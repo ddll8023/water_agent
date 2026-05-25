@@ -1,4 +1,6 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from functools import lru_cache
 
 
 class Settings(BaseSettings):
@@ -32,7 +34,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 1440
 
     # CORS 配置
-    CORS_ORIGINS: list[str] = ["http://localhost:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:3444"]
 
     # 聊天配置
     # 负责需要多步推理的任务——Agent 规划、污染溯源推理、调度方案生成
@@ -61,7 +63,7 @@ class Settings(BaseSettings):
             f"?charset=utf8mb4"
         )
 
-    class config:
+    class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
 

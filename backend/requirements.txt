@@ -7,7 +7,7 @@ pydantic_settings
 PyJWT
 bcrypt
 python-multipart
-
+aiomysql
 pyyaml
 langchain_community
 langchain
@@ -16,3 +16,4 @@ langchain_openai
 langchain_deepseek
 redis
 neo4j
+python_jose
