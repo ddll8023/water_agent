@@ -8,10 +8,10 @@ from sqlalchemy import select
 from datetime import timezone
 from app.core.database import get_db
 from app.models import user as models_user
-from app.schemas import user as schemas_user
+from app.schemas import auth as schemas_auth
 
 # Bearer token 方案
-oahth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oahth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 
 def create_access_token(data: dict):

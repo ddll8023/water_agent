@@ -34,7 +34,8 @@ class RegisterResponse(BaseModel):
 
     user_id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
-    role: str = Field(..., description="用户角色")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoginResponse(BaseModel):
@@ -42,3 +43,17 @@ class LoginResponse(BaseModel):
 
     access_token: str = Field(..., description="访问令牌")
     username: str = Field(..., description="用户名")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GetCurrentUserDetailResponse(BaseModel):
+    """获取当前用户详情响应模型"""
+
+    user_id: int = Field(..., description="用户 ID")
+    username: str = Field(..., description="用户名")
+    role: str = Field(..., description="用户角色")
+    phone: str | None = Field(None, ge=11, le=11, description="手机号")
+    dingtalk_id: str | None = Field(None, description="钉钉ID_用于推送")
+
+    model_config = ConfigDict(from_attributes=True)
