@@ -32,12 +32,16 @@ async def login(db: AsyncSession, login_request: schemas_auth.LoginRequest):
 
     user_entity.last_login = datetime.now()
     await commit_or_rollback(db)
+    role_entity = await db.get(models_user.Role, user_entity.role_id)
+    if not role_entity:
+        logger.error("角色不存在")
+        raise ServiceException(message="角色不存在")
 
     access_token = create_access_token(
         {
             "user_id": user_entity.id,
             "username": user_entity.username,
-            "role_id": user_entity.role_id,
+            "role_name": role_entity.name,
         }
     )
     return schemas_auth.LoginResponse(

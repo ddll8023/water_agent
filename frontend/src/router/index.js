@@ -4,7 +4,23 @@ import { useAuthStore } from '@/stores/auth'
 const routes = [
   {
     path: '/',
-    redirect: '/dashboard'
+    component: () => import('@/views/layout/MainLayout.vue'),
+    redirect: '/dashboard',
+    meta: { requiresAuth: true },
+    children: [
+      {
+        path: 'dashboard',
+        name: 'Dashboard',
+        component: () => import('@/views/dashboard/index.vue'),
+        meta: { title: '仪表盘' }
+      },
+      {
+        path: 'system/users',
+        name: 'UserManage',
+        component: () => import('@/views/system/UserManage.vue'),
+        meta: { title: '用户管理' }
+      }
+    ]
   },
   {
     path: '/login',
@@ -17,12 +33,6 @@ const routes = [
     name: 'Register',
     component: () => import('@/views/auth/Register.vue'),
     meta: { requiresAuth: false }
-  },
-  {
-    path: '/dashboard',
-    name: 'Dashboard',
-    component: () => import('@/views/dashboard/index.vue'),
-    meta: { requiresAuth: true }
   }
 ]
 

@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, ConfigDict
-from app.models import user as models_user
+
+
+# ========== 辅助类（Support）==========
 
 
 class ValidateTokenUserItem(BaseModel):
@@ -7,9 +9,12 @@ class ValidateTokenUserItem(BaseModel):
 
     user_id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
-    role: str = Field(..., description="用户角色")
+    role_name: str = Field(..., description="用户角色")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ========== 请求类（Request）==========
 
 
 class LoginRequest(BaseModel):
@@ -27,6 +32,9 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., description="用户名")
     password: str = Field(..., description="密码")
     phone: str | None = Field(None, ge=11, le=11, description="手机号")
+
+
+# ========== 响应类（Response）==========
 
 
 class RegisterResponse(BaseModel):
@@ -48,7 +56,7 @@ class LoginResponse(BaseModel):
 
 
 class GetCurrentUserDetailResponse(BaseModel):
-    """获取当前用户详情响应模型"""
+    """当前用户详情响应"""
 
     user_id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")

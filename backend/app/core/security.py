@@ -26,9 +26,12 @@ def create_access_token(data: dict):
 
 def verify_token(token: str):
     """验证 token"""
-    return jwt.decode(
-        token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
-    )
+    try:
+        return jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Token 验证失败")
 
 
 def get_current_user(
@@ -38,11 +41,11 @@ def get_current_user(
     payload = verify_token(token)
     user_id = payload.get("user_id")
     username = payload.get("username")
-    role = payload.get("role")
-    if username is None or role is None or user_id is None:
+    role_name = payload.get("role_name")
+    if username is None or role_name is None or user_id is None:
         raise HTTPException(status_code=401, detail="Token 缺少标识")
-    return schemas_user.ValidateTokenUserItem(
-        user_id=user_id, username=username, role=role
+    return schemas_auth.ValidateTokenUserItem(
+        user_id=user_id, username=username, role_name=role_name
     )
 
 
@@ -50,9 +53,9 @@ def require_role(*roles: str):
     """角色权限依赖注入。用法: Depends(require_role("admin","analyst"))"""
 
     def role_checker(
-        current_user: schemas_user.ValidateTokenUserItem = Depends(get_current_user),
+        current_user: schemas_auth.ValidateTokenUserItem = Depends(get_current_user),
     ):
-        if current_user.role not in roles and current_user.role != "admin":
+        if current_user.role_name not in roles and current_user.role_name != "admin":
             raise HTTPException(status_code=403, detail="权限不足")
         return current_user
 

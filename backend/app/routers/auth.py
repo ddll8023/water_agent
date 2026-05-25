@@ -6,7 +6,7 @@ from app.schemas.response import success, error
 from app.schemas.common import ApiResponse, ErrorCode, PaginatedResponse
 from app.utils.exception import ServiceException
 from app.schemas import auth as schemas_auth
-from app.services import auth as auth_service
+from app.services import auth as service_auth
 from app.core.security import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["认证登录"])
@@ -21,7 +21,7 @@ async def login(
 ):
     """登录"""
     try:
-        login_response = await auth_service.login(db, login_request)
+        login_response = await service_auth.login(db, login_request)
         return success(login_response)
     except ServiceException as e:
         return error(e.code, e.message)
@@ -38,7 +38,7 @@ async def register(
 ):
     """注册"""
     try:
-        register_response = await auth_service.register(db, register_request)
+        register_response = await service_auth.register(db, register_request)
         return success(register_response)
     except ServiceException as e:
         return error(e.code, e.message)
@@ -48,7 +48,7 @@ async def register(
 async def logout():
     """退出登录"""
     try:
-        return success(auth_service.logout())
+        return success(await service_auth.logout())
     except ServiceException as e:
         return error(e.code, e.message)
 
@@ -64,7 +64,7 @@ async def get_current_user_detail(
 ):
     """获取当前用户详情"""
     try:
-        current_user_detail = await auth_service.get_current_user_detail(db, user_item)
+        current_user_detail = await service_auth.get_current_user_detail(db, user_item)
         return success(current_user_detail)
     except ServiceException as e:
         return error(e.code, e.message)

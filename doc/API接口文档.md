@@ -209,3 +209,81 @@
 |------|------|------|
 | status | string | 服务状态，正常为 `ok` |
 | version | string | 应用版本号 |
+
+
+---
+
+## 三、用户管理（/api/users）
+
+用户 CRUD 与角色权限管理接口。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 3.1 获取用户列表
+
+- **GET** `/api/users/list`
+- **描述**：分页获取用户列表，支持关键词搜索和角色/状态筛选。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| keyword | string\|null | body | 否 | 搜索关键词（匹配用户名、真实姓名、手机号） |
+| role_id | int\|null | body | 否 | 角色 ID 筛选 |
+| status | int\|null | body | 否 | 状态筛选：0=禁用，1=启用 |
+| page | int | body | 是 | 页码，默认 1 |
+| page_size | int | body | 是 | 每页数量，默认 10 |
+
+**请求体示例**：
+
+```json
+{
+  "keyword": "zhang",
+  "role_id": null,
+  "status": null,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "role_id": 1,
+        "username": "zhangsan",
+        "real_name": "张三",
+        "phone": "13800138000",
+        "dingtalk_id": "zhangsan@dingtalk",
+        "status": 1,
+        "last_login": "2026-05-25T10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| lists[].id | int | 用户 ID |
+| lists[].role_id | int | 角色 ID |
+| lists[].username | string | 用户名 |
+| lists[].real_name | string\|null | 真实姓名 |
+| lists[].phone | string\|null | 手机号 |
+| lists[].dingtalk_id | string\|null | 钉钉 ID |
+| lists[].status | int | 状态：0=禁用，1=启用 |
+| lists[].last_login | datetime\|null | 最后登录时间 |
+| pagination.page | int | 当前页码 |
+| pagination.page_size | int | 每页数量 |
+| pagination.total | int | 总记录数 |
+| pagination.total_pages | int | 总页数 |

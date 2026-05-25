@@ -20,8 +20,8 @@ class User(Base):
         ForeignKey("role.id", ondelete="SET NULL"),
         comment="角色ID",
     )
-    username = Column[str](String(256), comment="用户名")
-    password = Column[str](String(256), comment="密码哈希")
+    username = Column[str](String(256), nullable=False, comment="用户名")
+    password = Column[str](String(256), nullable=False, comment="密码哈希")
     real_name = Column[str](String(64), comment="真实姓名")
     phone = Column[str](String(11), comment="手机号")
     dingtalk_id = Column[str](String(256), comment="钉钉ID_用于推送")
