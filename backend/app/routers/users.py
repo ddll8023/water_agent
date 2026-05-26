@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/users", tags=["用户模块"])
     "/list",
     response_model=ApiResponse[PaginatedResponse[schemas_users.GetUserListResponse]],
     description="获取用户列表",
-    dependencies=[Depends(require_role("admin"))],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 async def get_user_list(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -27,5 +27,24 @@ async def get_user_list(
     """获取用户列表"""
     try:
         return success(await service_users.get_user_list(db, get_user_list_request))
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.post(
+    "/add",
+    response_model=ApiResponse[schemas_users.AddUserResponse],
+    description="添加用户",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def add_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    add_user_request: Annotated[
+        schemas_users.AddUserRequest, Body(..., description="添加用户请求")
+    ],
+):
+    """添加用户"""
+    try:
+        return success(await service_users.add_user(db, add_user_request))
     except ServiceException as e:
         return error(e.code, e.message)

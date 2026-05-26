@@ -287,3 +287,120 @@
 | pagination.page_size | int | 每页数量 |
 | pagination.total | int | 总记录数 |
 | pagination.total_pages | int | 总页数 |
+
+### 3.2 添加用户
+
+- **POST** `/api/users/add`
+- **描述**：管理员添加新用户。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| username | string | body | 是 | 用户名 |
+| password | string | body | 否 | 密码，默认 `123456` |
+| real_name | string\|null | body | 否 | 真实姓名 |
+| phone | string\|null | body | 否 | 手机号，11 位 |
+| role_id | int | body | 是 | 角色 ID |
+| dingtalk_id | string\|null | body | 否 | 钉钉 ID，用于消息推送 |
+
+**请求体示例**：
+
+```json
+{
+  "username": "wangwu",
+  "password": "Abc123456",
+  "real_name": "王五",
+  "phone": "13900139000",
+  "role_id": 2,
+  "dingtalk_id": "wangwu@dingtalk"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 3,
+    "username": "wangwu"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 用户 ID |
+| username | string | 用户名 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1001 | 参数错误（缺少必填项） |
+| 5001 | 用户名已存在 |
+
+---
+
+## 四、角色管理（/api/roles）
+
+角色列表查询。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 4.1 获取角色列表
+
+- **GET** `/api/roles/list`
+- **描述**：分页获取角色列表。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 10 |
+
+**请求示例**：
+
+```
+GET /api/roles/list?page=1&page_size=10
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "role_name": "管理员"
+      },
+      {
+        "id": 2,
+        "role_name": "监测员",
+        "created_at": "2026-05-25T10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 2,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| lists[].id | int | 角色 ID |
+| lists[].role_name | string | 角色名称 |
+| lists[].created_at | datetime\|null | 创建时间 |
+| pagination.page | int | 当前页码 |
+| pagination.page_size | int | 每页数量 |
+| pagination.total | int | 总记录数 |
+| pagination.total_pages | int | 总页数 |

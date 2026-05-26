@@ -7,3 +7,11 @@ export function getUserList(data) {
     data
   })
 }
+
+export function addUser(data) {
+  return request({
+    method: 'post',
+    url: '/users/add',
+    data
+  })
+}
