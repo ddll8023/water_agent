@@ -50,3 +50,39 @@ async def add_role(db: AsyncSession, add_role_request: schemas_roles.AddRoleRequ
     await commit_or_rollback(db)
     await db.refresh(role_entity)
     return schemas_roles.AddRoleResponse.model_validate(role_entity)
+
+
+async def get_role_detail(db: AsyncSession, role_id: int):
+    """获取角色详情"""
+    role_entity = await db.get(models_role.Role, role_id)
+    if not role_entity:
+        raise ServiceException("角色不存在")
+    return schemas_roles.GetRoleDetailResponse.model_validate(role_entity)
+
+
+async def update_role(
+    db: AsyncSession, update_role_request: schemas_roles.UpateRoleRequest
+):
+    """更新角色"""
+    role_entity = await db.get(models_role.Role, update_role_request.id)
+    if not role_entity:
+        raise ServiceException("角色不存在")
+    if update_role_request.name is not None:
+        role_entity.name = update_role_request.name
+    if update_role_request.code is not None:
+        role_entity.code = update_role_request.code
+    if update_role_request.permissions is not None:
+        role_entity.permissions = update_role_request.permissions
+    await commit_or_rollback(db)
+    await db.refresh(role_entity)
+    return True
+
+
+async def delete_role(db: AsyncSession, role_id: int):
+    """删除角色"""
+    role_entity = await db.get(models_role.Role, role_id)
+    if not role_entity:
+        raise ServiceException("角色不存在")
+    await db.delete(role_entity)
+    await commit_or_rollback(db)
+    return True

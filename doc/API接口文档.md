@@ -621,3 +621,134 @@ Authorization: Bearer <token>
 | 错误码 | 场景 |
 |--------|------|
 | 5001 | 角色编码或名称已存在 |
+
+### 4.3 获取角色详情
+
+- **GET** `/api/roles/{id}`
+- **描述**：根据角色 ID 获取角色详细信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 角色 ID |
+
+**请求示例**：
+
+```
+GET /api/roles/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "name": "管理员",
+    "code": "admin",
+    "permissions": ["user:manage", "role:manage"],
+    "created_at": "2026-05-25T10:30:00"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 角色 ID |
+| name | string | 角色名称 |
+| code | string | 角色编码 |
+| permissions | array[string] | 权限列表 |
+| created_at | datetime | 创建时间 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（角色不存在） |
+
+### 4.4 更新角色
+
+- **PUT** `/api/roles/update`
+- **描述**：管理员更新角色信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | body | 是 | 角色 ID |
+| name | string | body | 否 | 角色名称 |
+| code | string | body | 否 | 角色编码 |
+| permissions | array[string] | body | 否 | 权限列表 |
+
+**请求体示例**：
+
+```json
+{
+  "id": 1,
+  "name": "超级管理员",
+  "code": "super_admin",
+  "permissions": ["user:manage", "role:manage", "system:config"]
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（角色不存在） |
+
+### 4.5 删除角色
+
+- **DELETE** `/api/roles/{id}`
+- **描述**：管理员删除指定角色。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 角色 ID |
+
+**请求示例**：
+
+```
+DELETE /api/roles/3
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（角色不存在） |

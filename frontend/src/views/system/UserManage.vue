@@ -104,26 +104,32 @@
           empty-text="暂无角色数据"
         >
           <el-table-column prop="id" label="角色ID" width="80" align="center" />
-          <el-table-column prop="name" label="角色名称" min-width="160">
+          <el-table-column prop="name" label="角色名称" min-width="140">
             <template #default="{ row }">
               <el-tag :type="getRoleTagTypeByName(row.name)" size="small">
                 {{ row.name }}
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column prop="code" label="角色编码" min-width="120" />
           <el-table-column label="创建时间" min-width="170">
             <template #default="{ row }">
               {{ formatDateTime(row.created_at) }}
             </template>
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
-            <template #default>
-              <el-tooltip content="功能开发中，敬请期待" placement="top">
-                <el-button type="primary" link disabled>编辑</el-button>
-              </el-tooltip>
-              <el-tooltip content="功能开发中，敬请期待" placement="top">
-                <el-button type="danger" link disabled>删除</el-button>
-              </el-tooltip>
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="handleEditRole(row)">编辑</el-button>
+              <el-popconfirm
+                title="确定删除该角色？"
+                confirm-button-text="确定"
+                cancel-button-text="取消"
+                @confirm="handleDeleteRole(row)"
+              >
+                <template #reference>
+                  <el-button type="danger" link size="small">删除</el-button>
+                </template>
+              </el-popconfirm>
             </template>
           </el-table-column>
         </el-table>
@@ -379,20 +385,73 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="editRoleDialogVisible"
+      title="编辑角色"
+      width="520px"
+      :close-on-click-modal="false"
+      @closed="editRoleFormRef?.resetFields()"
+    >
+      <el-form
+        ref="editRoleFormRef"
+        :model="editRoleForm"
+        :rules="editRoleRules"
+        label-width="90px"
+      >
+        <el-form-item label="角色名称" prop="role_name">
+          <el-input
+            v-model="editRoleForm.role_name"
+            placeholder="请输入角色名称"
+            maxlength="50"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="角色编码" prop="code">
+          <el-input
+            v-model="editRoleForm.code"
+            placeholder="请输入角色编码，如 admin"
+            maxlength="50"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="权限列表" prop="permissions">
+          <el-select
+            v-model="editRoleForm.permissions"
+            multiple
+            placeholder="请选择权限（可多选）"
+            class="w-full"
+          >
+            <el-option label="用户管理" value="user:manage" />
+            <el-option label="角色管理" value="role:manage" />
+            <el-option label="数据查看" value="data:view" />
+            <el-option label="数据编辑" value="data:edit" />
+            <el-option label="报表导出" value="report:export" />
+            <el-option label="系统设置" value="system:config" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editRoleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editRoleLoading" @click="submitEditRole">
+          确认保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 /**
  * 用户管理页
- * 功能描述：系统管理 - 用户管理（已对接用户列表），角色管理（开发中）
+ * 功能描述：系统管理 - 用户管理（已对接） + 角色管理（已对接列表/新增/编辑）
  * 依赖组件：无
  */
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { getUserList, addUser, getUserDetail, updateUser, resetPassword } from '@/api/user'
-import { getRoleList, addRole } from '@/api/role'
+import { getRoleList, addRole, getRoleDetail, updateRole, deleteRole } from '@/api/role'
 
 const activeTab = ref('users')
 const loading = ref(false)
@@ -615,6 +674,26 @@ const addRoleRules = {
   ]
 }
 
+const editRoleDialogVisible = ref(false)
+const editRoleLoading = ref(false)
+const editRoleFormRef = ref(null)
+const editingRoleId = ref(null)
+const editRoleForm = reactive({
+  role_name: '',
+  code: '',
+  permissions: []
+})
+const editRoleRules = {
+  role_name: [
+    { required: true, message: '请输入角色名称', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色名称长度在 2 到 50 个字符', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入角色编码', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色编码长度在 2 到 50 个字符', trigger: 'blur' }
+  ]
+}
+
 const handleAddRole = () => {
   addRoleForm.role_name = ''
   addRoleForm.code = ''
@@ -641,6 +720,58 @@ const submitAddRole = async () => {
     ElMessage.error(e.message || '添加角色失败')
   } finally {
     addRoleLoading.value = false
+  }
+}
+
+const handleEditRole = async (row) => {
+  editingRoleId.value = row.id
+  editRoleForm.role_name = ''
+  editRoleForm.code = ''
+  editRoleForm.permissions = []
+  editRoleDialogVisible.value = true
+  editRoleLoading.value = true
+  try {
+    const res = await getRoleDetail(row.id)
+    editRoleForm.role_name = res.data.name
+    editRoleForm.code = res.data.code
+    editRoleForm.permissions = res.data.permissions || []
+  } catch (e) {
+    ElMessage.error(e.message || '获取角色详情失败')
+    editRoleDialogVisible.value = false
+  } finally {
+    editRoleLoading.value = false
+  }
+}
+
+const submitEditRole = async () => {
+  const valid = await editRoleFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  editRoleLoading.value = true
+  try {
+    await updateRole({
+      id: editingRoleId.value,
+      name: editRoleForm.role_name,
+      code: editRoleForm.code,
+      permissions: editRoleForm.permissions
+    })
+    ElMessage.success('更新角色成功')
+    editRoleDialogVisible.value = false
+    await fetchRoleList()
+  } catch (e) {
+    ElMessage.error(e.message || '更新角色失败')
+  } finally {
+    editRoleLoading.value = false
+  }
+}
+
+const handleDeleteRole = async (row) => {
+  try {
+    await deleteRole(row.id)
+    ElMessage.success(`已删除角色「${row.name}」`)
+    await fetchRoleList()
+  } catch (e) {
+    ElMessage.error(e.message || '删除角色失败')
   }
 }
 
