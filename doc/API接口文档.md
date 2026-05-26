@@ -541,11 +541,11 @@ Authorization: Bearer <token>
     "lists": [
       {
         "id": 1,
-        "role_name": "管理员"
+        "name": "管理员"
       },
       {
         "id": 2,
-        "role_name": "监测员",
+        "name": "监测员",
         "created_at": "2026-05-25T10:30:00"
       }
     ],
@@ -562,9 +562,62 @@ Authorization: Bearer <token>
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | lists[].id | int | 角色 ID |
-| lists[].role_name | string | 角色名称 |
+| lists[].name | string | 角色名称 |
 | lists[].created_at | datetime\|null | 创建时间 |
 | pagination.page | int | 当前页码 |
 | pagination.page_size | int | 每页数量 |
 | pagination.total | int | 总记录数 |
 | pagination.total_pages | int | 总页数 |
+
+### 4.2 添加角色
+
+- **POST** `/api/roles/add`
+- **描述**：管理员添加新角色。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| name | string | body | 是 | 角色名称 |
+| code | string | body | 是 | 角色编码，需唯一 |
+| permissions | array[string] | body | 否 | 权限列表 |
+
+**请求体示例**：
+
+```json
+{
+  "name": "分析员",
+  "code": "analyst",
+  "permissions": ["data:view", "report:export"]
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 4,
+    "name": "分析员",
+    "code": "analyst",
+    "permissions": ["data:view", "report:export"],
+    "created_at": "2026-05-26T10:30:00"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 角色 ID |
+| name | string | 角色名称 |
+| code | string | 角色编码 |
+| permissions | array[string] | 权限列表 |
+| created_at | datetime | 创建时间 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 5001 | 角色编码或名称已存在 |

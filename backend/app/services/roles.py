@@ -33,3 +33,20 @@ async def get_role_list(
             page_size=get_role_list_request.page_size,
         ),
     )
+
+
+async def add_role(db: AsyncSession, add_role_request: schemas_roles.AddRoleRequest):
+    """添加角色"""
+    role_entity = await db.scalar(
+        select(models_role.Role).where(
+            models_role.Role.code == add_role_request.code
+            or models_role.Role.name == add_role_request.name
+        )
+    )
+    if role_entity:
+        raise ServiceException("角色编码或名称已存在")
+    role_entity = models_role.Role(**add_role_request.model_dump())
+    db.add(role_entity)
+    await commit_or_rollback(db)
+    await db.refresh(role_entity)
+    return schemas_roles.AddRoleResponse.model_validate(role_entity)

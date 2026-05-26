@@ -7,3 +7,11 @@ export function getRoleList(params) {
     params
   })
 }
+
+export function addRole(data) {
+  return request({
+    method: 'post',
+    url: '/roles/add',
+    data
+  })
+}

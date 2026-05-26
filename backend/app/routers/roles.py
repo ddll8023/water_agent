@@ -29,3 +29,22 @@ async def get_role_list(
         return success(await service_roles.get_role_list(db, get_role_list_request))
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.post(
+    "/add",
+    response_model=ApiResponse[schemas_roles.AddRoleResponse],
+    description="添加角色",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def add_role(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    add_role_request: Annotated[
+        schemas_roles.AddRoleRequest, Body(..., description="添加角色请求")
+    ],
+):
+    """添加角色"""
+    try:
+        return success(await service_roles.add_role(db, add_role_request))
+    except ServiceException as e:
+        return error(e.code, e.message)

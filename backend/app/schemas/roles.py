@@ -3,6 +3,12 @@ from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
 
+# ========== 辅助类（Support）==========
+
+
+# ========== 请求类（Request）==========
+
+
 class GetRoleListRequest(BaseModel):
     """角色列表请求"""
 
@@ -10,11 +16,34 @@ class GetRoleListRequest(BaseModel):
     page_size: int | None = Field(10, ge=10, description="每页数量")
 
 
+class AddRoleRequest(BaseModel):
+    """添加角色请求"""
+
+    name: str = Field(..., description="角色名称")
+    code: str = Field(..., description="角色编码")
+    permissions: list[str] = Field(default_factory=list, description="权限列表")
+
+
+# ========== 响应类（Response）==========
+
+
 class GetRoleListResponse(BaseModel):
     """角色列表响应"""
 
     id: int = Field(..., description="角色 ID")
-    role_name: str = Field(..., validation_alias="name", description="角色名称")
+    name: str = Field(..., description="角色名称")
     created_at: datetime | None = Field(None, description="创建时间")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AddRoleResponse(BaseModel):
+    """添加角色响应"""
+
+    id: int = Field(..., description="角色 ID")
+    name: str = Field(..., description="角色名称")
+    code: str = Field(..., description="角色编码")
+    permissions: list[str] = Field(default_factory=list, description="权限列表")
+    created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)

@@ -89,6 +89,12 @@
       </el-tab-pane>
 
       <el-tab-pane label="角色管理" name="roles">
+        <div class="flex items-center justify-between mb-4">
+          <el-button type="primary" @click="handleAddRole">
+            <el-icon><Plus /></el-icon>
+            新增角色
+          </el-button>
+        </div>
         <el-table
           v-loading="roleLoading"
           :data="roleList"
@@ -98,10 +104,10 @@
           empty-text="暂无角色数据"
         >
           <el-table-column prop="id" label="角色ID" width="80" align="center" />
-          <el-table-column prop="role_name" label="角色名称" min-width="160">
+          <el-table-column prop="name" label="角色名称" min-width="160">
             <template #default="{ row }">
-              <el-tag :type="getRoleTagTypeByName(row.role_name)" size="small">
-                {{ row.role_name }}
+              <el-tag :type="getRoleTagTypeByName(row.name)" size="small">
+                {{ row.name }}
               </el-tag>
             </template>
           </el-table-column>
@@ -191,7 +197,7 @@
             <el-option
               v-for="role in allRoles"
               :key="role.id"
-              :label="role.role_name"
+              :label="role.name"
               :value="role.id"
             />
           </el-select>
@@ -251,7 +257,7 @@
             <el-option
               v-for="role in allRoles"
               :key="role.id"
-              :label="role.role_name"
+              :label="role.name"
               :value="role.id"
             />
           </el-select>
@@ -320,6 +326,59 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="addRoleDialogVisible"
+      title="新增角色"
+      width="520px"
+      :close-on-click-modal="false"
+      @closed="addRoleFormRef?.resetFields()"
+    >
+      <el-form
+        ref="addRoleFormRef"
+        :model="addRoleForm"
+        :rules="addRoleRules"
+        label-width="90px"
+      >
+        <el-form-item label="角色名称" prop="role_name">
+          <el-input
+            v-model="addRoleForm.role_name"
+            placeholder="请输入角色名称"
+            maxlength="50"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="角色编码" prop="code">
+          <el-input
+            v-model="addRoleForm.code"
+            placeholder="请输入角色编码，如 admin"
+            maxlength="50"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="权限列表" prop="permissions">
+          <el-select
+            v-model="addRoleForm.permissions"
+            multiple
+            placeholder="请选择权限（可多选，可不选）"
+            class="w-full"
+          >
+            <el-option label="用户管理" value="user:manage" />
+            <el-option label="角色管理" value="role:manage" />
+            <el-option label="数据查看" value="data:view" />
+            <el-option label="数据编辑" value="data:edit" />
+            <el-option label="报表导出" value="report:export" />
+            <el-option label="系统设置" value="system:config" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addRoleDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="addRoleLoading" @click="submitAddRole">
+          确认添加
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -333,7 +392,7 @@ import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { getUserList, addUser, getUserDetail, updateUser, resetPassword } from '@/api/user'
-import { getRoleList } from '@/api/role'
+import { getRoleList, addRole } from '@/api/role'
 
 const activeTab = ref('users')
 const loading = ref(false)
@@ -535,6 +594,54 @@ const resetPasswordRules = {
     { required: true, message: '请再次输入新密码', trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
   ]
+}
+
+const addRoleDialogVisible = ref(false)
+const addRoleLoading = ref(false)
+const addRoleFormRef = ref(null)
+const addRoleForm = reactive({
+  role_name: '',
+  code: '',
+  permissions: []
+})
+const addRoleRules = {
+  role_name: [
+    { required: true, message: '请输入角色名称', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色名称长度在 2 到 50 个字符', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入角色编码', trigger: 'blur' },
+    { min: 2, max: 50, message: '角色编码长度在 2 到 50 个字符', trigger: 'blur' }
+  ]
+}
+
+const handleAddRole = () => {
+  addRoleForm.role_name = ''
+  addRoleForm.code = ''
+  addRoleForm.permissions = []
+  addRoleFormRef.value?.resetFields()
+  addRoleDialogVisible.value = true
+}
+
+const submitAddRole = async () => {
+  const valid = await addRoleFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  addRoleLoading.value = true
+  try {
+    await addRole({
+      name: addRoleForm.role_name,
+      code: addRoleForm.code,
+      permissions: addRoleForm.permissions
+    })
+    ElMessage.success('添加角色成功')
+    addRoleDialogVisible.value = false
+    await fetchRoleList()
+  } catch (e) {
+    ElMessage.error(e.message || '添加角色失败')
+  } finally {
+    addRoleLoading.value = false
+  }
 }
 
 const handleEditUser = async (row) => {
