@@ -37,6 +37,12 @@ class UpdateUserRequest(BaseModel):
     status: int | None = Field(None, description="状态")
 
 
+class ResetPasswordRequest(BaseModel):
+    """重置密码请求"""
+
+    password: str = Field(..., description="新密码")
+
+
 # ========== 响应类（Response）==========
 
 

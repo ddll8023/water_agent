@@ -30,3 +30,11 @@ export function updateUser(id, data) {
     data
   })
 }
+
+export function resetPassword(id, data) {
+  return request({
+    method: 'post',
+    url: `/users/${id}/reset-password`,
+    data
+  })
+}

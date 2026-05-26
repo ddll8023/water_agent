@@ -93,3 +93,20 @@ async def update_user(
 
     await commit_or_rollback(db)
     return schemas_users.UpdateUserResponse.model_validate(user_entity)
+
+
+async def reset_password(
+    db: AsyncSession,
+    id: int,
+    reset_password_request: schemas_users.ResetPasswordRequest,
+):
+    """重置密码"""
+    user_entity = await db.get(models_user.User, id)
+    if not user_entity:
+        raise ServiceException("用户不存在")
+
+    user_entity.password = hashpw(
+        reset_password_request.password.encode("utf-8"), gensalt()
+    )
+    await commit_or_rollback(db)
+    return True

@@ -462,6 +462,52 @@ Authorization: Bearer <token>
 
 ---
 
+### 3.5 重置密码
+
+- **POST** `/api/users/{id}/reset-password`
+- **描述**：管理员重置指定用户的密码。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 用户 ID |
+| password | string | body | 是 | 新密码 |
+
+**请求示例**：
+
+```
+POST /api/users/1/reset-password
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "password": "NewPass123"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（用户不存在） |
+
+---
+
 ## 四、角色管理（/api/roles）
 
 角色列表查询。需要 Bearer Token 认证，且要求 admin 角色。

@@ -85,3 +85,25 @@ async def update_user(
         return success(await service_users.update_user(db, id, update_user_request))
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.post(
+    "/{id}/reset-password",
+    response_model=ApiResponse[bool],
+    description="重置密码",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def reset_password(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="用户 ID")],
+    reset_password_request: Annotated[
+        schemas_users.ResetPasswordRequest, Body(..., description="重置密码请求")
+    ],
+):
+    """重置密码"""
+    try:
+        return success(
+            await service_users.reset_password(db, id, reset_password_request)
+        )
+    except ServiceException as e:
+        return error(e.code, e.message)
