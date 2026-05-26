@@ -100,4 +100,6 @@ async def get_current_user_detail(
         role=role_entity.name,
         phone=user_entity.phone,
         dingtalk_id=user_entity.dingtalk_id,
+        real_name=user_entity.real_name,
+        status=user_entity.status,
     )

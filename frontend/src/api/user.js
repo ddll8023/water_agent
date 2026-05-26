@@ -15,3 +15,18 @@ export function addUser(data) {
     data
   })
 }
+
+export function getUserDetail(id) {
+  return request({
+    method: 'get',
+    url: `/users/${id}`
+  })
+}
+
+export function updateUser(id, data) {
+  return request({
+    method: 'put',
+    url: `/users/${id}`,
+    data
+  })
+}

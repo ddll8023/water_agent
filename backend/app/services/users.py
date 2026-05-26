@@ -62,3 +62,34 @@ async def add_user(db: AsyncSession, add_user_request: schemas_users.AddUserRequ
         id=user_entity.id,
         username=user_entity.username,
     )
+
+
+async def get_user_detail(db: AsyncSession, id: int):
+    """获取用户详情"""
+    user_entity = await db.get(models_user.User, id)
+    if not user_entity:
+        raise ServiceException("用户不存在")
+    return schemas_users.GetUserDetailResponse.model_validate(user_entity)
+
+
+async def update_user(
+    db: AsyncSession, id: int, update_user_request: schemas_users.UpdateUserRequest
+):
+    """更新用户"""
+    user_entity = await db.get(models_user.User, id)
+    if not user_entity:
+        raise ServiceException("用户不存在")
+
+    if update_user_request.real_name:
+        user_entity.real_name = update_user_request.real_name
+    if update_user_request.phone:
+        user_entity.phone = update_user_request.phone
+    if update_user_request.role_id:
+        user_entity.role_id = update_user_request.role_id
+    if update_user_request.dingtalk_id:
+        user_entity.dingtalk_id = update_user_request.dingtalk_id
+    if update_user_request.status:
+        user_entity.status = update_user_request.status
+
+    await commit_or_rollback(db)
+    return schemas_users.UpdateUserResponse.model_validate(user_entity)

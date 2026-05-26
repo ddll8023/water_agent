@@ -344,6 +344,124 @@
 
 ---
 
+### 3.3 获取用户详情
+
+- **GET** `/api/users/{id}`
+- **描述**：根据用户 ID 获取用户详细信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 用户 ID |
+
+**请求示例**：
+
+```
+GET /api/users/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "username": "zhangsan",
+    "role_id": 1,
+    "real_name": "张三",
+    "phone": "13800138000",
+    "dingtalk_id": "zhangsan@dingtalk",
+    "status": 1
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 用户 ID |
+| username | string | 用户名 |
+| role_id | int | 角色 ID |
+| real_name | string\|null | 真实姓名 |
+| phone | string\|null | 手机号 |
+| dingtalk_id | string\|null | 钉钉 ID |
+| status | int | 状态：0=禁用，1=启用 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（用户不存在） |
+
+---
+
+### 3.4 更新用户
+
+- **PUT** `/api/users/{id}`
+- **描述**：更新用户信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 用户 ID |
+| real_name | string\|null | body | 否 | 真实姓名 |
+| phone | string\|null | body | 否 | 手机号，11 位 |
+| role_id | int\|null | body | 否 | 角色 ID |
+| dingtalk_id | string\|null | body | 否 | 钉钉 ID，用于消息推送 |
+| status | int\|null | body | 否 | 状态：0=禁用，1=启用 |
+
+**请求体示例**：
+
+```json
+{
+  "real_name": "张三丰",
+  "phone": "13800138001",
+  "role_id": 2,
+  "dingtalk_id": "zhangsanfeng@dingtalk",
+  "status": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "username": "zhangsan",
+    "role_id": 2,
+    "real_name": "张三丰",
+    "phone": "13800138001",
+    "dingtalk_id": "zhangsanfeng@dingtalk",
+    "status": 1
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 用户 ID |
+| username | string | 用户名 |
+| role_id | int | 角色 ID |
+| real_name | string\|null | 真实姓名 |
+| phone | string\|null | 手机号 |
+| dingtalk_id | string\|null | 钉钉 ID |
+| status | int | 状态：0=禁用，1=启用 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（用户不存在） |
+
+---
+
 ## 四、角色管理（/api/roles）
 
 角色列表查询。需要 Bearer Token 认证，且要求 admin 角色。

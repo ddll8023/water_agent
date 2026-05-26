@@ -67,10 +67,8 @@
             </template>
           </el-table-column>
           <el-table-column label="操作" width="240" fixed="right">
-            <template #default>
-              <el-tooltip content="功能开发中，敬请期待" placement="top">
-                <el-button type="primary" link disabled>编辑</el-button>
-              </el-tooltip>
+            <template #default="{ row }">
+              <el-button type="primary" link @click="handleEditUser(row)">编辑</el-button>
               <el-tooltip content="功能开发中，敬请期待" placement="top">
                 <el-button type="warning" link disabled>重置密码</el-button>
               </el-tooltip>
@@ -218,6 +216,73 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑用户"
+      width="520px"
+      :close-on-click-modal="false"
+      @closed="editUserFormRef?.resetFields()"
+    >
+      <el-form
+        ref="editUserFormRef"
+        :model="editUserForm"
+        :rules="editUserRules"
+        label-width="90px"
+      >
+        <el-form-item label="用户名">
+          <el-input :model-value="editUserForm.username" disabled />
+        </el-form-item>
+        <el-form-item label="真实姓名" prop="real_name">
+          <el-input
+            v-model="editUserForm.real_name"
+            placeholder="请输入真实姓名（选填）"
+            maxlength="30"
+          />
+        </el-form-item>
+        <el-form-item label="手机号" prop="phone">
+          <el-input
+            v-model="editUserForm.phone"
+            placeholder="请输入手机号（选填）"
+            maxlength="11"
+          />
+        </el-form-item>
+        <el-form-item label="所属角色" prop="role_id">
+          <el-select
+            v-model="editUserForm.role_id"
+            placeholder="请选择所属角色"
+            class="w-full"
+          >
+            <el-option
+              v-for="role in allRoles"
+              :key="role.id"
+              :label="role.role_name"
+              :value="role.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="钉钉ID" prop="dingtalk_id">
+          <el-input
+            v-model="editUserForm.dingtalk_id"
+            placeholder="请输入钉钉ID（选填）"
+            maxlength="50"
+          />
+        </el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-switch
+            v-model="editUserForm.status"
+            :active-value="1"
+            :inactive-value="0"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editUserLoading" @click="submitEditUser">
+          确认保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -230,7 +295,7 @@
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getUserList, addUser } from '@/api/user'
+import { getUserList, addUser, getUserDetail, updateUser } from '@/api/user'
 import { getRoleList } from '@/api/role'
 
 const activeTab = ref('users')
@@ -387,6 +452,74 @@ const submitAddUser = async () => {
     ElMessage.error(e.message || '添加用户失败')
   } finally {
     addUserLoading.value = false
+  }
+}
+
+const editDialogVisible = ref(false)
+const editUserLoading = ref(false)
+const editUserFormRef = ref(null)
+const editingUserId = ref(null)
+const editUserForm = reactive({
+  username: '',
+  real_name: '',
+  phone: '',
+  role_id: null,
+  dingtalk_id: '',
+  status: 1
+})
+const editUserRules = {
+  role_id: [
+    { required: true, message: '请选择所属角色', trigger: 'change' }
+  ]
+}
+
+const handleEditUser = async (row) => {
+  editingUserId.value = row.id
+  editUserForm.username = row.username
+  editUserForm.real_name = ''
+  editUserForm.phone = ''
+  editUserForm.role_id = null
+  editUserForm.dingtalk_id = ''
+  editUserForm.status = 1
+  editDialogVisible.value = true
+  editUserLoading.value = true
+  fetchAllRoles()
+  try {
+    const res = await getUserDetail(row.id)
+    editUserForm.username = res.data.username
+    editUserForm.real_name = res.data.real_name || ''
+    editUserForm.phone = res.data.phone || ''
+    editUserForm.role_id = res.data.role_id
+    editUserForm.dingtalk_id = res.data.dingtalk_id || ''
+    editUserForm.status = res.data.status
+  } catch (e) {
+    ElMessage.error(e.message || '获取用户详情失败')
+    editDialogVisible.value = false
+  } finally {
+    editUserLoading.value = false
+  }
+}
+
+const submitEditUser = async () => {
+  const valid = await editUserFormRef.value.validate().catch(() => false)
+  if (!valid) return
+
+  editUserLoading.value = true
+  try {
+    await updateUser(editingUserId.value, {
+      real_name: editUserForm.real_name || null,
+      phone: editUserForm.phone || null,
+      role_id: editUserForm.role_id,
+      dingtalk_id: editUserForm.dingtalk_id || null,
+      status: editUserForm.status
+    })
+    ElMessage.success('更新用户成功')
+    editDialogVisible.value = false
+    await fetchUserList()
+  } catch (e) {
+    ElMessage.error(e.message || '更新用户失败')
+  } finally {
+    editUserLoading.value = false
   }
 }
 

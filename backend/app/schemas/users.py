@@ -27,6 +27,16 @@ class AddUserRequest(BaseModel):
     dingtalk_id: str | None = Field(None, description="钉钉ID_用于推送")
 
 
+class UpdateUserRequest(BaseModel):
+    """更新用户请求"""
+
+    real_name: str | None = Field(None, description="真实姓名")
+    phone: str | None = Field(None, description="手机号")
+    role_id: int | None = Field(None, description="角色 ID")
+    dingtalk_id: str | None = Field(None, description="钉钉ID_用于推送")
+    status: int | None = Field(None, description="状态")
+
+
 # ========== 响应类（Response）==========
 
 
@@ -50,6 +60,11 @@ class GetUserDetailResponse(BaseModel):
 
     id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
+    role_id: int = Field(..., description="角色 ID")
+    real_name: str | None = Field(None, description="真实姓名")
+    phone: str | None = Field(None, description="手机号")
+    dingtalk_id: str | None = Field(None, description="钉钉ID_用于推送")
+    status: int = Field(..., description="状态")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -59,5 +74,19 @@ class AddUserResponse(BaseModel):
 
     id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UpdateUserResponse(BaseModel):
+    """更新用户响应"""
+
+    id: int = Field(..., description="用户 ID")
+    username: str = Field(..., description="用户名")
+    role_id: int = Field(..., description="角色 ID")
+    real_name: str | None = Field(None, description="真实姓名")
+    phone: str | None = Field(None, description="手机号")
+    dingtalk_id: str | None = Field(None, description="钉钉ID_用于推送")
+    status: int = Field(..., description="状态")
 
     model_config = ConfigDict(from_attributes=True)

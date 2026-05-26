@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Body, Query
+from fastapi import APIRouter, Depends, Body, Query, Path
 from typing import Annotated
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,5 +46,42 @@ async def add_user(
     """添加用户"""
     try:
         return success(await service_users.add_user(db, add_user_request))
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.get(
+    "/{id}",
+    response_model=ApiResponse[schemas_users.GetUserDetailResponse],
+    description="获取用户详情",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def get_user_detail(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="用户 ID")],
+):
+    """获取用户详情"""
+    try:
+        return success(await service_users.get_user_detail(db, id))
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.put(
+    "/{id}",
+    response_model=ApiResponse[schemas_users.UpdateUserResponse],
+    description="更新用户",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def update_user(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="用户 ID")],
+    update_user_request: Annotated[
+        schemas_users.UpdateUserRequest, Body(..., description="更新用户请求")
+    ],
+):
+    """更新用户"""
+    try:
+        return success(await service_users.update_user(db, id, update_user_request))
     except ServiceException as e:
         return error(e.code, e.message)
