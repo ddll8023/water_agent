@@ -79,3 +79,52 @@ async def create_reservoir(
     await commit_or_rollback(db)
     await db.refresh(reservoir_entity)
     return True
+
+
+async def get_reservoir_detail(db: AsyncSession, reservoir_id: int):
+    """获取水库详情"""
+    reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
+    if not reservoir_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
+    return schemas_reservoir.GetReservoirDetailResponse.model_validate(reservoir_entity)
+
+
+async def update_reservoir(
+    db: AsyncSession,
+    reservoir_id: int,
+    update_reservoir_request: schemas_reservoir.UpdateReservoirRequest,
+):
+    """更新水库"""
+    reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
+    if not reservoir_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
+    if update_reservoir_request.code is not None:
+        existing = await db.scalar(
+            select(models_reservoir.Reservoir).where(
+                models_reservoir.Reservoir.code == update_reservoir_request.code
+            )
+        )
+        if existing and existing.id != reservoir_id:
+            raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "水库编码已存在")
+        reservoir_entity.code = update_reservoir_request.code
+    if update_reservoir_request.name is not None:
+        reservoir_entity.name = update_reservoir_request.name
+    if update_reservoir_request.location is not None:
+        reservoir_entity.location = update_reservoir_request.location
+    if update_reservoir_request.longitude is not None:
+        reservoir_entity.longitude = update_reservoir_request.longitude
+    if update_reservoir_request.latitude is not None:
+        reservoir_entity.latitude = update_reservoir_request.latitude
+    if update_reservoir_request.capacity is not None:
+        reservoir_entity.capacity = update_reservoir_request.capacity
+    if update_reservoir_request.watershed is not None:
+        reservoir_entity.watershed = update_reservoir_request.watershed
+    if update_reservoir_request.water_grade is not None:
+        reservoir_entity.water_grade = update_reservoir_request.water_grade
+    if update_reservoir_request.status is not None:
+        reservoir_entity.status = update_reservoir_request.status
+    if update_reservoir_request.sort_order is not None:
+        reservoir_entity.sort_order = update_reservoir_request.sort_order
+
+    await commit_or_rollback(db)
+    return True

@@ -85,7 +85,7 @@
       </el-table-column>
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
-          <el-button type="primary" link size="small">编辑</el-button>
+          <el-button type="primary" link size="small" @click="openEditDialog(row.id)">编辑</el-button>
           <el-button type="danger" link size="small">删除</el-button>
         </template>
       </el-table-column>
@@ -188,6 +188,91 @@
         <el-button type="primary" :loading="createLoading" @click="handleCreateReservoir">确 定</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑水库"
+      width="600px"
+      :close-on-click-modal="false"
+      @close="resetEditForm"
+    >
+      <el-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="editFormRules"
+        label-width="100px"
+        label-position="right"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="水库名称" prop="name">
+              <el-input v-model="editForm.name" placeholder="请输入水库名称" maxlength="100" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="水库编号" prop="code">
+              <el-input v-model="editForm.code" placeholder="请输入水库编号" maxlength="50" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="所在位置" prop="location">
+              <el-input v-model="editForm.location" placeholder="请输入所在位置" maxlength="200" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属流域" prop="watershed">
+              <el-select v-model="editForm.watershed" placeholder="请选择所属流域" clearable class="w-full">
+                <el-option label="长江流域" value="长江流域" />
+                <el-option label="黄河流域" value="黄河流域" />
+                <el-option label="珠江流域" value="珠江流域" />
+                <el-option label="淮河流域" value="淮河流域" />
+                <el-option label="海河流域" value="海河流域" />
+                <el-option label="松花江流域" value="松花江流域" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="经度" prop="longitude">
+              <el-input v-model="editForm.longitude" placeholder="如：110.123456" maxlength="50" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="纬度" prop="latitude">
+              <el-input v-model="editForm.latitude" placeholder="如：30.123456" maxlength="50" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="库容(万m³)" prop="capacity">
+              <el-input v-model="editForm.capacity" placeholder="请输入库容" maxlength="50" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="水质等级" prop="water_grade">
+              <el-select v-model="editForm.water_grade" placeholder="请选择水质等级" clearable class="w-full">
+                <el-option label="Ⅰ类" value="Ⅰ类" />
+                <el-option label="Ⅱ类" value="Ⅱ类" />
+                <el-option label="Ⅲ类" value="Ⅲ类" />
+                <el-option label="Ⅳ类" value="Ⅳ类" />
+                <el-option label="Ⅴ类" value="Ⅴ类" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="排序" prop="sort_order">
+          <el-input-number v-model="editForm.sort_order" :min="0" :max="9999" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editLoading" @click="handleUpdateReservoir">确 定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -200,7 +285,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getReservoirList, createReservoir } from '@/api/reservoir'
+import { getReservoirList, createReservoir, getReservoirDetail, updateReservoir } from '@/api/reservoir'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -346,6 +431,103 @@ const handleCreateReservoir = async () => {
     ElMessage.error(e.message || '创建水库失败')
   } finally {
     createLoading.value = false
+  }
+}
+
+const editDialogVisible = ref(false)
+const editLoading = ref(false)
+const editFormRef = ref(null)
+const editingReservoirId = ref(null)
+
+const editForm = reactive({
+  name: '',
+  code: '',
+  location: '',
+  longitude: '',
+  latitude: '',
+  capacity: '',
+  water_grade: '',
+  watershed: '',
+  sort_order: 0
+})
+
+const editFormRules = {
+  name: [
+    { required: true, message: '请输入水库名称', trigger: 'blur' },
+    { max: 100, message: '水库名称不超过100个字符', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入水库编号', trigger: 'blur' },
+    { max: 50, message: '水库编号不超过50个字符', trigger: 'blur' }
+  ]
+}
+
+const openEditDialog = async (id) => {
+  editingReservoirId.value = id
+  editDialogVisible.value = true
+  editLoading.value = true
+  try {
+    const res = await getReservoirDetail(id)
+    const detail = res.data
+    editForm.name = detail.name ?? ''
+    editForm.code = detail.code ?? ''
+    editForm.location = detail.location ?? ''
+    editForm.longitude = detail.longitude ?? ''
+    editForm.latitude = detail.latitude ?? ''
+    editForm.capacity = detail.capacity ?? ''
+    editForm.water_grade = detail.water_grade ?? ''
+    editForm.watershed = detail.watershed ?? ''
+    editForm.sort_order = detail.sort_order ?? 0
+  } catch (e) {
+    ElMessage.error(e.message || '获取水库详情失败')
+    editDialogVisible.value = false
+  } finally {
+    editLoading.value = false
+  }
+}
+
+const resetEditForm = () => {
+  editForm.name = ''
+  editForm.code = ''
+  editForm.location = ''
+  editForm.longitude = ''
+  editForm.latitude = ''
+  editForm.capacity = ''
+  editForm.water_grade = ''
+  editForm.watershed = ''
+  editForm.sort_order = 0
+  editingReservoirId.value = null
+  editFormRef.value?.clearValidate()
+}
+
+const handleUpdateReservoir = async () => {
+  if (!editFormRef.value) return
+  try {
+    await editFormRef.value.validate()
+  } catch {
+    return
+  }
+  editLoading.value = true
+  try {
+    const payload = {
+      name: editForm.name,
+      code: editForm.code,
+      location: editForm.location || undefined,
+      longitude: editForm.longitude || undefined,
+      latitude: editForm.latitude || undefined,
+      capacity: editForm.capacity || undefined,
+      water_grade: editForm.water_grade || undefined,
+      watershed: editForm.watershed || undefined,
+      sort_order: editForm.sort_order
+    }
+    await updateReservoir(editingReservoirId.value, payload)
+    ElMessage.success('水库更新成功')
+    editDialogVisible.value = false
+    await fetchReservoirList()
+  } catch (e) {
+    ElMessage.error(e.message || '更新水库失败')
+  } finally {
+    editLoading.value = false
   }
 }
 </script>

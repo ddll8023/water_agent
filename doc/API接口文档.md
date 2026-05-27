@@ -40,6 +40,7 @@
 | 4001 | 调用 AI 服务错误 |
 | 5001 | 服务器内部错误 |
 | 6001 | 密码错误 |
+| 7001 | 资源已存在 |
 
 - **Swagger 文档**：`http://localhost:3443/docs`
 
@@ -883,3 +884,120 @@ Authorization: Bearer <token>
 |--------|------|
 | 1001 | 参数错误（缺少必填项） |
 | 7001 | 资源已存在（水库编号已存在） |
+
+### 5.3 获取水库详情
+
+- **GET** `/api/reservoir/{id}`
+- **描述**：根据水库 ID 获取水库详细信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 水库 ID |
+
+**请求示例**：
+
+```
+GET /api/reservoir/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "name": "三峡水库",
+    "code": "SX-001",
+    "location": "湖北省宜昌市",
+    "longitude": "111.508",
+    "latitude": "30.824",
+    "capacity": "393000",
+    "water_grade": "Ⅱ类",
+    "watershed": "长江流域",
+    "sort_order": 0,
+    "status": 1,
+    "created_at": "2026-05-25T10:30:00"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 水库 ID |
+| name | string | 水库名称 |
+| code | string | 水库编号 |
+| location | string\|null | 所在位置 |
+| longitude | string\|null | 经度 |
+| latitude | string\|null | 纬度 |
+| capacity | string\|null | 库容（万 m³） |
+| water_grade | string\|null | 水质等级 |
+| watershed | string\|null | 所属流域 |
+| sort_order | int | 排序值 |
+| status | int | 状态：0=停用，1=启用 |
+| created_at | datetime | 创建时间 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（水库不存在） |
+
+### 5.4 更新水库
+
+- **PUT** `/api/reservoir/{id}`
+- **描述**：管理员更新水库信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 水库 ID |
+| name | string\|null | body | 否 | 水库名称 |
+| code | string\|null | body | 否 | 水库编号 |
+| location | string\|null | body | 否 | 所在位置 |
+| longitude | string\|null | body | 否 | 经度 |
+| latitude | string\|null | body | 否 | 纬度 |
+| capacity | string\|null | body | 否 | 库容（万 m³） |
+| water_grade | string\|null | body | 否 | 水质等级 |
+| watershed | string\|null | body | 否 | 所属流域 |
+| status | int\|null | body | 否 | 状态：0=停用，1=启用 |
+| sort_order | int\|null | body | 否 | 排序值 |
+
+**请求体示例**：
+
+```json
+{
+  "name": "三峡水库",
+  "code": "SX-001",
+  "location": "湖北省宜昌市夷陵区",
+  "longitude": "111.512",
+  "latitude": "30.828",
+  "capacity": "393000",
+  "water_grade": "Ⅰ类",
+  "watershed": "长江流域",
+  "status": 1,
+  "sort_order": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（水库不存在） |
+| 7001 | 资源已存在（水库编码已存在） |
