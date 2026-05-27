@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field, ConfigDict
 class GetRoleListRequest(BaseModel):
     """角色列表请求"""
 
+    keyword: str | None = Field(None, description="搜索关键词")
+
     page: int | None = Field(1, ge=1, description="页码")
     page_size: int | None = Field(10, ge=10, description="每页数量")
 

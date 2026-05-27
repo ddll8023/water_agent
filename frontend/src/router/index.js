@@ -19,6 +19,12 @@ const routes = [
         name: 'UserManage',
         component: () => import('@/views/system/UserManage.vue'),
         meta: { title: '用户管理' }
+      },
+      {
+        path: 'system/reservoirs',
+        name: 'ReservoirManage',
+        component: () => import('@/views/system/ReservoirManage.vue'),
+        meta: { title: '水库管理' }
       }
     ]
   },

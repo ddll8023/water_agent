@@ -16,9 +16,19 @@ async def get_user_list(
     """获取用户列表"""
     total = await db.scalar(select(func.count(models_user.User.id)))
 
+    stmt = select(models_user.User)
+
+    if get_user_list_request.keyword:
+        stmt = stmt.where(
+            models_user.User.username.like(f"%{get_user_list_request.keyword}%")
+        )
+    if get_user_list_request.role_id:
+        stmt = stmt.where(models_user.User.role_id == get_user_list_request.role_id)
+    if get_user_list_request.status is not None:
+        stmt = stmt.where(models_user.User.status == get_user_list_request.status)
+
     user_entity_list = await db.scalars(
-        select(models_user.User)
-        .order_by(models_user.User.id.desc())
+        stmt.order_by(models_user.User.id.desc())
         .offset((get_user_list_request.page - 1) * get_user_list_request.page_size)
         .limit(get_user_list_request.page_size)
     )

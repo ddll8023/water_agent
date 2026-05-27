@@ -5,6 +5,7 @@ from app.core.database import engine, Base
 from app.routers import auth as auth_router
 from app.routers import users as users_router
 from app.routers import roles as roles_router
+from app.routers import reservoir as reservoir_router
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
@@ -19,6 +20,7 @@ app.add_middleware(
 app.include_router(auth_router.router)
 app.include_router(users_router.router)
 app.include_router(roles_router.router)
+app.include_router(reservoir_router.router)
 
 
 @app.on_event("startup")

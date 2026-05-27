@@ -9,7 +9,6 @@ from sqlalchemy import (
 )
 from app.core.database import Base
 from datetime import datetime
-from app.models.role import Role
 
 
 class User(Base):

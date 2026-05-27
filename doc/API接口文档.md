@@ -752,3 +752,82 @@ Authorization: Bearer <token>
 | 错误码 | 场景 |
 |--------|------|
 | 1002 | 数据不存在（角色不存在） |
+
+---
+
+## 五、水库管理（/api/reservoir）
+
+水库列表查询与分页接口。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 5.1 获取水库列表
+
+- **GET** `/api/reservoir/list`
+- **描述**：分页获取水库列表，支持关键词搜索、所属流域、水质等级和状态筛选。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| keyword | string\|null | body | 否 | 搜索关键词（匹配水库名称、水库编号） |
+| watershed | string\|null | body | 否 | 所属流域筛选 |
+| water_grade | string\|null | body | 否 | 水质等级筛选 |
+| status | int\|null | body | 否 | 状态筛选：0=停用，1=启用 |
+| page | int | body | 是 | 页码，默认 1 |
+| page_size | int | body | 是 | 每页数量，默认 10 |
+
+**请求体示例**：
+
+```json
+{
+  "keyword": null,
+  "watershed": null,
+  "water_grade": null,
+  "status": null,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "name": "三峡水库",
+        "code": "SX-001",
+        "capacity": "393000",
+        "water_grade": "Ⅱ类",
+        "watershed": "长江流域",
+        "sort_order": 0,
+        "created_at": "2026-05-25T10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| lists[].id | int | 水库 ID |
+| lists[].name | string | 水库名称 |
+| lists[].code | string | 水库编号 |
+| lists[].capacity | string\|null | 库容（万 m³） |
+| lists[].water_grade | string\|null | 水质等级（如 Ⅱ类、Ⅲ类） |
+| lists[].watershed | string\|null | 所属流域 |
+| lists[].sort_order | int | 排序值 |
+| lists[].created_at | datetime | 创建时间 |
+| pagination.page | int | 当前页码 |
+| pagination.page_size | int | 每页数量 |
+| pagination.total | int | 总记录数 |
+| pagination.total_pages | int | 总页数 |

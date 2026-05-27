@@ -17,3 +17,4 @@ langchain_deepseek
 redis
 neo4j
 python_jose
+cryptography

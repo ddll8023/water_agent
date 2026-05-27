@@ -26,6 +26,10 @@
               <el-icon><User /></el-icon>
               <span>用户管理</span>
             </el-menu-item>
+            <el-menu-item index="/system/reservoirs">
+              <el-icon><Collection /></el-icon>
+              <span>水库管理</span>
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-scrollbar>
@@ -93,6 +97,7 @@ import {
   Monitor,
   Setting,
   User,
+  Collection,
   Fold,
   Expand,
   ArrowDown,

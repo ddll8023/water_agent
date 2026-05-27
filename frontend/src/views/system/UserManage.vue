@@ -3,15 +3,33 @@
     <el-tabs v-model="activeTab" type="border-card" class="bg-white rounded-lg shadow-sm">
       <el-tab-pane label="用户管理" name="users">
         <div class="flex items-center justify-between mb-4">
-          <el-button type="primary" @click="handleAddUser">
-            <el-icon><Plus /></el-icon>
-            新增用户
-          </el-button>
+          <div class="flex items-center gap-2">
+            <el-button type="primary" @click="handleAddUser">
+              <el-icon><Plus /></el-icon>
+              新增用户
+            </el-button>
+            <el-select v-model="roleFilter" placeholder="角色筛选" clearable class="w-36">
+              <el-option
+                v-for="role in allRoles"
+                :key="role.id"
+                :label="role.name"
+                :value="role.id"
+              />
+            </el-select>
+            <el-select v-model="statusFilter" placeholder="状态筛选" clearable class="w-28">
+              <el-option label="启用" :value="1" />
+              <el-option label="禁用" :value="0" />
+            </el-select>
+            <el-button type="primary" @click="handleSearch">
+              <el-icon><Search /></el-icon>
+              搜索
+            </el-button>
+          </div>
           <el-input
             v-model="searchKeyword"
-            placeholder="搜索用户名、真实姓名、手机号"
+            placeholder="搜索用户名"
             clearable
-            class="w-72"
+            class="w-64"
             @clear="handleSearch"
             @keyup.enter="handleSearch"
           >
@@ -94,6 +112,24 @@
             <el-icon><Plus /></el-icon>
             新增角色
           </el-button>
+          <div class="flex items-center gap-2">
+            <el-input
+              v-model="roleSearchKeyword"
+              placeholder="搜索角色名称"
+              clearable
+              class="w-64"
+              @clear="handleRoleSearch"
+              @keyup.enter="handleRoleSearch"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <el-button type="primary" @click="handleRoleSearch">
+              <el-icon><Search /></el-icon>
+              搜索
+            </el-button>
+          </div>
         </div>
         <el-table
           v-loading="roleLoading"
@@ -465,6 +501,9 @@ const pagination = reactive({
   total_pages: 0
 })
 
+const roleFilter = ref(null)
+const statusFilter = ref(null)
+
 const roleLoading = ref(false)
 const roleList = ref([])
 const rolePagination = reactive({
@@ -473,6 +512,7 @@ const rolePagination = reactive({
   total: 0,
   total_pages: 0
 })
+const roleSearchKeyword = ref('')
 
 const addUserDialogVisible = ref(false)
 const addUserLoading = ref(false)
@@ -533,13 +573,14 @@ const formatDateTime = (value) => {
 const fetchUserList = async () => {
   loading.value = true
   try {
-    const res = await getUserList({
-      keyword: searchKeyword.value || null,
-      role_id: null,
-      status: null,
+    const params = {
+      keyword: searchKeyword.value || undefined,
+      role_id: roleFilter.value ?? undefined,
+      status: statusFilter.value ?? undefined,
       page: pagination.page,
       page_size: pagination.page_size
-    })
+    }
+    const res = await getUserList(params)
     userList.value = res.data.lists
     pagination.total = res.data.pagination.total
     pagination.total_pages = res.data.pagination.total_pages
@@ -552,6 +593,11 @@ const fetchUserList = async () => {
 }
 
 const handleSearch = () => {
+  pagination.page = 1
+  fetchUserList()
+}
+
+const handleUserFilterChange = () => {
   pagination.page = 1
   fetchUserList()
 }
@@ -856,6 +902,7 @@ const fetchRoleList = async () => {
   roleLoading.value = true
   try {
     const res = await getRoleList({
+      keyword: roleSearchKeyword.value || undefined,
       page: rolePagination.page,
       page_size: rolePagination.page_size
     })
@@ -868,6 +915,11 @@ const fetchRoleList = async () => {
   } finally {
     roleLoading.value = false
   }
+}
+
+const handleRoleSearch = () => {
+  rolePagination.page = 1
+  fetchRoleList()
 }
 
 const handleRoleSizeChange = () => {
@@ -887,5 +939,6 @@ watch(activeTab, (newVal) => {
 
 onMounted(() => {
   fetchUserList()
+  fetchAllRoles()
 })
 </script>
