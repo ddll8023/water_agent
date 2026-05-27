@@ -51,3 +51,15 @@ export function updateReservoir(id, data) {
     data
   })
 }
+
+/**
+ * 删除水库
+ * @param {number} id - 水库ID
+ * @returns {Promise} 删除结果
+ */
+export function deleteReservoir(id) {
+  return request({
+    method: 'delete',
+    url: `/reservoir/${id}`
+  })
+}

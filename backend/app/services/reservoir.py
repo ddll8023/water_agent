@@ -128,3 +128,13 @@ async def update_reservoir(
 
     await commit_or_rollback(db)
     return True
+
+
+async def delete_reservoir(db: AsyncSession, reservoir_id: int):
+    """删除水库"""
+    reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
+    if not reservoir_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
+    await db.delete(reservoir_entity)
+    await commit_or_rollback(db)
+    return True

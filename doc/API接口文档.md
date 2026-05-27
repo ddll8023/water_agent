@@ -1001,3 +1001,43 @@ Authorization: Bearer <token>
 |--------|------|
 | 1002 | 数据不存在（水库不存在） |
 | 7001 | 资源已存在（水库编码已存在） |
+
+### 5.5 删除水库
+
+- **DELETE** `/api/reservoir/{id}`
+- **描述**：管理员删除指定水库。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 水库 ID |
+
+**请求示例**：
+
+```
+DELETE /api/reservoir/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（水库不存在） |
+
+---

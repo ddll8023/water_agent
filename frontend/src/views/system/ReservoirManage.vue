@@ -86,7 +86,7 @@
       <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="openEditDialog(row.id)">编辑</el-button>
-          <el-button type="danger" link size="small">删除</el-button>
+          <el-button type="danger" link size="small" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -283,9 +283,9 @@
  * 依赖组件：无
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getReservoirList, createReservoir, getReservoirDetail, updateReservoir } from '@/api/reservoir'
+import { getReservoirList, createReservoir, getReservoirDetail, updateReservoir, deleteReservoir } from '@/api/reservoir'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -528,6 +528,25 @@ const handleUpdateReservoir = async () => {
     ElMessage.error(e.message || '更新水库失败')
   } finally {
     editLoading.value = false
+  }
+}
+
+const handleDelete = async (id) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该水库吗？删除后不可恢复。', '删除确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteReservoir(id)
+    ElMessage.success('水库删除成功')
+    await fetchReservoirList()
+  } catch (e) {
+    ElMessage.error(e.message || '删除水库失败')
   }
 }
 </script>

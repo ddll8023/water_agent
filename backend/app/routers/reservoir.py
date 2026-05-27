@@ -95,3 +95,19 @@ async def update_reservoir(
         )
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.delete(
+    "/{id}",
+    response_model=ApiResponse,
+    dependencies=[Depends(require_role("admin"))],
+    description="删除水库",
+)
+async def delete_reservoir(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="水库ID")],
+):
+    try:
+        return success(await service_reservoir.delete_reservoir(db, id))
+    except ServiceException as e:
+        return error(e.code, e.message)

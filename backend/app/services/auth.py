@@ -9,6 +9,8 @@ from app.core.security import create_access_token
 from sqlalchemy import select
 from datetime import datetime
 
+from app.services.roles import models_role
+
 logger = setup_logger(__name__)
 
 
@@ -32,7 +34,7 @@ async def login(db: AsyncSession, login_request: schemas_auth.LoginRequest):
 
     user_entity.last_login = datetime.now()
     await commit_or_rollback(db)
-    role_entity = await db.get(models_user.Role, user_entity.role_id)
+    role_entity = await db.get(models_role.Role, user_entity.role_id)
     if not role_entity:
         logger.error("角色不存在")
         raise ServiceException(message="角色不存在")
