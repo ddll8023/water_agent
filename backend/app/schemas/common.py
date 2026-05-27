@@ -63,3 +63,6 @@ class ErrorCode(IntEnum):
 
     # 密码错误
     PASSWORD_ERROR = 6001
+
+    # 资源已存在
+    RESOURCE_ALREADY_EXISTS = 7001

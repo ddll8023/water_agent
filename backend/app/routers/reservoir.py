@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body
 from typing import Annotated
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,5 +33,25 @@ async def get_reservoir_list(
             db, get_reservoir_list_request
         )
         return success(data=result)
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.post(
+    "/create",
+    response_model=ApiResponse,
+    dependencies=[Depends(require_role("admin"))],
+    description="创建水库",
+)
+async def create_reservoir(
+    db: AsyncSession = Depends(get_db),
+    create_reservoir_request: schemas_reservoir.CreateReservoirRequest = Body(
+        ..., description="创建水库请求参数"
+    ),
+):
+    try:
+        return success(
+            await service_reservoir.create_reservoir(db, create_reservoir_request)
+        )
     except ServiceException as e:
         return error(e.code, e.message)

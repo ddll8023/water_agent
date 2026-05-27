@@ -12,3 +12,16 @@ export function getReservoirList(params) {
     params
   })
 }
+
+/**
+ * 创建水库
+ * @param {Object} data - 创建水库请求参数
+ * @returns {Promise} 创建结果
+ */
+export function createReservoir(data) {
+  return request({
+    method: 'post',
+    url: '/reservoir/create',
+    data
+  })
+}

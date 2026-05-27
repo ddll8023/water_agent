@@ -39,21 +39,12 @@
           <el-option label="Ⅳ类" value="Ⅳ类" />
           <el-option label="Ⅴ类" value="Ⅴ类" />
         </el-select>
-        <el-select
-          v-model="filterStatus"
-          placeholder="状态"
-          clearable
-          class="w-28"
-        >
-          <el-option label="启用" :value="1" />
-          <el-option label="停用" :value="0" />
-        </el-select>
         <el-button type="primary" @click="handleSearch">
           <el-icon><Search /></el-icon>
           搜索
         </el-button>
       </div>
-      <el-button type="primary">
+      <el-button type="primary" @click="openCreateDialog">
         <el-icon><Plus /></el-icon>
         新增水库
       </el-button>
@@ -87,16 +78,6 @@
           {{ row.watershed || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="状态" width="80" align="center">
-        <template #default="{ row }">
-          <el-switch
-            :model-value="row.status === 1"
-            disabled
-            size="small"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column prop="sort_order" label="排序" width="70" align="center" />
       <el-table-column label="创建时间" min-width="170">
         <template #default="{ row }">
           {{ formatDateTime(row.created_at) }}
@@ -122,6 +103,91 @@
         @current-change="handlePageChange"
       />
     </div>
+
+    <el-dialog
+      v-model="createDialogVisible"
+      title="新增水库"
+      width="600px"
+      :close-on-click-modal="false"
+      @close="resetCreateForm"
+    >
+      <el-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createFormRules"
+        label-width="100px"
+        label-position="right"
+      >
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="水库名称" prop="name">
+              <el-input v-model="createForm.name" placeholder="请输入水库名称" maxlength="100" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="水库编号" prop="code">
+              <el-input v-model="createForm.code" placeholder="请输入水库编号" maxlength="50" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="所在位置" prop="location">
+              <el-input v-model="createForm.location" placeholder="请输入所在位置" maxlength="200" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="所属流域" prop="watershed">
+              <el-select v-model="createForm.watershed" placeholder="请选择所属流域" clearable class="w-full">
+                <el-option label="长江流域" value="长江流域" />
+                <el-option label="黄河流域" value="黄河流域" />
+                <el-option label="珠江流域" value="珠江流域" />
+                <el-option label="淮河流域" value="淮河流域" />
+                <el-option label="海河流域" value="海河流域" />
+                <el-option label="松花江流域" value="松花江流域" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="经度" prop="longitude">
+              <el-input v-model="createForm.longitude" placeholder="如：110.123456" maxlength="50" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="纬度" prop="latitude">
+              <el-input v-model="createForm.latitude" placeholder="如：30.123456" maxlength="50" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="库容(万m³)" prop="capacity">
+              <el-input v-model="createForm.capacity" placeholder="请输入库容" maxlength="50" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="水质等级" prop="water_grade">
+              <el-select v-model="createForm.water_grade" placeholder="请选择水质等级" clearable class="w-full">
+                <el-option label="Ⅰ类" value="Ⅰ类" />
+                <el-option label="Ⅱ类" value="Ⅱ类" />
+                <el-option label="Ⅲ类" value="Ⅲ类" />
+                <el-option label="Ⅳ类" value="Ⅳ类" />
+                <el-option label="Ⅴ类" value="Ⅴ类" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="排序" prop="sort_order">
+          <el-input-number v-model="createForm.sort_order" :min="0" :max="9999" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreateReservoir">确 定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -134,13 +200,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getReservoirList } from '@/api/reservoir'
+import { getReservoirList, createReservoir } from '@/api/reservoir'
 
 const loading = ref(false)
 const searchKeyword = ref('')
 const filterWatershed = ref(null)
 const filterWaterGrade = ref(null)
-const filterStatus = ref(null)
 
 const reservoirList = ref([])
 const pagination = reactive({
@@ -175,7 +240,6 @@ const fetchReservoirList = async () => {
       keyword: searchKeyword.value || undefined,
       watershed: filterWatershed.value || undefined,
       water_grade: filterWaterGrade.value || undefined,
-      status: filterStatus.value ?? undefined,
       page: pagination.page,
       page_size: pagination.page_size
     }
@@ -208,4 +272,80 @@ const handleSizeChange = () => {
 onMounted(() => {
   fetchReservoirList()
 })
+
+const createDialogVisible = ref(false)
+const createLoading = ref(false)
+const createFormRef = ref(null)
+
+const createForm = reactive({
+  name: '',
+  code: '',
+  location: '',
+  longitude: '',
+  latitude: '',
+  capacity: '',
+  water_grade: '',
+  watershed: '',
+  sort_order: 0
+})
+
+const createFormRules = {
+  name: [
+    { required: true, message: '请输入水库名称', trigger: 'blur' },
+    { max: 100, message: '水库名称不超过100个字符', trigger: 'blur' }
+  ],
+  code: [
+    { required: true, message: '请输入水库编号', trigger: 'blur' },
+    { max: 50, message: '水库编号不超过50个字符', trigger: 'blur' }
+  ]
+}
+
+const openCreateDialog = () => {
+  createDialogVisible.value = true
+}
+
+const resetCreateForm = () => {
+  createForm.name = ''
+  createForm.code = ''
+  createForm.location = ''
+  createForm.longitude = ''
+  createForm.latitude = ''
+  createForm.capacity = ''
+  createForm.water_grade = ''
+  createForm.watershed = ''
+  createForm.sort_order = 0
+  createFormRef.value?.clearValidate()
+}
+
+const handleCreateReservoir = async () => {
+  if (!createFormRef.value) return
+  try {
+    await createFormRef.value.validate()
+  } catch {
+    return
+  }
+  createLoading.value = true
+  try {
+    const payload = {
+      name: createForm.name,
+      code: createForm.code,
+      location: createForm.location || undefined,
+      longitude: createForm.longitude || undefined,
+      latitude: createForm.latitude || undefined,
+      capacity: createForm.capacity || undefined,
+      water_grade: createForm.water_grade || undefined,
+      watershed: createForm.watershed || undefined,
+      sort_order: createForm.sort_order
+    }
+    await createReservoir(payload)
+    ElMessage.success('水库创建成功')
+    createDialogVisible.value = false
+    pagination.page = 1
+    await fetchReservoirList()
+  } catch (e) {
+    ElMessage.error(e.message || '创建水库失败')
+  } finally {
+    createLoading.value = false
+  }
+}
 </script>

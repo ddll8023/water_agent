@@ -831,3 +831,55 @@ Authorization: Bearer <token>
 | pagination.page_size | int | 每页数量 |
 | pagination.total | int | 总记录数 |
 | pagination.total_pages | int | 总页数 |
+
+### 5.2 创建水库
+
+- **POST** `/api/reservoir/create`
+- **描述**：管理员新增水库。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| name | string | body | 是 | 水库名称 |
+| code | string | body | 是 | 水库编号 |
+| location | string\|null | body | 否 | 所在位置 |
+| longitude | string\|null | body | 否 | 经度 |
+| latitude | string\|null | body | 否 | 纬度 |
+| capacity | string\|null | body | 否 | 库容（万 m³） |
+| water_grade | string\|null | body | 否 | 水质等级（如 Ⅱ类、Ⅲ类） |
+| watershed | string\|null | body | 否 | 所属流域 |
+| sort_order | int | body | 否 | 排序值，默认 0 |
+
+**请求体示例**：
+
+```json
+{
+  "name": "丹江口水库",
+  "code": "DJK-001",
+  "location": "湖北省丹江口市",
+  "longitude": "111.508",
+  "latitude": "32.558",
+  "capacity": "290500",
+  "water_grade": "Ⅱ类",
+  "watershed": "长江流域",
+  "sort_order": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1001 | 参数错误（缺少必填项） |
+| 7001 | 资源已存在（水库编号已存在） |

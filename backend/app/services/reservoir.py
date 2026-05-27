@@ -60,13 +60,22 @@ async def get_reservoir_list(
     )
 
 
-async def get_reservoir(
+async def create_reservoir(
     db: AsyncSession, create_reservoir_request: schemas_reservoir.CreateReservoirRequest
 ):
-    """获取水库详情"""
-    reservoir_entity = await db.get(
-        models_reservoir.Reservoir, create_reservoir_request.id
+    """创建水库"""
+    existing = await db.scalar(
+        select(models_reservoir.Reservoir).where(
+            models_reservoir.Reservoir.code == create_reservoir_request.code
+        )
     )
-    if not reservoir_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
-    return schemas_reservoir.CreateReservoirResponse.model_validate(reservoir_entity)
+    if existing:
+        raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "水库已存在")
+
+    reservoir_entity = models_reservoir.Reservoir(
+        **create_reservoir_request.model_dump()
+    )
+    db.add(reservoir_entity)
+    await commit_or_rollback(db)
+    await db.refresh(reservoir_entity)
+    return True
