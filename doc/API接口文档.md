@@ -26,21 +26,21 @@
 
 - **错误码表**：
 
-| 错误码 | 说明 |
-|--------|------|
-| 0 | 成功 |
-| 1001 | 参数错误 |
-| 1002 | 数据不存在 |
-| 2001 | 未登录 / 用户不存在或已禁用 |
-| 2002 | 令牌过期 |
-| 2003 | 权限不足 |
-| 2004 | 令牌无效 |
-| 3001 | 文件格式不支持 |
-| 3002 | 文件大小超过限制 |
-| 4001 | 调用 AI 服务错误 |
-| 5001 | 服务器内部错误 |
-| 6001 | 密码错误 |
-| 7001 | 资源已存在 |
+| 错误码 | 说明                        |
+| ------ | --------------------------- |
+| 0      | 成功                        |
+| 1001   | 参数错误                    |
+| 1002   | 数据不存在                  |
+| 2001   | 未登录 / 用户不存在或已禁用 |
+| 2002   | 令牌过期                    |
+| 2003   | 权限不足                    |
+| 2004   | 令牌无效                    |
+| 3001   | 文件格式不支持              |
+| 3002   | 文件大小超过限制            |
+| 4001   | 调用 AI 服务错误            |
+| 5001   | 服务器内部错误              |
+| 6001   | 密码错误                    |
+| 7001   | 资源已存在                  |
 
 - **Swagger 文档**：`http://localhost:3443/docs`
 
@@ -55,12 +55,12 @@
 - **POST** `/api/auth/login`
 - **描述**：用户使用用户名和密码登录，返回访问令牌。
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| username | string | body | 是 | 用户名 |
-| password | string | body | 是 | 密码 |
-| phone | string\|null | body | 否 | 手机号，11 位 |
-| dingtalk_id | string\|null | body | 否 | 钉钉 ID，用于消息推送 |
+| 参数        | 类型         | 位置 | 必填 | 说明                  |
+| ----------- | ------------ | ---- | ---- | --------------------- |
+| username    | string       | body | 是   | 用户名                |
+| password    | string       | body | 是   | 密码                  |
+| phone       | string\|null | body | 否   | 手机号，11 位         |
+| dingtalk_id | string\|null | body | 否   | 钉钉 ID，用于消息推送 |
 
 **请求体示例**：
 
@@ -84,10 +84,10 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段         | 类型   | 说明                         |
+| ------------ | ------ | ---------------------------- |
 | access_token | string | JWT 访问令牌，有效期 24 小时 |
-| username | string | 用户名 |
+| username     | string | 用户名                       |
 
 ---
 
@@ -96,11 +96,11 @@
 - **POST** `/api/auth/register`
 - **描述**：新用户注册。
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| username | string | body | 是 | 用户名 |
-| password | string | body | 是 | 密码 |
-| phone | string\|null | body | 否 | 手机号，11 位 |
+| 参数     | 类型         | 位置 | 必填 | 说明          |
+| -------- | ------------ | ---- | ---- | ------------- |
+| username | string       | body | 是   | 用户名        |
+| password | string       | body | 是   | 密码          |
+| phone    | string\|null | body | 否   | 手机号，11 位 |
 
 **请求体示例**：
 
@@ -124,10 +124,10 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| user_id | int | 用户 ID |
-| username | string | 用户名 |
+| 字段     | 类型   | 说明    |
+| -------- | ------ | ------- |
+| user_id  | int    | 用户 ID |
+| username | string | 用户名  |
 
 ---
 
@@ -148,8 +148,8 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段    | 类型   | 说明             |
+| ------- | ------ | ---------------- |
 | message | string | 退出登录提示信息 |
 
 ---
@@ -160,9 +160,9 @@
 - **描述**：根据 Token 获取当前登录用户的详细信息。需要 Bearer Token 认证。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
 
 **响应格式**：
 
@@ -180,12 +180,12 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| user_id | int | 用户 ID |
-| username | string | 用户名 |
-| role | string | 用户角色名称 |
-| phone | string\|null | 手机号 |
+| 字段        | 类型         | 说明                  |
+| ----------- | ------------ | --------------------- |
+| user_id     | int          | 用户 ID               |
+| username    | string       | 用户名                |
+| role        | string       | 用户角色名称          |
+| phone       | string\|null | 手机号                |
 | dingtalk_id | string\|null | 钉钉 ID，用于消息推送 |
 
 ---
@@ -206,11 +206,10 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| status | string | 服务状态，正常为 `ok` |
-| version | string | 应用版本号 |
-
+| 字段    | 类型   | 说明                    |
+| ------- | ------ | ----------------------- |
+| status  | string | 服务状态，正常为 `ok` |
+| version | string | 应用版本号              |
 
 ---
 
@@ -224,14 +223,14 @@
 - **描述**：分页获取用户列表，支持关键词搜索和角色/状态筛选。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| keyword | string\|null | body | 否 | 搜索关键词（匹配用户名、真实姓名、手机号） |
-| role_id | int\|null | body | 否 | 角色 ID 筛选 |
-| status | int\|null | body | 否 | 状态筛选：0=禁用，1=启用 |
-| page | int | body | 是 | 页码，默认 1 |
-| page_size | int | body | 是 | 每页数量，默认 10 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                       |
+| ------------- | ------------ | ------ | ---- | ------------------------------------------ |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>`      |
+| keyword       | string\|null | body   | 否   | 搜索关键词（匹配用户名、真实姓名、手机号） |
+| role_id       | int\|null    | body   | 否   | 角色 ID 筛选                               |
+| status        | int\|null    | body   | 否   | 状态筛选：0=禁用，1=启用                   |
+| page          | int          | body   | 是   | 页码，默认 1                               |
+| page_size     | int          | body   | 是   | 每页数量，默认 10                          |
 
 **请求体示例**：
 
@@ -274,20 +273,20 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| lists[].id | int | 用户 ID |
-| lists[].role_id | int | 角色 ID |
-| lists[].username | string | 用户名 |
-| lists[].real_name | string\|null | 真实姓名 |
-| lists[].phone | string\|null | 手机号 |
-| lists[].dingtalk_id | string\|null | 钉钉 ID |
-| lists[].status | int | 状态：0=禁用，1=启用 |
-| lists[].last_login | datetime\|null | 最后登录时间 |
-| pagination.page | int | 当前页码 |
-| pagination.page_size | int | 每页数量 |
-| pagination.total | int | 总记录数 |
-| pagination.total_pages | int | 总页数 |
+| 字段                   | 类型           | 说明                 |
+| ---------------------- | -------------- | -------------------- |
+| lists[].id             | int            | 用户 ID              |
+| lists[].role_id        | int            | 角色 ID              |
+| lists[].username       | string         | 用户名               |
+| lists[].real_name      | string\|null   | 真实姓名             |
+| lists[].phone          | string\|null   | 手机号               |
+| lists[].dingtalk_id    | string\|null   | 钉钉 ID              |
+| lists[].status         | int            | 状态：0=禁用，1=启用 |
+| lists[].last_login     | datetime\|null | 最后登录时间         |
+| pagination.page        | int            | 当前页码             |
+| pagination.page_size   | int            | 每页数量             |
+| pagination.total       | int            | 总记录数             |
+| pagination.total_pages | int            | 总页数               |
 
 ### 3.2 添加用户
 
@@ -295,15 +294,15 @@
 - **描述**：管理员添加新用户。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| username | string | body | 是 | 用户名 |
-| password | string | body | 否 | 密码，默认 `123456` |
-| real_name | string\|null | body | 否 | 真实姓名 |
-| phone | string\|null | body | 否 | 手机号，11 位 |
-| role_id | int | body | 是 | 角色 ID |
-| dingtalk_id | string\|null | body | 否 | 钉钉 ID，用于消息推送 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| username      | string       | body   | 是   | 用户名                                |
+| password      | string       | body   | 否   | 密码，默认 `123456`                 |
+| real_name     | string\|null | body   | 否   | 真实姓名                              |
+| phone         | string\|null | body   | 否   | 手机号，11 位                         |
+| role_id       | int          | body   | 是   | 角色 ID                               |
+| dingtalk_id   | string\|null | body   | 否   | 钉钉 ID，用于消息推送                 |
 
 **请求体示例**：
 
@@ -331,17 +330,17 @@
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 用户 ID |
-| username | string | 用户名 |
+| 字段     | 类型   | 说明    |
+| -------- | ------ | ------- |
+| id       | int    | 用户 ID |
+| username | string | 用户名  |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1001 | 参数错误（缺少必填项） |
-| 5001 | 用户名已存在 |
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 1001   | 参数错误（缺少必填项） |
+| 5001   | 用户名已存在           |
 
 ---
 
@@ -351,10 +350,10 @@
 - **描述**：根据用户 ID 获取用户详细信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 用户 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 用户 ID                               |
 
 **请求示例**：
 
@@ -381,21 +380,21 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 用户 ID |
-| username | string | 用户名 |
-| role_id | int | 角色 ID |
-| real_name | string\|null | 真实姓名 |
-| phone | string\|null | 手机号 |
-| dingtalk_id | string\|null | 钉钉 ID |
-| status | int | 状态：0=禁用，1=启用 |
+| 字段        | 类型         | 说明                 |
+| ----------- | ------------ | -------------------- |
+| id          | int          | 用户 ID              |
+| username    | string       | 用户名               |
+| role_id     | int          | 角色 ID              |
+| real_name   | string\|null | 真实姓名             |
+| phone       | string\|null | 手机号               |
+| dingtalk_id | string\|null | 钉钉 ID              |
+| status      | int          | 状态：0=禁用，1=启用 |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（用户不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（用户不存在） |
 
 ---
 
@@ -405,15 +404,15 @@ Authorization: Bearer <token>
 - **描述**：更新用户信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 用户 ID |
-| real_name | string\|null | body | 否 | 真实姓名 |
-| phone | string\|null | body | 否 | 手机号，11 位 |
-| role_id | int\|null | body | 否 | 角色 ID |
-| dingtalk_id | string\|null | body | 否 | 钉钉 ID，用于消息推送 |
-| status | int\|null | body | 否 | 状态：0=禁用，1=启用 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int          | path   | 是   | 用户 ID                               |
+| real_name     | string\|null | body   | 否   | 真实姓名                              |
+| phone         | string\|null | body   | 否   | 手机号，11 位                         |
+| role_id       | int\|null    | body   | 否   | 角色 ID                               |
+| dingtalk_id   | string\|null | body   | 否   | 钉钉 ID，用于消息推送                 |
+| status        | int\|null    | body   | 否   | 状态：0=禁用，1=启用                  |
 
 **请求体示例**：
 
@@ -445,21 +444,21 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 用户 ID |
-| username | string | 用户名 |
-| role_id | int | 角色 ID |
-| real_name | string\|null | 真实姓名 |
-| phone | string\|null | 手机号 |
-| dingtalk_id | string\|null | 钉钉 ID |
-| status | int | 状态：0=禁用，1=启用 |
+| 字段        | 类型         | 说明                 |
+| ----------- | ------------ | -------------------- |
+| id          | int          | 用户 ID              |
+| username    | string       | 用户名               |
+| role_id     | int          | 角色 ID              |
+| real_name   | string\|null | 真实姓名             |
+| phone       | string\|null | 手机号               |
+| dingtalk_id | string\|null | 钉钉 ID              |
+| status      | int          | 状态：0=禁用，1=启用 |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（用户不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（用户不存在） |
 
 ---
 
@@ -469,11 +468,11 @@ Authorization: Bearer <token>
 - **描述**：管理员重置指定用户的密码。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 用户 ID |
-| password | string | body | 是 | 新密码 |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 用户 ID                               |
+| password      | string | body   | 是   | 新密码                                |
 
 **请求示例**：
 
@@ -497,15 +496,15 @@ Content-Type: application/json
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（用户不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（用户不存在） |
 
 ---
 
@@ -519,11 +518,11 @@ Content-Type: application/json
 - **描述**：分页获取角色列表。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| page | int | query | 否 | 页码，默认 1 |
-| page_size | int | query | 否 | 每页数量，默认 10 |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| page          | int    | query  | 否   | 页码，默认 1                          |
+| page_size     | int    | query  | 否   | 每页数量，默认 10                     |
 
 **请求示例**：
 
@@ -560,15 +559,15 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| lists[].id | int | 角色 ID |
-| lists[].name | string | 角色名称 |
-| lists[].created_at | datetime\|null | 创建时间 |
-| pagination.page | int | 当前页码 |
-| pagination.page_size | int | 每页数量 |
-| pagination.total | int | 总记录数 |
-| pagination.total_pages | int | 总页数 |
+| 字段                   | 类型           | 说明     |
+| ---------------------- | -------------- | -------- |
+| lists[].id             | int            | 角色 ID  |
+| lists[].name           | string         | 角色名称 |
+| lists[].created_at     | datetime\|null | 创建时间 |
+| pagination.page        | int            | 当前页码 |
+| pagination.page_size   | int            | 每页数量 |
+| pagination.total       | int            | 总记录数 |
+| pagination.total_pages | int            | 总页数   |
 
 ### 4.2 添加角色
 
@@ -576,12 +575,12 @@ Authorization: Bearer <token>
 - **描述**：管理员添加新角色。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| name | string | body | 是 | 角色名称 |
-| code | string | body | 是 | 角色编码，需唯一 |
-| permissions | array[string] | body | 否 | 权限列表 |
+| 参数          | 类型          | 位置   | 必填 | 说明                                  |
+| ------------- | ------------- | ------ | ---- | ------------------------------------- |
+| Authorization | string        | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| name          | string        | body   | 是   | 角色名称                              |
+| code          | string        | body   | 是   | 角色编码，需唯一                      |
+| permissions   | array[string] | body   | 否   | 权限列表                              |
 
 **请求体示例**：
 
@@ -609,19 +608,19 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 角色 ID |
-| name | string | 角色名称 |
-| code | string | 角色编码 |
+| 字段        | 类型          | 说明     |
+| ----------- | ------------- | -------- |
+| id          | int           | 角色 ID  |
+| name        | string        | 角色名称 |
+| code        | string        | 角色编码 |
 | permissions | array[string] | 权限列表 |
-| created_at | datetime | 创建时间 |
+| created_at  | datetime      | 创建时间 |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 5001 | 角色编码或名称已存在 |
+| 错误码 | 场景                 |
+| ------ | -------------------- |
+| 5001   | 角色编码或名称已存在 |
 
 ### 4.3 获取角色详情
 
@@ -629,10 +628,10 @@ Authorization: Bearer <token>
 - **描述**：根据角色 ID 获取角色详细信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 角色 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 角色 ID                               |
 
 **请求示例**：
 
@@ -657,19 +656,19 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 角色 ID |
-| name | string | 角色名称 |
-| code | string | 角色编码 |
+| 字段        | 类型          | 说明     |
+| ----------- | ------------- | -------- |
+| id          | int           | 角色 ID  |
+| name        | string        | 角色名称 |
+| code        | string        | 角色编码 |
 | permissions | array[string] | 权限列表 |
-| created_at | datetime | 创建时间 |
+| created_at  | datetime      | 创建时间 |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（角色不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（角色不存在） |
 
 ### 4.4 更新角色
 
@@ -677,13 +676,13 @@ Authorization: Bearer <token>
 - **描述**：管理员更新角色信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | body | 是 | 角色 ID |
-| name | string | body | 否 | 角色名称 |
-| code | string | body | 否 | 角色编码 |
-| permissions | array[string] | body | 否 | 权限列表 |
+| 参数          | 类型          | 位置   | 必填 | 说明                                  |
+| ------------- | ------------- | ------ | ---- | ------------------------------------- |
+| Authorization | string        | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int           | body   | 是   | 角色 ID                               |
+| name          | string        | body   | 否   | 角色名称                              |
+| code          | string        | body   | 否   | 角色编码                              |
+| permissions   | array[string] | body   | 否   | 权限列表                              |
 
 **请求体示例**：
 
@@ -706,15 +705,15 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（角色不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（角色不存在） |
 
 ### 4.5 删除角色
 
@@ -722,10 +721,10 @@ Authorization: Bearer <token>
 - **描述**：管理员删除指定角色。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 角色 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 角色 ID                               |
 
 **请求示例**：
 
@@ -744,15 +743,15 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（角色不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（角色不存在） |
 
 ---
 
@@ -766,15 +765,15 @@ Authorization: Bearer <token>
 - **描述**：分页获取水库列表，支持关键词搜索、所属流域、水质等级和状态筛选。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| keyword | string\|null | body | 否 | 搜索关键词（匹配水库名称、水库编号） |
-| watershed | string\|null | body | 否 | 所属流域筛选 |
-| water_grade | string\|null | body | 否 | 水质等级筛选 |
-| status | int\|null | body | 否 | 状态筛选：0=停用，1=启用 |
-| page | int | body | 是 | 页码，默认 1 |
-| page_size | int | body | 是 | 每页数量，默认 10 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| keyword       | string\|null | body   | 否   | 搜索关键词（匹配水库名称、水库编号）  |
+| watershed     | string\|null | body   | 否   | 所属流域筛选                          |
+| water_grade   | string\|null | body   | 否   | 水质等级筛选                          |
+| status        | int\|null    | body   | 否   | 状态筛选：0=停用，1=启用              |
+| page          | int          | body   | 是   | 页码，默认 1                          |
+| page_size     | int          | body   | 是   | 每页数量，默认 10                     |
 
 **请求体示例**：
 
@@ -818,20 +817,20 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| lists[].id | int | 水库 ID |
-| lists[].name | string | 水库名称 |
-| lists[].code | string | 水库编号 |
-| lists[].capacity | string\|null | 库容（万 m³） |
-| lists[].water_grade | string\|null | 水质等级（如 Ⅱ类、Ⅲ类） |
-| lists[].watershed | string\|null | 所属流域 |
-| lists[].sort_order | int | 排序值 |
-| lists[].created_at | datetime | 创建时间 |
-| pagination.page | int | 当前页码 |
-| pagination.page_size | int | 每页数量 |
-| pagination.total | int | 总记录数 |
-| pagination.total_pages | int | 总页数 |
+| 字段                   | 类型         | 说明                      |
+| ---------------------- | ------------ | ------------------------- |
+| lists[].id             | int          | 水库 ID                   |
+| lists[].name           | string       | 水库名称                  |
+| lists[].code           | string       | 水库编号                  |
+| lists[].capacity       | string\|null | 库容（万 m³）            |
+| lists[].water_grade    | string\|null | 水质等级（如 Ⅱ类、Ⅲ类） |
+| lists[].watershed      | string\|null | 所属流域                  |
+| lists[].sort_order     | int          | 排序值                    |
+| lists[].created_at     | datetime     | 创建时间                  |
+| pagination.page        | int          | 当前页码                  |
+| pagination.page_size   | int          | 每页数量                  |
+| pagination.total       | int          | 总记录数                  |
+| pagination.total_pages | int          | 总页数                    |
 
 ### 5.2 创建水库
 
@@ -839,18 +838,18 @@ Authorization: Bearer <token>
 - **描述**：管理员新增水库。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| name | string | body | 是 | 水库名称 |
-| code | string | body | 是 | 水库编号 |
-| location | string\|null | body | 否 | 所在位置 |
-| longitude | string\|null | body | 否 | 经度 |
-| latitude | string\|null | body | 否 | 纬度 |
-| capacity | string\|null | body | 否 | 库容（万 m³） |
-| water_grade | string\|null | body | 否 | 水质等级（如 Ⅱ类、Ⅲ类） |
-| watershed | string\|null | body | 否 | 所属流域 |
-| sort_order | int | body | 否 | 排序值，默认 0 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| name          | string       | body   | 是   | 水库名称                              |
+| code          | string       | body   | 是   | 水库编号                              |
+| location      | string\|null | body   | 否   | 所在位置                              |
+| longitude     | string\|null | body   | 否   | 经度                                  |
+| latitude      | string\|null | body   | 否   | 纬度                                  |
+| capacity      | string\|null | body   | 否   | 库容（万 m³）                        |
+| water_grade   | string\|null | body   | 否   | 水质等级（如 Ⅱ类、Ⅲ类）             |
+| watershed     | string\|null | body   | 否   | 所属流域                              |
+| sort_order    | int          | body   | 否   | 排序值，默认 0                        |
 
 **请求体示例**：
 
@@ -880,10 +879,10 @@ Authorization: Bearer <token>
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1001 | 参数错误（缺少必填项） |
-| 7001 | 资源已存在（水库编号已存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1001   | 参数错误（缺少必填项）       |
+| 7001   | 资源已存在（水库编号已存在） |
 
 ### 5.3 获取水库详情
 
@@ -891,10 +890,10 @@ Authorization: Bearer <token>
 - **描述**：根据水库 ID 获取水库详细信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 水库 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 水库 ID                               |
 
 **请求示例**：
 
@@ -926,26 +925,26 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 水库 ID |
-| name | string | 水库名称 |
-| code | string | 水库编号 |
-| location | string\|null | 所在位置 |
-| longitude | string\|null | 经度 |
-| latitude | string\|null | 纬度 |
-| capacity | string\|null | 库容（万 m³） |
-| water_grade | string\|null | 水质等级 |
-| watershed | string\|null | 所属流域 |
-| sort_order | int | 排序值 |
-| status | int | 状态：0=停用，1=启用 |
-| created_at | datetime | 创建时间 |
+| 字段        | 类型         | 说明                 |
+| ----------- | ------------ | -------------------- |
+| id          | int          | 水库 ID              |
+| name        | string       | 水库名称             |
+| code        | string       | 水库编号             |
+| location    | string\|null | 所在位置             |
+| longitude   | string\|null | 经度                 |
+| latitude    | string\|null | 纬度                 |
+| capacity    | string\|null | 库容（万 m³）       |
+| water_grade | string\|null | 水质等级             |
+| watershed   | string\|null | 所属流域             |
+| sort_order  | int          | 排序值               |
+| status      | int          | 状态：0=停用，1=启用 |
+| created_at  | datetime     | 创建时间             |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（水库不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（水库不存在） |
 
 ### 5.4 更新水库
 
@@ -953,20 +952,20 @@ Authorization: Bearer <token>
 - **描述**：管理员更新水库信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 水库 ID |
-| name | string\|null | body | 否 | 水库名称 |
-| code | string\|null | body | 否 | 水库编号 |
-| location | string\|null | body | 否 | 所在位置 |
-| longitude | string\|null | body | 否 | 经度 |
-| latitude | string\|null | body | 否 | 纬度 |
-| capacity | string\|null | body | 否 | 库容（万 m³） |
-| water_grade | string\|null | body | 否 | 水质等级 |
-| watershed | string\|null | body | 否 | 所属流域 |
-| status | int\|null | body | 否 | 状态：0=停用，1=启用 |
-| sort_order | int\|null | body | 否 | 排序值 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int          | path   | 是   | 水库 ID                               |
+| name          | string\|null | body   | 否   | 水库名称                              |
+| code          | string\|null | body   | 否   | 水库编号                              |
+| location      | string\|null | body   | 否   | 所在位置                              |
+| longitude     | string\|null | body   | 否   | 经度                                  |
+| latitude      | string\|null | body   | 否   | 纬度                                  |
+| capacity      | string\|null | body   | 否   | 库容（万 m³）                        |
+| water_grade   | string\|null | body   | 否   | 水质等级                              |
+| watershed     | string\|null | body   | 否   | 所属流域                              |
+| status        | int\|null    | body   | 否   | 状态：0=停用，1=启用                  |
+| sort_order    | int\|null    | body   | 否   | 排序值                                |
 
 **请求体示例**：
 
@@ -997,10 +996,10 @@ Authorization: Bearer <token>
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（水库不存在） |
-| 7001 | 资源已存在（水库编码已存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（水库不存在）     |
+| 7001   | 资源已存在（水库编码已存在） |
 
 ### 5.5 删除水库
 
@@ -1008,10 +1007,10 @@ Authorization: Bearer <token>
 - **描述**：管理员删除指定水库。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 水库 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 水库 ID                               |
 
 **请求示例**：
 
@@ -1030,15 +1029,15 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（水库不存在） |
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（水库不存在） |
 
 ---
 
@@ -1052,16 +1051,16 @@ Authorization: Bearer <token>
 - **描述**：管理员新增监测站点。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| reservoir_id | int | body | 是 | 所属水库 ID |
-| name | string | body | 是 | 站点名称 |
-| code | string | body | 是 | 站点编码 |
-| type | string\|null | body | 否 | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
-| longitude | string\|null | body | 否 | 经度 |
-| latitude | string\|null | body | 否 | 纬度 |
-| sampling_point | string\|null | body | 否 | 采样点位描述 |
+| 参数           | 类型         | 位置   | 必填 | 说明                                                               |
+| -------------- | ------------ | ------ | ---- | ------------------------------------------------------------------ |
+| Authorization  | string       | header | 是   | Bearer Token，格式 `Bearer <token>`                              |
+| reservoir_id   | int          | body   | 是   | 所属水库 ID                                                        |
+| name           | string       | body   | 是   | 站点名称                                                           |
+| code           | string       | body   | 是   | 站点编码                                                           |
+| type           | string\|null | body   | 否   | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| longitude      | string\|null | body   | 否   | 经度                                                               |
+| latitude       | string\|null | body   | 否   | 纬度                                                               |
+| sampling_point | string\|null | body   | 否   | 采样点位描述                                                       |
 
 **请求体示例**：
 
@@ -1087,16 +1086,16 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1001 | 参数错误（缺少必填项） |
-| 7001 | 资源已存在（监测站点已存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1001   | 参数错误（缺少必填项）       |
+| 7001   | 资源已存在（监测站点已存在） |
 
 ---
 
@@ -1105,15 +1104,15 @@ Authorization: Bearer <token>
 - **GET** `/api/stations/list`
 - **描述**：分页获取监测站点列表，支持关键词搜索、水库筛选、站点类型筛选。需 admin 角色。
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| reservoir_id | int\|null | query | 否 | 所属水库 ID 筛选 |
-| keyword | string\|null | query | 否 | 搜索关键词（匹配站点名称） |
-| code | string\|null | query | 否 | 站点编码搜索 |
-| type | string\|null | query | 否 | 站点类型筛选：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
-| page | int | query | 是 | 页码，默认 1 |
-| page_size | int | query | 是 | 每页数量，默认 10 |
+| 参数          | 类型         | 位置   | 必填 | 说明                                                                   |
+| ------------- | ------------ | ------ | ---- | ---------------------------------------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>`                                  |
+| reservoir_id  | int\|null    | query  | 否   | 所属水库 ID 筛选                                                       |
+| keyword       | string\|null | query  | 否   | 搜索关键词（匹配站点名称）                                             |
+| code          | string\|null | query  | 否   | 站点编码搜索                                                           |
+| type          | string\|null | query  | 否   | 站点类型筛选：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| page          | int          | query  | 是   | 页码，默认 1                                                           |
+| page_size     | int          | query  | 是   | 每页数量，默认 10                                                      |
 
 **请求示例**：
 
@@ -1151,22 +1150,22 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| lists[].id | int | 站点 ID |
-| lists[].reservoir_id | int | 所属水库 ID |
-| lists[].name | string | 站点名称 |
-| lists[].code | string | 站点编码 |
-| lists[].type | string\|null | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
-| lists[].longitude | string\|null | 经度 |
-| lists[].latitude | string\|null | 纬度 |
-| lists[].sampling_point | string\|null | 采样点位描述 |
-| lists[].status | int | 运行状态：0=离线，1=在线 |
-| lists[].last_data_time | datetime\|null | 最后数据时间 |
-| pagination.page | int | 当前页码 |
-| pagination.page_size | int | 每页数量 |
-| pagination.total | int | 总记录数 |
-| pagination.total_pages | int | 总页数 |
+| 字段                   | 类型           | 说明                                                               |
+| ---------------------- | -------------- | ------------------------------------------------------------------ |
+| lists[].id             | int            | 站点 ID                                                            |
+| lists[].reservoir_id   | int            | 所属水库 ID                                                        |
+| lists[].name           | string         | 站点名称                                                           |
+| lists[].code           | string         | 站点编码                                                           |
+| lists[].type           | string\|null   | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| lists[].longitude      | string\|null   | 经度                                                               |
+| lists[].latitude       | string\|null   | 纬度                                                               |
+| lists[].sampling_point | string\|null   | 采样点位描述                                                       |
+| lists[].status         | int            | 运行状态：0=离线，1=在线                                           |
+| lists[].last_data_time | datetime\|null | 最后数据时间                                                       |
+| pagination.page        | int            | 当前页码                                                           |
+| pagination.page_size   | int            | 每页数量                                                           |
+| pagination.total       | int            | 总记录数                                                           |
+| pagination.total_pages | int            | 总页数                                                             |
 
 ---
 
@@ -1177,10 +1176,10 @@ Authorization: Bearer <token>
 - **GET** `/api/stations/{id}`
 - **描述**：根据站点 ID 获取监测站点详细信息。需 admin 角色。
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 监测站点 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 监测站点 ID                           |
 
 **请求示例**：
 
@@ -1209,23 +1208,23 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | int | 站点 ID |
-| reservoir_id | int | 所属水库 ID |
-| name | string | 站点名称 |
-| code | string | 站点编码 |
-| type | string\|null | 站点类型 |
-| longitude | string\|null | 经度 |
-| latitude | string\|null | 纬度 |
-| sampling_point | string\|null | 采样点位描述 |
-| status | int | 运行状态：0=离线，1=在线 |
+| 字段           | 类型         | 说明                     |
+| -------------- | ------------ | ------------------------ |
+| id             | int          | 站点 ID                  |
+| reservoir_id   | int          | 所属水库 ID              |
+| name           | string       | 站点名称                 |
+| code           | string       | 站点编码                 |
+| type           | string\|null | 站点类型                 |
+| longitude      | string\|null | 经度                     |
+| latitude       | string\|null | 纬度                     |
+| sampling_point | string\|null | 采样点位描述             |
+| status         | int          | 运行状态：0=离线，1=在线 |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（监测站点不存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（监测站点不存在） |
 
 ---
 
@@ -1235,18 +1234,18 @@ Authorization: Bearer <token>
 - **描述**：管理员更新监测站点信息。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 监测站点 ID |
-| reservoir_id | int\|null | body | 否 | 所属水库 ID |
-| name | string\|null | body | 否 | 站点名称 |
-| code | string\|null | body | 否 | 站点编码 |
-| type | string\|null | body | 否 | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
-| longitude | string\|null | body | 否 | 经度 |
-| latitude | string\|null | body | 否 | 纬度 |
-| sampling_point | string\|null | body | 否 | 采样点位描述 |
-| status | int\|null | body | 否 | 运行状态：0=离线，1=在线 |
+| 参数           | 类型         | 位置   | 必填 | 说明                                                               |
+| -------------- | ------------ | ------ | ---- | ------------------------------------------------------------------ |
+| Authorization  | string       | header | 是   | Bearer Token，格式 `Bearer <token>`                              |
+| id             | int          | path   | 是   | 监测站点 ID                                                        |
+| reservoir_id   | int\|null    | body   | 否   | 所属水库 ID                                                        |
+| name           | string\|null | body   | 否   | 站点名称                                                           |
+| code           | string\|null | body   | 否   | 站点编码                                                           |
+| type           | string\|null | body   | 否   | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| longitude      | string\|null | body   | 否   | 经度                                                               |
+| latitude       | string\|null | body   | 否   | 纬度                                                               |
+| sampling_point | string\|null | body   | 否   | 采样点位描述                                                       |
+| status         | int\|null    | body   | 否   | 运行状态：0=离线，1=在线                                           |
 
 **请求体示例**：
 
@@ -1272,16 +1271,16 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（监测站点不存在） |
-| 7001 | 资源已存在（站点编码已存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（监测站点不存在） |
+| 7001   | 资源已存在（站点编码已存在） |
 
 ---
 
@@ -1291,10 +1290,10 @@ Authorization: Bearer <token>
 - **描述**：管理员删除指定监测站点。需 admin 角色。
 - **Content-Type**：application/json
 
-| 参数 | 类型 | 位置 | 必填 | 说明 |
-|------|------|------|------|------|
-| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
-| id | int | path | 是 | 监测站点 ID |
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 监测站点 ID                           |
 
 **请求示例**：
 
@@ -1313,12 +1312,159 @@ Authorization: Bearer <token>
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
 | data | bool | 操作结果，成功为 `true` |
 
 **错误场景**：
 
-| 错误码 | 场景 |
-|--------|------|
-| 1002 | 数据不存在（监测站点不存在） |
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（监测站点不存在） |
+
+---
+
+## 七、指标管理（/api/indicators）
+
+监测指标 CRUD 接口。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 7.1 创建指标
+
+- **POST** `/api/indicators/create`
+- **描述**：管理员新增监测指标。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数               | 类型         | 位置   | 必填 | 说明                                  |
+| ------------------ | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization      | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| name               | string       | body   | 是   | 指标名称                              |
+| code               | string       | body   | 是   | 指标编码                              |
+| unit               | string\|null | body   | 否   | 单位，如 mg/L                         |
+| category           | string\|null | body   | 否   | 分类：物理 / 化学 / 生物 / 综合       |
+| standard_limit_i   | float\|null  | body   | 否   | Ⅰ类限值                              |
+| standard_limit_ii  | float\|null  | body   | 否   | Ⅱ类限值                              |
+| standard_limit_iii | float\|null  | body   | 否   | Ⅲ类限值                              |
+| standard_limit_iv  | float\|null  | body   | 否   | Ⅳ类限值                              |
+| standard_limit_v   | float\|null  | body   | 否   | Ⅴ类限值                              |
+| is_core            | int\|null    | body   | 否   | 是否核心指标：0=否，1=是              |
+
+**请求体示例**：
+
+```json
+{
+  "name": "总磷",
+  "code": "TP",
+  "unit": "mg/L",
+  "category": "化学",
+  "standard_limit_i": 0.02,
+  "standard_limit_ii": 0.1,
+  "standard_limit_iii": 0.2,
+  "standard_limit_iv": 0.3,
+  "standard_limit_v": 0.4,
+  "is_core": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                             |
+| ------ | -------------------------------- |
+| 1001   | 参数错误（缺少必填项 name/code） |
+| 7001   | 资源已存在（指标编码已存在）     |
+
+---
+
+### 7.2 获取指标列表
+
+- **POST** `/api/indicators/list`
+- **描述**：分页获取指标列表，支持名称、编码、分类和核心指标筛选。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| name          | string\|null | body   | 否   | 指标名称（模糊搜索）                  |
+| code          | string\|null | body   | 否   | 指标编码（模糊搜索）                  |
+| category      | string\|null | body   | 否   | 分类筛选                              |
+| is_core       | int\|null    | body   | 否   | 核心指标筛选：0=普通指标，1=核心指标  |
+| page          | int          | body   | 是   | 页码，默认 1                          |
+| page_size     | int          | body   | 是   | 每页数量，默认 10                     |
+
+**请求体示例**：
+
+```json
+{
+  "name": "总磷",
+  "code": null,
+  "category": null,
+  "is_core": null,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "name": "总磷",
+        "code": "TP",
+        "unit": "mg/L",
+        "category": "化学",
+        "standard_limit_i": 0.02,
+        "standard_limit_ii": 0.1,
+        "standard_limit_iii": 0.2,
+        "standard_limit_iv": 0.3,
+        "standard_limit_v": 0.4,
+        "is_core": 1,
+        "created_at": "2026-05-28T12:00:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段                       | 类型         | 说明                     |
+| -------------------------- | ------------ | ------------------------ |
+| lists[].id                 | int          | 指标 ID                  |
+| lists[].name               | string       | 指标名称                 |
+| lists[].code               | string       | 指标编码                 |
+| lists[].unit               | string\|null | 单位                     |
+| lists[].category           | string\|null | 分类                     |
+| lists[].standard_limit_i   | float\|null  | Ⅰ类限值                 |
+| lists[].standard_limit_ii  | float\|null  | Ⅱ类限值                 |
+| lists[].standard_limit_iii | float\|null  | Ⅲ类限值                 |
+| lists[].standard_limit_iv  | float\|null  | Ⅳ类限值                 |
+| lists[].standard_limit_v   | float\|null  | Ⅴ类限值                 |
+| lists[].is_core            | int\|null    | 是否核心指标：0=否，1=是 |
+| lists[].created_at         | datetime\|null | 创建时间               |
+| pagination.page            | int          | 当前页码                 |
+| pagination.page_size       | int          | 每页数量                 |
+| pagination.total           | int          | 总记录数                 |
+| pagination.total_pages     | int          | 总页数                   |
