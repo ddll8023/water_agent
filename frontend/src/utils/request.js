@@ -33,6 +33,9 @@ request.interceptors.response.use(
     }
     if (error.response) {
       const { status, data } = error.response
+      if (status === 401 || status === 403) {
+        return Promise.reject(new Error('请先登录'))
+      }
       const message = data?.message || `请求失败 (${status})`
       return Promise.reject(new Error(message))
     }

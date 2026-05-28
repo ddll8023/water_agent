@@ -1041,3 +1041,240 @@ Authorization: Bearer <token>
 | 1002 | 数据不存在（水库不存在） |
 
 ---
+
+## 六、监测站点管理（/api/stations）
+
+监测站点的创建、列表查询、详情获取与更新。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 6.1 创建监测站点
+
+- **POST** `/api/stations/create`
+- **描述**：管理员新增监测站点。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| reservoir_id | int | body | 是 | 所属水库 ID |
+| name | string | body | 是 | 站点名称 |
+| code | string | body | 是 | 站点编码 |
+| type | string\|null | body | 否 | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| longitude | string\|null | body | 否 | 经度 |
+| latitude | string\|null | body | 否 | 纬度 |
+| sampling_point | string\|null | body | 否 | 采样点位描述 |
+
+**请求体示例**：
+
+```json
+{
+  "reservoir_id": 1,
+  "name": "三峡大坝上游自动监测站",
+  "code": "SX-AUTO-001",
+  "type": "auto",
+  "longitude": "111.508",
+  "latitude": "30.824",
+  "sampling_point": "大坝上游500米处"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1001 | 参数错误（缺少必填项） |
+| 7001 | 资源已存在（监测站点已存在） |
+
+---
+
+### 6.2 获取监测站点列表
+
+- **GET** `/api/stations/list`
+- **描述**：分页获取监测站点列表，支持关键词搜索、水库筛选、站点类型筛选。需 admin 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| reservoir_id | int\|null | query | 否 | 所属水库 ID 筛选 |
+| keyword | string\|null | query | 否 | 搜索关键词（匹配站点名称） |
+| code | string\|null | query | 否 | 站点编码搜索 |
+| type | string\|null | query | 否 | 站点类型筛选：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| page | int | query | 是 | 页码，默认 1 |
+| page_size | int | query | 是 | 每页数量，默认 10 |
+
+**请求示例**：
+
+```
+GET /api/stations/list?keyword=三峡&page=1&page_size=10
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "reservoir_id": 1,
+        "name": "三峡大坝上游自动监测站",
+        "code": "SX-AUTO-001",
+        "type": "auto",
+        "sampling_point": "大坝上游500米处",
+        "status": 1,
+        "last_data_time": "2026-05-28T10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| lists[].reservoir_id | int | 所属水库 ID |
+| lists[].name | string | 站点名称 |
+| lists[].code | string | 站点编码 |
+| lists[].type | string\|null | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| lists[].longitude | string\|null | 经度 |
+| lists[].latitude | string\|null | 纬度 |
+| lists[].sampling_point | string\|null | 采样点位描述 |
+| lists[].status | int | 运行状态：0=离线，1=在线 |
+| lists[].last_data_time | datetime\|null | 最后数据时间 |
+| pagination.page | int | 当前页码 |
+| pagination.page_size | int | 每页数量 |
+| pagination.total | int | 总记录数 |
+| pagination.total_pages | int | 总页数 |
+
+---
+
+---
+
+### 6.3 获取监测站点详情
+
+- **GET** `/api/stations/{id}`
+- **描述**：根据站点 ID 获取监测站点详细信息。需 admin 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 监测站点 ID |
+
+**请求示例**：
+
+```
+GET /api/stations/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "reservoir_id": 1,
+    "name": "三峡大坝上游自动监测站",
+    "code": "SX-AUTO-001",
+    "type": "auto",
+    "longitude": "111.508",
+    "latitude": "30.824",
+    "sampling_point": "大坝上游500米处",
+    "status": 1
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| reservoir_id | int | 所属水库 ID |
+| name | string | 站点名称 |
+| code | string | 站点编码 |
+| type | string\|null | 站点类型 |
+| longitude | string\|null | 经度 |
+| latitude | string\|null | 纬度 |
+| sampling_point | string\|null | 采样点位描述 |
+| status | int | 运行状态：0=离线，1=在线 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（监测站点不存在） |
+
+---
+
+### 6.4 更新监测站点
+
+- **PUT** `/api/stations/{id}`
+- **描述**：管理员更新监测站点信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 监测站点 ID |
+| reservoir_id | int\|null | body | 否 | 所属水库 ID |
+| name | string\|null | body | 否 | 站点名称 |
+| code | string\|null | body | 否 | 站点编码 |
+| type | string\|null | body | 否 | 站点类型：`auto` 自动站 / `manual` 人工站 / `sensing` 遥感站 |
+| longitude | string\|null | body | 否 | 经度 |
+| latitude | string\|null | body | 否 | 纬度 |
+| sampling_point | string\|null | body | 否 | 采样点位描述 |
+| status | int\|null | body | 否 | 运行状态：0=离线，1=在线 |
+
+**请求体示例**：
+
+```json
+{
+  "name": "三峡大坝上游自动监测站",
+  "code": "SX-AUTO-001",
+  "type": "auto",
+  "longitude": "111.512",
+  "latitude": "30.828",
+  "sampling_point": "大坝上游800米处",
+  "status": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（监测站点不存在） |
+| 7001 | 资源已存在（站点编码已存在） |

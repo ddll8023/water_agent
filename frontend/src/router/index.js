@@ -24,7 +24,7 @@ const routes = [
         path: 'system/reservoirs',
         name: 'ReservoirManage',
         component: () => import('@/views/system/ReservoirManage.vue'),
-        meta: { title: '水库管理' }
+        meta: { title: '水库站点配置管理' }
       }
     ]
   },

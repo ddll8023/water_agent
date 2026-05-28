@@ -24,11 +24,11 @@
             </template>
             <el-menu-item index="/system/users">
               <el-icon><User /></el-icon>
-              <span>用户管理</span>
+              <span>用户与权限管理</span>
             </el-menu-item>
             <el-menu-item index="/system/reservoirs">
               <el-icon><Collection /></el-icon>
-              <span>水库管理</span>
+              <span>水库站点配置管理</span>
             </el-menu-item>
           </el-sub-menu>
         </el-menu>
