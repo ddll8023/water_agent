@@ -141,3 +141,18 @@ async def update_monitoring_station(
         monitoring_station_entity.latitude = update_monitoring_station_request.latitude
     await commit_or_rollback(db)
     return True
+
+
+async def delete_monitoring_station(
+    db: AsyncSession,
+    monitoring_station_id: int,
+):
+    """删除监测站点"""
+    monitoring_station_entity = await db.get(
+        models_station.MonitoringStation, monitoring_station_id
+    )
+    if not monitoring_station_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
+    await db.delete(monitoring_station_entity)
+    await commit_or_rollback(db)
+    return True

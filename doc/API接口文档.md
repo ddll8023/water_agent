@@ -1131,6 +1131,7 @@ Authorization: Bearer <token>
   "data": {
     "lists": [
       {
+        "id": 1,
         "reservoir_id": 1,
         "name": "三峡大坝上游自动监测站",
         "code": "SX-AUTO-001",
@@ -1152,6 +1153,7 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| lists[].id | int | 站点 ID |
 | lists[].reservoir_id | int | 所属水库 ID |
 | lists[].name | string | 站点名称 |
 | lists[].code | string | 站点编码 |
@@ -1194,6 +1196,7 @@ Authorization: Bearer <token>
   "code": 0,
   "message": "success",
   "data": {
+    "id": 1,
     "reservoir_id": 1,
     "name": "三峡大坝上游自动监测站",
     "code": "SX-AUTO-001",
@@ -1208,6 +1211,7 @@ Authorization: Bearer <token>
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
+| id | int | 站点 ID |
 | reservoir_id | int | 所属水库 ID |
 | name | string | 站点名称 |
 | code | string | 站点编码 |
@@ -1278,3 +1282,43 @@ Authorization: Bearer <token>
 |--------|------|
 | 1002 | 数据不存在（监测站点不存在） |
 | 7001 | 资源已存在（站点编码已存在） |
+
+---
+
+### 6.5 删除监测站点
+
+- **DELETE** `/api/stations/{id}`
+- **描述**：管理员删除指定监测站点。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token，格式 `Bearer <token>` |
+| id | int | path | 是 | 监测站点 ID |
+
+**请求示例**：
+
+```
+DELETE /api/stations/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 数据不存在（监测站点不存在） |

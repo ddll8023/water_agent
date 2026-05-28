@@ -85,7 +85,7 @@
       <el-table-column label="操作" width="130" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
-          <el-button type="danger" link size="small">删除</el-button>
+          <el-button type="danger" link size="small" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -188,9 +188,9 @@
  * 依赖组件：无
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getStationList, createStation, getStationDetail, updateStation } from '@/api/station'
+import { getStationList, createStation, getStationDetail, updateStation, deleteStation } from '@/api/station'
 import { getReservoirList } from '@/api/reservoir'
 
 const loading = ref(false)
@@ -273,6 +273,7 @@ const handleSizeChange = () => {
 }
 
 onMounted(() => {
+  fetchReservoirOptions()
   fetchStationList()
 })
 
@@ -351,6 +352,25 @@ const resetCreateForm = () => {
   createForm.sampling_point = ''
   createForm.status = 1
   createFormRef.value?.clearValidate()
+}
+
+const handleDelete = async (id) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该监测站点吗？删除后不可恢复。', '删除确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteStation(id)
+    ElMessage.success('站点删除成功')
+    await fetchStationList()
+  } catch (e) {
+    ElMessage.error(e.message || '删除站点失败')
+  }
 }
 
 const handleCreateStation = async () => {

@@ -50,9 +50,10 @@ class UpdateMonitoringStationRequest(BaseModel):
 class GetMonitoringStationListResponse(BaseModel):
     """获取监测站点列表响应模型"""
 
-    reservoir_id: int = Field(..., description="水库ID")
+    id: int = Field(..., description="站点ID")
     name: str = Field(..., description="站点名称")
     code: str = Field(..., description="站点编号")
+    reservoir_id: int = Field(..., description="水库ID")
     type: str | None = Field(None, description="站点类型")
     sampling_point: str | None = Field(None, description="采样点位描述")
     status: int = Field(..., description="状态")
@@ -64,6 +65,7 @@ class GetMonitoringStationListResponse(BaseModel):
 class GetMonitoringStationDetailResponse(BaseModel):
     """获取监测站点详情响应模型"""
 
+    id: int = Field(..., description="站点ID")
     reservoir_id: int = Field(..., description="水库ID")
     name: str = Field(..., description="站点名称")
     code: str = Field(..., description="站点编号")

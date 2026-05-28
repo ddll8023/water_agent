@@ -51,3 +51,15 @@ export function updateStation(id, data) {
     data
   })
 }
+
+/**
+ * 删除监测站点
+ * @param {number} id - 站点ID
+ * @returns {Promise} 删除结果
+ */
+export function deleteStation(id) {
+  return request({
+    method: 'delete',
+    url: `/stations/${id}`
+  })
+}

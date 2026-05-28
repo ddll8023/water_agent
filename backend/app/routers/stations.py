@@ -100,3 +100,20 @@ async def update_monitoring_station(
         )
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.delete(
+    "/{id}",
+    response_model=ApiResponse[bool],
+    description="删除监测站点",
+    dependencies=[Depends(require_role(["admin"]))],
+)
+async def delete_monitoring_station(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="监测站点ID")],
+):
+    """删除监测站点"""
+    try:
+        return success(await service_stations.delete_monitoring_station(db, id))
+    except ServiceException as e:
+        return error(e.code, e.message)
