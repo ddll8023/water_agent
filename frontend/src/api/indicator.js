@@ -51,3 +51,15 @@ export function updateIndicator(id, data) {
     data
   })
 }
+
+/**
+ * 删除指标
+ * @param {number} id - 指标ID
+ * @returns {Promise} 删除结果
+ */
+export function deleteIndicator(id) {
+  return request({
+    method: 'delete',
+    url: `/indicators/${id}`
+  })
+}

@@ -98,3 +98,20 @@ async def update_indicator(
         )
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.delete(
+    "/{id}",
+    response_model=ApiResponse[bool],
+    dependencies=[Depends(require_role("admin"))],
+    description="删除指标",
+)
+async def delete_indicator(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="指标ID")],
+):
+    """删除指标"""
+    try:
+        return success(await service_indicators.delete_indicator(db, id))
+    except ServiceException as e:
+        return error(e.code, e.message)

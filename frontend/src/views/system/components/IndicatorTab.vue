@@ -119,9 +119,10 @@
           <el-tag v-else type="info" size="small" effect="plain">普通</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="130" fixed="right">
+      <el-table-column label="操作" width="200" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+          <el-button type="danger" link size="small" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>
       <template #empty>
@@ -279,9 +280,9 @@
  * 依赖组件：无
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getIndicatorList, createIndicator, getIndicatorDetail, updateIndicator } from '@/api/indicator'
+import { getIndicatorList, createIndicator, getIndicatorDetail, updateIndicator, deleteIndicator } from '@/api/indicator'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -454,6 +455,25 @@ const handleCreateIndicator = async () => {
     ElMessage.error(e.message || (isEditMode.value ? '更新指标失败' : '创建指标失败'))
   } finally {
     createLoading.value = false
+  }
+}
+
+const handleDelete = async (id) => {
+  try {
+    await ElMessageBox.confirm('确定要删除该指标吗？删除后不可恢复。', '删除确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+  try {
+    await deleteIndicator(id)
+    ElMessage.success('指标删除成功')
+    await fetchIndicatorList()
+  } catch (e) {
+    ElMessage.error(e.message || '删除指标失败')
   }
 }
 </script>

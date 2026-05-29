@@ -125,3 +125,16 @@ async def update_indicator(
         indicator_entity.is_core = update_indicator_request.is_core
     await commit_or_rollback(db)
     return True
+
+
+async def delete_indicator(
+    db: AsyncSession,
+    indicator_id: int,
+):
+    """删除指标"""
+    indicator_entity = await db.get(models_indicator.Indicator, indicator_id)
+    if not indicator_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "指标不存在")
+    await db.delete(indicator_entity)
+    await commit_or_rollback(db)
+    return True
