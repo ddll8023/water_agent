@@ -8,6 +8,7 @@ from app.routers import roles as roles_router
 from app.routers import reservoir as reservoir_router
 from app.routers import stations as stations_router
 from app.routers import indicators as indicators_router
+from app.utils.db_init import init_db
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
@@ -31,6 +32,7 @@ app.include_router(indicators_router.router)
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # await init_db(conn)
     print("✅ 数据库表创建完成")
 
 

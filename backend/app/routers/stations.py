@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/stations", tags=["监测站模块"])
     "/create",
     response_model=ApiResponse[bool],
     description="创建监测站点",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def create_monitoring_station(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -40,7 +40,7 @@ async def create_monitoring_station(
 @router.get(
     "/list",
     description="获取监测站点列表",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def get_monitoring_station_list(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -63,7 +63,7 @@ async def get_monitoring_station_list(
 @router.get(
     "/{id}",
     response_model=ApiResponse[schemas_stations.GetMonitoringStationDetailResponse],
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
     description="获取监测站点详情",
 )
 async def get_monitoring_station_detail(
@@ -81,7 +81,7 @@ async def get_monitoring_station_detail(
     "/{id}",
     response_model=ApiResponse[bool],
     description="更新监测站点",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def update_monitoring_station(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -106,7 +106,7 @@ async def update_monitoring_station(
     "/{id}",
     response_model=ApiResponse[bool],
     description="删除监测站点",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def delete_monitoring_station(
     db: Annotated[AsyncSession, Depends(get_db)],

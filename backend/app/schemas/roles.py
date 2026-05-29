@@ -22,7 +22,7 @@ class AddRoleRequest(BaseModel):
 
     name: str = Field(..., description="角色名称")
     code: str = Field(..., description="角色编码")
-    permissions: list[str] = Field(default_factory=list, description="权限列表")
+    permissions: dict = Field(default_factory=dict, description="权限列表")
 
 
 class UpateRoleRequest(BaseModel):
@@ -31,7 +31,7 @@ class UpateRoleRequest(BaseModel):
     id: int = Field(..., description="角色 ID")
     name: str | None = Field(None, description="角色名称")
     code: str | None = Field(None, description="角色编码")
-    permissions: list[str] = Field(default_factory=list, description="权限列表")
+    permissions: dict = Field(default_factory=dict, description="权限列表")
 
 
 # ========== 响应类（Response）==========
@@ -54,7 +54,7 @@ class AddRoleResponse(BaseModel):
     id: int = Field(..., description="角色 ID")
     name: str = Field(..., description="角色名称")
     code: str = Field(..., description="角色编码")
-    permissions: list[str] = Field(default_factory=list, description="权限列表")
+    permissions: dict = Field(default_factory=dict, description="权限列表")
     created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)
@@ -66,7 +66,7 @@ class GetRoleDetailResponse(BaseModel):
     id: int = Field(..., description="角色 ID")
     name: str = Field(..., description="角色名称")
     code: str = Field(..., description="角色编码")
-    permissions: list[str] = Field(default_factory=list, description="权限列表")
+    permissions: dict = Field(default_factory=dict, description="权限列表")
     created_at: datetime = Field(..., description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)

@@ -2,7 +2,7 @@ from app.core.database import get_db, commit_or_rollback
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.utils.logger_config import setup_logger
 from app.utils.exception import ServiceException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from app.models import role as models_role
 from app.schemas.common import PaginatedResponse, PaginationInfo
 from app.schemas import roles as schemas_roles
@@ -43,8 +43,10 @@ async def add_role(db: AsyncSession, add_role_request: schemas_roles.AddRoleRequ
     """添加角色"""
     role_entity = await db.scalar(
         select(models_role.Role).where(
-            models_role.Role.code == add_role_request.code
-            or models_role.Role.name == add_role_request.name
+            or_(
+                models_role.Role.code == add_role_request.code,
+                models_role.Role.name == add_role_request.name,
+            )
         )
     )
     if role_entity:

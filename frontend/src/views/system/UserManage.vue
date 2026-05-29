@@ -399,19 +399,14 @@
           />
         </el-form-item>
         <el-form-item label="权限列表" prop="permissions">
-          <el-select
-            v-model="addRoleForm.permissions"
-            multiple
-            placeholder="请选择权限（可多选，可不选）"
-            class="w-full"
-          >
-            <el-option label="用户管理" value="user:manage" />
-            <el-option label="角色管理" value="role:manage" />
-            <el-option label="数据查看" value="data:view" />
-            <el-option label="数据编辑" value="data:edit" />
-            <el-option label="报表导出" value="report:export" />
-            <el-option label="系统设置" value="system:config" />
-          </el-select>
+          <el-checkbox-group v-model="addRoleForm.permissions" class="flex flex-wrap gap-x-4 gap-y-1">
+            <el-checkbox label="数据总览" value="dashboard" />
+            <el-checkbox label="告警管理" value="alert" />
+            <el-checkbox label="智能问答" value="rag" />
+            <el-checkbox label="知识图谱" value="graph" />
+            <el-checkbox label="报告管理" value="report" />
+            <el-checkbox label="知识库" value="knowledge" />
+          </el-checkbox-group>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -452,19 +447,14 @@
           />
         </el-form-item>
         <el-form-item label="权限列表" prop="permissions">
-          <el-select
-            v-model="editRoleForm.permissions"
-            multiple
-            placeholder="请选择权限（可多选）"
-            class="w-full"
-          >
-            <el-option label="用户管理" value="user:manage" />
-            <el-option label="角色管理" value="role:manage" />
-            <el-option label="数据查看" value="data:view" />
-            <el-option label="数据编辑" value="data:edit" />
-            <el-option label="报表导出" value="report:export" />
-            <el-option label="系统设置" value="system:config" />
-          </el-select>
+          <el-checkbox-group v-model="editRoleForm.permissions" class="flex flex-wrap gap-x-4 gap-y-1">
+            <el-checkbox label="数据总览" value="dashboard" />
+            <el-checkbox label="告警管理" value="alert" />
+            <el-checkbox label="智能问答" value="rag" />
+            <el-checkbox label="知识图谱" value="graph" />
+            <el-checkbox label="报告管理" value="report" />
+            <el-checkbox label="知识库" value="knowledge" />
+          </el-checkbox-group>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -568,6 +558,20 @@ const formatDateTime = (value) => {
   const d = new Date(value)
   const pad = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+const ALL_PERMISSIONS = ['dashboard', 'alert', 'rag', 'graph', 'report', 'knowledge']
+
+const toPermissionsDict = (selected) => {
+  const dict = {}
+  ALL_PERMISSIONS.forEach((key) => {
+    dict[key] = selected.includes(key)
+  })
+  return dict
+}
+
+const fromPermissionsDict = (dict) => {
+  return ALL_PERMISSIONS.filter((key) => dict[key])
 }
 
 const fetchUserList = async () => {
@@ -757,7 +761,7 @@ const submitAddRole = async () => {
     await addRole({
       name: addRoleForm.role_name,
       code: addRoleForm.code,
-      permissions: addRoleForm.permissions
+      permissions: toPermissionsDict(addRoleForm.permissions)
     })
     ElMessage.success('添加角色成功')
     addRoleDialogVisible.value = false
@@ -780,7 +784,7 @@ const handleEditRole = async (row) => {
     const res = await getRoleDetail(row.id)
     editRoleForm.role_name = res.data.name
     editRoleForm.code = res.data.code
-    editRoleForm.permissions = res.data.permissions || []
+    editRoleForm.permissions = fromPermissionsDict(res.data.permissions || {})
   } catch (e) {
     ElMessage.error(e.message || '获取角色详情失败')
     editRoleDialogVisible.value = false
@@ -799,7 +803,7 @@ const submitEditRole = async () => {
       id: editingRoleId.value,
       name: editRoleForm.role_name,
       code: editRoleForm.code,
-      permissions: editRoleForm.permissions
+      permissions: toPermissionsDict(editRoleForm.permissions)
     })
     ElMessage.success('更新角色成功')
     editRoleDialogVisible.value = false

@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/roles", tags=["角色模块"])
     "/list",
     response_model=ApiResponse[PaginatedResponse[schemas_roles.GetRoleListResponse]],
     description="获取角色列表",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def get_role_list(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -35,7 +35,7 @@ async def get_role_list(
     "/add",
     response_model=ApiResponse[schemas_roles.AddRoleResponse],
     description="添加角色",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def add_role(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -54,7 +54,7 @@ async def add_role(
     "/{id}",
     response_model=ApiResponse[schemas_roles.GetRoleDetailResponse],
     description="获取角色详情",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def get_role_detail(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -71,7 +71,7 @@ async def get_role_detail(
     "/update",
     response_model=ApiResponse,
     description="更新角色",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def update_role(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -90,7 +90,7 @@ async def update_role(
     "/{id}",
     response_model=ApiResponse,
     description="删除角色",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def delete_role(
     db: Annotated[AsyncSession, Depends(get_db)],

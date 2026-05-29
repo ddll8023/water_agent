@@ -34,6 +34,9 @@ request.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 401 || status === 403) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('userInfo')
+        window.location.href = '/login'
         return Promise.reject(new Error('请先登录'))
       }
       const message = data?.message || `请求失败 (${status})`

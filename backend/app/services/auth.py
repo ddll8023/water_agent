@@ -43,7 +43,7 @@ async def login(db: AsyncSession, login_request: schemas_auth.LoginRequest):
         {
             "user_id": user_entity.id,
             "username": user_entity.username,
-            "role_name": role_entity.name,
+            "role_code": role_entity.code,
         }
     )
     return schemas_auth.LoginResponse(

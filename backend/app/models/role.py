@@ -12,7 +12,7 @@ class Role(Base):
     id = Column[int](Integer, primary_key=True, autoincrement=True, comment="角色ID")
     name = Column[str](String(50), nullable=False, comment="角色名称")
     code = Column[str](String(50), unique=True, nullable=False, comment="角色编码")
-    permissions = Column[list[str]](JSON, comment="权限列表")
+    permissions = Column[dict](JSON, comment="权限列表")
     created_at = Column[datetime](DateTime, default=datetime.now, comment="创建时间")
 
     __table_args__ = (

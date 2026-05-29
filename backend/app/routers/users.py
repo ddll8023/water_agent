@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/users", tags=["用户模块"])
     "/list",
     response_model=ApiResponse[PaginatedResponse[schemas_users.GetUserListResponse]],
     description="获取用户列表",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def get_user_list(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -35,7 +35,7 @@ async def get_user_list(
     "/add",
     response_model=ApiResponse[schemas_users.AddUserResponse],
     description="添加用户",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def add_user(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -54,7 +54,7 @@ async def add_user(
     "/{id}",
     response_model=ApiResponse[schemas_users.GetUserDetailResponse],
     description="获取用户详情",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def get_user_detail(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -71,7 +71,7 @@ async def get_user_detail(
     "/{id}",
     response_model=ApiResponse[schemas_users.UpdateUserResponse],
     description="更新用户",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def update_user(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -91,7 +91,7 @@ async def update_user(
     "/{id}/reset-password",
     response_model=ApiResponse[bool],
     description="重置密码",
-    dependencies=[Depends(require_role(["admin"]))],
+    dependencies=[Depends(require_role("admin"))],
 )
 async def reset_password(
     db: Annotated[AsyncSession, Depends(get_db)],

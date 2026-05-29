@@ -9,7 +9,7 @@ class ValidateTokenUserItem(BaseModel):
 
     user_id: int = Field(..., description="用户 ID")
     username: str = Field(..., description="用户名")
-    role_name: str = Field(..., description="用户角色")
+    role_code: str = Field(..., description="用户角色编码")
 
     model_config = ConfigDict(from_attributes=True)
 
