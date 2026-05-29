@@ -103,7 +103,17 @@ async def update_indicator(
         raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "指标不存在")
     if update_indicator_request.name:
         indicator_entity.name = update_indicator_request.name
-    if update_indicator_request.code:
+    if (
+        update_indicator_request.code is not None
+        and update_indicator_request.code != indicator_entity.code
+    ):
+        existing_code = await db.scalar(
+            select(models_indicator.Indicator).where(
+                models_indicator.Indicator.code == update_indicator_request.code
+            )
+        )
+        if existing_code is not None:
+            raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "指标编码已存在")
         indicator_entity.code = update_indicator_request.code
     if update_indicator_request.unit:
         indicator_entity.unit = update_indicator_request.unit

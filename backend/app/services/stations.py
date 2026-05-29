@@ -119,7 +119,20 @@ async def update_monitoring_station(
         raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
     if update_monitoring_station_request.name is not None:
         monitoring_station_entity.name = update_monitoring_station_request.name
-    if update_monitoring_station_request.code is not None:
+    if (
+        update_monitoring_station_request.code is not None
+        and update_monitoring_station_request.code != monitoring_station_entity.code
+    ):
+        existing_code = await db.scalar(
+            select(models_station.MonitoringStation).where(
+                models_station.MonitoringStation.code
+                != update_monitoring_station_request.code
+            )
+        )
+        if existing_code is not None:
+            raise ServiceException(
+                ErrorCode.RESOURCE_ALREADY_EXISTS, "监测站点编码已存在"
+            )
         monitoring_station_entity.code = update_monitoring_station_request.code
     if update_monitoring_station_request.type is not None:
         monitoring_station_entity.type = update_monitoring_station_request.type

@@ -98,7 +98,10 @@ async def update_reservoir(
     reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
     if not reservoir_entity:
         raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
-    if update_reservoir_request.code is not None:
+    if (
+        update_reservoir_request.code is not None
+        and update_reservoir_request.code != reservoir_entity.code
+    ):
         existing = await db.scalar(
             select(models_reservoir.Reservoir).where(
                 models_reservoir.Reservoir.code == update_reservoir_request.code
