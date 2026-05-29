@@ -1468,3 +1468,125 @@ Authorization: Bearer <token>
 | pagination.page_size       | int          | 每页数量                 |
 | pagination.total           | int          | 总记录数                 |
 | pagination.total_pages     | int          | 总页数                   |
+
+---
+
+### 7.3 获取指标详情
+
+- **GET** `/api/indicators/{id}`
+- **描述**：根据指标 ID 获取指标详细信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 指标 ID                               |
+
+**请求示例**：
+
+```
+GET /api/indicators/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "name": "总磷",
+    "code": "TP",
+    "unit": "mg/L",
+    "category": "化学",
+    "standard_limit_i": 0.02,
+    "standard_limit_ii": 0.1,
+    "standard_limit_iii": 0.2,
+    "standard_limit_iv": 0.3,
+    "standard_limit_v": 0.4,
+    "is_core": 1
+  }
+}
+```
+
+| 字段               | 类型         | 说明                     |
+| ------------------ | ------------ | ------------------------ |
+| id                 | int          | 指标 ID                  |
+| name               | string       | 指标名称                 |
+| code               | string       | 指标编码                 |
+| unit               | string\|null | 单位                     |
+| category           | string\|null | 分类                     |
+| standard_limit_i   | float\|null  | Ⅰ类限值                 |
+| standard_limit_ii  | float\|null  | Ⅱ类限值                 |
+| standard_limit_iii | float\|null  | Ⅲ类限值                 |
+| standard_limit_iv  | float\|null  | Ⅳ类限值                 |
+| standard_limit_v   | float\|null  | Ⅴ类限值                 |
+| is_core            | int\|null    | 是否核心指标：0=否，1=是 |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（指标不存在） |
+
+---
+
+### 7.4 更新指标
+
+- **PUT** `/api/indicators/{id}`
+- **描述**：更新指定指标的信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数              | 类型         | 位置   | 必填 | 说明                                  |
+| ----------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization     | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id                | int          | path   | 是   | 指标 ID                               |
+| name              | string\|null | body   | 否   | 指标名称                              |
+| code              | string\|null | body   | 否   | 指标编码                              |
+| unit              | string\|null | body   | 否   | 单位                                  |
+| category          | string\|null | body   | 否   | 分类                                  |
+| standard_limit_i  | float\|null  | body   | 否   | Ⅰ类限值                              |
+| standard_limit_ii | float\|null  | body   | 否   | Ⅱ类限值                              |
+| standard_limit_iii| float\|null  | body   | 否   | Ⅲ类限值                              |
+| standard_limit_iv | float\|null  | body   | 否   | Ⅳ类限值                              |
+| standard_limit_v  | float\|null  | body   | 否   | Ⅴ类限值                              |
+| is_core           | int\|null    | body   | 否   | 是否核心指标：0=否，1=是              |
+
+**请求体示例**：
+
+```json
+{
+  "name": "总磷（TP）",
+  "unit": "mg/L",
+  "category": "化学",
+  "standard_limit_i": 0.02,
+  "standard_limit_ii": 0.1,
+  "standard_limit_iii": 0.2,
+  "standard_limit_iv": 0.3,
+  "standard_limit_v": 0.4,
+  "is_core": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（指标不存在） |
+| 7001   | 资源已存在（指标编码已存在） |

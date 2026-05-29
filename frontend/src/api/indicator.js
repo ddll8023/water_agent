@@ -25,3 +25,29 @@ export function getIndicatorList(data) {
     data
   })
 }
+
+/**
+ * 获取指标详情
+ * @param {number} id - 指标ID
+ * @returns {Promise} 指标详情数据
+ */
+export function getIndicatorDetail(id) {
+  return request({
+    method: 'get',
+    url: `/indicators/${id}`
+  })
+}
+
+/**
+ * 更新指标
+ * @param {number} id - 指标ID
+ * @param {Object} data - 更新指标请求参数
+ * @returns {Promise} 更新结果
+ */
+export function updateIndicator(id, data) {
+  return request({
+    method: 'put',
+    url: `/indicators/${id}`,
+    data
+  })
+}

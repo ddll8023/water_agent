@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, Query, Body, Path
 from typing import Annotated
+
+from sqlalchemy.sql.schema import Identity
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.response import success, error
@@ -54,6 +56,45 @@ async def get_indicator_list(
     try:
         return success(
             await service_indicators.get_indicator_list(db, get_indicator_list_request)
+        )
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.get(
+    "/{id}",
+    response_model=ApiResponse[schemas_indicators.GetIndicatorDetailResponse],
+    dependencies=[Depends(require_role("admin"))],
+    description="获取指标详情",
+)
+async def get_indicator_detail(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="指标ID")],
+):
+    """获取指标详情"""
+    try:
+        return success(await service_indicators.get_indicator_detail(db, id))
+    except ServiceException as e:
+        return error(e.code, e.message)
+
+
+@router.put(
+    "/{id}",
+    response_model=ApiResponse[bool],
+    dependencies=[Depends(require_role("admin"))],
+    description="更新指标",
+)
+async def update_indicator(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="指标ID")],
+    update_indicator_request: Annotated[
+        schemas_indicators.UpdateIndicatorRequest, Body(..., description="更新指标请求")
+    ],
+):
+    """更新指标"""
+    try:
+        return success(
+            await service_indicators.update_indicator(db, id, update_indicator_request)
         )
     except ServiceException as e:
         return error(e.code, e.message)

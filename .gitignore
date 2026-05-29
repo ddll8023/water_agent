@@ -8,7 +8,7 @@ wheels/
 node_modules
 # Virtual environments
 .venv
-
+.claude
 .env
 
 .idea

@@ -119,6 +119,11 @@
           <el-tag v-else type="info" size="small" effect="plain">普通</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="操作" width="130" fixed="right">
+        <template #default="{ row }">
+          <el-button type="primary" link size="small" @click="openEditDialog(row)">编辑</el-button>
+        </template>
+      </el-table-column>
       <template #empty>
         <el-empty description="暂无指标数据" />
       </template>
@@ -139,7 +144,7 @@
 
     <el-dialog
       v-model="createDialogVisible"
-      title="新增指标"
+      :title="isEditMode ? '编辑指标' : '新增指标'"
       width="640px"
       :close-on-click-modal="false"
       @close="resetCreateForm"
@@ -259,7 +264,9 @@
       </el-form>
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="createLoading" @click="handleCreateIndicator">确 定</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreateIndicator">
+          {{ isEditMode ? '保 存' : '确 定' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>
@@ -268,13 +275,13 @@
 <script setup>
 /**
  * 监测指标管理 Tab
- * 功能描述：指标列表查询、筛选、分页、新增
+ * 功能描述：指标列表查询、筛选、分页、新增、编辑
  * 依赖组件：无
  */
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { getIndicatorList, createIndicator } from '@/api/indicator'
+import { getIndicatorList, createIndicator, getIndicatorDetail, updateIndicator } from '@/api/indicator'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -334,6 +341,8 @@ onMounted(() => {
 const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const createFormRef = ref(null)
+const isEditMode = ref(false)
+const editingIndicatorId = ref(null)
 
 const createForm = reactive({
   name: '',
@@ -360,10 +369,40 @@ const createFormRules = {
 }
 
 const openCreateDialog = () => {
+  isEditMode.value = false
+  editingIndicatorId.value = null
   createDialogVisible.value = true
 }
 
+const openEditDialog = async (row) => {
+  isEditMode.value = true
+  editingIndicatorId.value = row.id
+  createLoading.value = true
+  createDialogVisible.value = true
+  try {
+    const res = await getIndicatorDetail(row.id)
+    const detail = res.data
+    createForm.name = detail.name
+    createForm.code = detail.code
+    createForm.unit = detail.unit || ''
+    createForm.category = detail.category || ''
+    createForm.standard_limit_i = detail.standard_limit_i ?? null
+    createForm.standard_limit_ii = detail.standard_limit_ii ?? null
+    createForm.standard_limit_iii = detail.standard_limit_iii ?? null
+    createForm.standard_limit_iv = detail.standard_limit_iv ?? null
+    createForm.standard_limit_v = detail.standard_limit_v ?? null
+    createForm.is_core = detail.is_core ?? 0
+  } catch (e) {
+    ElMessage.error(e.message || '获取指标详情失败')
+    createDialogVisible.value = false
+  } finally {
+    createLoading.value = false
+  }
+}
+
 const resetCreateForm = () => {
+  isEditMode.value = false
+  editingIndicatorId.value = null
   createForm.name = ''
   createForm.code = ''
   createForm.unit = ''
@@ -401,13 +440,18 @@ const handleCreateIndicator = async () => {
     const payload = Object.fromEntries(
       Object.entries(rawPayload).filter(([_, v]) => v !== undefined)
     )
-    await createIndicator(payload)
-    ElMessage.success('指标创建成功')
+    if (isEditMode.value) {
+      await updateIndicator(editingIndicatorId.value, payload)
+      ElMessage.success('指标更新成功')
+    } else {
+      await createIndicator(payload)
+      ElMessage.success('指标创建成功')
+    }
     createDialogVisible.value = false
     pagination.page = 1
     await fetchIndicatorList()
   } catch (e) {
-    ElMessage.error(e.message || '创建指标失败')
+    ElMessage.error(e.message || (isEditMode.value ? '更新指标失败' : '创建指标失败'))
   } finally {
     createLoading.value = false
   }

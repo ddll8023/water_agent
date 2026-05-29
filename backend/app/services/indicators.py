@@ -77,3 +77,51 @@ async def get_indicator_list(
             page_size=get_indicator_list_request.page_size,
         ),
     )
+
+
+async def get_indicator_detail(
+    db: AsyncSession,
+    indicator_id: int,
+):
+    """获取指标详情"""
+    indicator_entity = await db.get(models_indicator.Indicator, indicator_id)
+    if not indicator_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "指标不存在")
+    return schemas_indicators.GetIndicatorDetailResponse.model_validate(
+        indicator_entity
+    )
+
+
+async def update_indicator(
+    db: AsyncSession,
+    indicator_id: int,
+    update_indicator_request: schemas_indicators.UpdateIndicatorRequest,
+):
+    """更新指标"""
+    indicator_entity = await db.get(models_indicator.Indicator, indicator_id)
+    if not indicator_entity:
+        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "指标不存在")
+    if update_indicator_request.name:
+        indicator_entity.name = update_indicator_request.name
+    if update_indicator_request.code:
+        indicator_entity.code = update_indicator_request.code
+    if update_indicator_request.unit:
+        indicator_entity.unit = update_indicator_request.unit
+    if update_indicator_request.category:
+        indicator_entity.category = update_indicator_request.category
+    if update_indicator_request.standard_limit_i:
+        indicator_entity.standard_limit_i = update_indicator_request.standard_limit_i
+    if update_indicator_request.standard_limit_ii:
+        indicator_entity.standard_limit_ii = update_indicator_request.standard_limit_ii
+    if update_indicator_request.standard_limit_iii:
+        indicator_entity.standard_limit_iii = (
+            update_indicator_request.standard_limit_iii
+        )
+    if update_indicator_request.standard_limit_iv:
+        indicator_entity.standard_limit_iv = update_indicator_request.standard_limit_iv
+    if update_indicator_request.standard_limit_v:
+        indicator_entity.standard_limit_v = update_indicator_request.standard_limit_v
+    if update_indicator_request.is_core is not None:
+        indicator_entity.is_core = update_indicator_request.is_core
+    await commit_or_rollback(db)
+    return True
