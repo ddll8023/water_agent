@@ -8,6 +8,7 @@ from app.routers import roles as roles_router
 from app.routers import reservoir as reservoir_router
 from app.routers import stations as stations_router
 from app.routers import indicators as indicators_router
+from app.routers import monitoring as monitoring_router
 from app.utils.db_init import init_db
 
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
@@ -26,6 +27,7 @@ app.include_router(roles_router.router)
 app.include_router(reservoir_router.router)
 app.include_router(stations_router.router)
 app.include_router(indicators_router.router)
+app.include_router(monitoring_router.router)
 
 
 @app.on_event("startup")
