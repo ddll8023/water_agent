@@ -190,6 +190,45 @@ async def get_last_monitoring_record(
     )
 
 
+async def get_monitoring_records_trend(
+    db: AsyncSession,
+    get_monitoring_records_trend_request: schemas_monitorings.GetMonitoringRecordsTrendRequest,
+):
+    """获取监测记录趋势"""
+    stmt = select(models_monitoring.MonitoringRecord).where(
+        and_(
+            models_monitoring.MonitoringRecord.reservoir_id
+            == get_monitoring_records_trend_request.reservoir_id,
+            models_monitoring.MonitoringRecord.indicator_id
+            == get_monitoring_records_trend_request.indicator_id,
+        )
+    )
+    if get_monitoring_records_trend_request.start_time is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.record_time
+            >= get_monitoring_records_trend_request.start_time
+        )
+    if get_monitoring_records_trend_request.end_time is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.record_time
+            <= get_monitoring_records_trend_request.end_time
+        )
+    monitoring_records_entity_list = (
+        await db.scalars(
+            stmt.order_by(models_monitoring.MonitoringRecord.record_time.desc())
+        )
+    ).all()
+    return schemas_monitorings.GetMonitoringRecordsTrendResponse(
+        lists=[
+            schemas_monitorings.GetMonitoringRecordsTrendResponseItem.model_validate(
+                entity
+            )
+            for entity in monitoring_records_entity_list
+        ],
+        total=len(monitoring_records_entity_list),
+    )
+
+
 async def _fetch_real_data():
     """调用真实接口获取最新一条监测记录"""
     try:

@@ -58,3 +58,24 @@ async def get_last_monitoring_record(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/trend",
+    response_model=ApiResponse[schemas_monitorings.GetMonitoringRecordsTrendResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取监测记录趋势",
+)
+async def get_monitoring_records_trend(
+    db: AsyncSession = Depends(get_db),
+    get_monitoring_records_trend_request: schemas_monitorings.GetMonitoringRecordsTrendRequest = Query(
+        ..., description="获取监测记录趋势请求参数"
+    ),
+):
+    try:
+        result = await services_monitoring.get_monitoring_records_trend(
+            db, get_monitoring_records_trend_request
+        )
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)

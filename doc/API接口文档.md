@@ -1753,3 +1753,58 @@ Authorization: Bearer <token>
 | 错误码 | 场景                       |
 | ------ | -------------------------- |
 | 1002   | 数据不存在（监测记录不存在） |
+
+### 8.3 获取监测记录趋势
+
+- **GET** `/api/monitoring/trend`
+- **描述**：根据水库 ID、指标 ID、时间范围获取监测记录趋势数据，按监测时间倒序排列。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型     | 位置   | 必填 | 说明                                           |
+| ------------- | -------- | ------ | ---- | ---------------------------------------------- |
+| Authorization | string   | header | 是   | Bearer Token，格式 `Bearer <token>`          |
+| reservoir_id  | int      | query  | 是   | 水库 ID                                        |
+| indicator_id  | int      | query  | 是   | 指标 ID                                        |
+| start_time    | datetime | query  | 是   | 开始时间，格式 `YYYY-MM-DD HH:MM:SS`       |
+| end_time      | datetime | query  | 是   | 结束时间，格式 `YYYY-MM-DD HH:MM:SS`       |
+
+**请求示例**：
+
+```
+GET /api/monitoring/trend?reservoir_id=1&indicator_id=3&start_time=2026-06-01 00:00:00&end_time=2026-06-01 23:59:59
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "reservoir_id": 1,
+        "indicator_id": 3,
+        "record_time": "2026-06-01 08:00:00",
+        "value": 0.082
+      },
+      {
+        "reservoir_id": 1,
+        "indicator_id": 3,
+        "record_time": "2026-06-01 07:00:00",
+        "value": 0.079
+      }
+    ],
+    "total": 24
+  }
+}
+```
+
+| 字段                 | 类型     | 说明                                          |
+| -------------------- | -------- | --------------------------------------------- |
+| lists[].reservoir_id | int      | 水库 ID                                       |
+| lists[].indicator_id | int      | 指标 ID                                       |
+| lists[].record_time  | datetime | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`       |
+| lists[].value        | float    | 监测值                                        |
+| total                | int      | 总记录数                                      |

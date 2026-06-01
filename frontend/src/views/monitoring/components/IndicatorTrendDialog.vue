@@ -33,7 +33,7 @@ import {
   TitleComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getMonitoringRecordsList } from '@/api/monitoring'
+import { getMonitoringRecordsTrend } from '@/api/monitoring'
 
 echarts.use([
   LineChart,
@@ -49,6 +49,7 @@ const props = defineProps({
   modelValue: { type: Boolean, default: false },
   indicatorName: { type: String, default: 'pH' },
   standardLimit: { type: [Number, null], default: null },
+  reservoirId: { type: Number, default: undefined },
   stationId: { type: Number, default: undefined },
   indicatorId: { type: Number, default: undefined }
 })
@@ -103,16 +104,13 @@ const fetchTrendData = async () => {
   const start = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
   try {
-    const res = await getMonitoringRecordsList({
-      station_id: props.stationId,
+    const res = await getMonitoringRecordsTrend({
+      reservoir_id: props.reservoirId || undefined,
       indicator_id: props.indicatorId,
       start_time: _formatDateTime(start),
-      end_time: _formatDateTime(now),
-      page: 1,
-      page_size: 100
+      end_time: _formatDateTime(now)
     })
     const records = res.data?.lists || []
-    // 按 record_time 升序排列
     records.sort(
       (a, b) => new Date(a.record_time).getTime() - new Date(b.record_time).getTime()
     )

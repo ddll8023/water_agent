@@ -67,6 +67,7 @@
       v-model="dialogVisible"
       :indicator-name="activeIndicator?.indicatorName || ''"
       :standard-limit="activeIndicator?.standardLimit ?? null"
+      :reservoir-id="reservoirId"
       :station-id="activeIndicator?.stationId ?? undefined"
       :indicator-id="activeIndicator?.indicatorId ?? undefined"
     />

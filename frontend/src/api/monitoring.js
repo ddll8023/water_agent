@@ -36,3 +36,20 @@ export function getLastMonitoringRecord(params) {
     params
   })
 }
+
+/**
+ * 获取监测记录趋势
+ * @param {Object} params - 查询参数
+ * @param {number} params.reservoir_id - 水库 ID
+ * @param {number} params.indicator_id - 指标 ID
+ * @param {string} params.start_time - 开始时间，格式 YYYY-MM-DD HH:mm:ss
+ * @param {string} params.end_time - 结束时间，格式 YYYY-MM-DD HH:mm:ss
+ * @returns {Promise} 监测记录趋势数据
+ */
+export function getMonitoringRecordsTrend(params) {
+  return request({
+    method: 'get',
+    url: '/monitoring/trend',
+    params
+  })
+}

@@ -3,6 +3,17 @@ from typing import Literal
 from datetime import datetime
 
 
+class GetMonitoringRecordsTrendResponseItem(BaseModel):
+    """获取监测记录趋势响应参数项"""
+
+    reservoir_id: int = Field(description="水库ID")
+    indicator_id: int = Field(description="指标ID")
+    record_time: datetime = Field(description="监测时间")
+    value: float = Field(description="监测值")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GetMonitoringRecordsListRequest(BaseModel):
     """获取监测记录列表请求参数"""
 
@@ -30,6 +41,19 @@ class GetLastMonitoringRecordRequest(BaseModel):
     indicator_id: int = Field(description="指标ID")
 
 
+class GetMonitoringRecordsTrendRequest(BaseModel):
+    """获取监测记录趋势请求参数"""
+
+    reservoir_id: int = Field(description="水库ID")
+    indicator_id: int = Field(description="指标ID")
+    start_time: datetime | None = Field(
+        None, description="开始时间，格式：YYYY-MM-DD HH:MM:SS"
+    )
+    end_time: datetime | None = Field(
+        None, description="结束时间，格式：YYYY-MM-DD HH:MM:SS"
+    )
+
+
 class GetMonitoringRecordsListResponse(BaseModel):
     """获取监测记录列表响应参数"""
 
@@ -55,3 +79,12 @@ class GetLastMonitoringRecordResponse(BaseModel):
     record_time: datetime = Field(description="监测时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GetMonitoringRecordsTrendResponse(BaseModel):
+    """获取监测记录趋势响应参数"""
+
+    lists: list[GetMonitoringRecordsTrendResponseItem] = Field(
+        default_factory=list, description="监测记录趋势列表"
+    )
+    total: int = Field(0, description="总记录数")

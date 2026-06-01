@@ -69,7 +69,7 @@ import {
   DataZoomComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getMonitoringRecordsList } from '@/api/monitoring'
+import { getMonitoringRecordsTrend } from '@/api/monitoring'
 import { getIndicatorList } from '@/api/indicator'
 
 echarts.use([
@@ -129,13 +129,11 @@ const INDICATOR_COLOR_PALETTE = [
 
 const fetchTrendData = async (indicatorId, startTime, endTime) => {
   try {
-    const res = await getMonitoringRecordsList({
+    const res = await getMonitoringRecordsTrend({
       reservoir_id: reservoirId || undefined,
       indicator_id: indicatorId,
       start_time: startTime,
-      end_time: endTime,
-      page: 1,
-      page_size: 200
+      end_time: endTime
     })
     const records = res.data?.lists || []
     records.sort(
