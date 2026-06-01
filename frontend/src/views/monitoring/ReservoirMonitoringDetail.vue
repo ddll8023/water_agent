@@ -10,40 +10,25 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-baseline gap-3 mb-2">
             <h2 class="text-2xl font-semibold text-gray-900 leading-tight">
-              <el-skeleton :loading="true" animated style="width: 180px">
-                <template #template>
-                  <el-skeleton-item variant="h1" style="width: 100%; height: 28px" />
-                </template>
-              </el-skeleton>
+              {{ reservoirName || '加载中...' }}
             </h2>
+            <el-tag v-if="reservoirCode" type="info" size="small">{{ reservoirCode }}</el-tag>
           </div>
           <div class="flex items-center gap-6 text-sm text-gray-500">
-            <span class="flex items-center gap-1">
+            <span v-if="reservoirLocation" class="flex items-center gap-1">
               <el-icon><Location /></el-icon>
-              <el-skeleton :loading="true" animated style="width: 140px">
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 14px" />
-                </template>
-              </el-skeleton>
+              {{ reservoirLocation }}
             </span>
-            <span class="flex items-center gap-1">
+            <span v-if="reservoirWatershed" class="flex items-center gap-1">
               <el-icon><DataLine /></el-icon>
-              <el-skeleton :loading="true" animated style="width: 120px">
-                <template #template>
-                  <el-skeleton-item variant="text" style="width: 100%; height: 14px" />
-                </template>
-              </el-skeleton>
+              {{ reservoirWatershed }}
             </span>
           </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div v-if="waterGrade" class="flex items-center gap-2">
           <span class="text-sm text-gray-500">水质类别</span>
-          <el-skeleton :loading="true" animated style="width: 80px">
-            <template #template>
-              <el-skeleton-item variant="text" style="width: 100%; height: 32px; border-radius: 16px" />
-            </template>
-          </el-skeleton>
+          <el-tag :type="gradeTagType" size="large" effect="dark">{{ waterGrade }}</el-tag>
         </div>
       </div>
     </el-card>
@@ -71,20 +56,21 @@
       </el-button>
     </div>
 
-    <ai-chat-drawer v-model="aiDrawerVisible" :reservoir-name="''" />
+    <ai-chat-drawer v-model="aiDrawerVisible" :reservoir-name="reservoirName" />
   </div>
 </template>
 
 <script setup>
 /**
  * 水库实时监测详情页
- * 功能描述：面包屑 + 水库信息栏 + 三 Tab 切换 + 底部固定操作区 + AI 问答抽屉
+ * 功能描述：面包屑 + 水库信息栏（对接真实数据）+ 三 Tab 切换 + 底部固定操作区 + AI 问答抽屉
  * 依赖组件：RealtimeTab, TrendTab, StationsTab, AiChatDrawer
  */
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Location, DataLine, Document, ChatLineRound } from '@element-plus/icons-vue'
+import { getReservoirDetail } from '@/api/reservoir'
 import RealtimeTab from './components/RealtimeTab.vue'
 import TrendTab from './components/TrendTab.vue'
 import StationsTab from './components/StationsTab.vue'
@@ -94,7 +80,36 @@ const route = useRoute()
 const activeTab = ref('realtime')
 const aiDrawerVisible = ref(false)
 
+const reservoirName = ref('')
+const reservoirCode = ref('')
+const reservoirLocation = ref('')
+const reservoirWatershed = ref('')
+const waterGrade = ref('')
+
+const gradeTagType = computed(() => {
+  const map = { 'Ⅰ类': 'success', 'Ⅱ类': 'success', 'Ⅲ类': 'warning', 'Ⅳ类': 'danger', 'Ⅴ类': 'danger' }
+  return map[waterGrade.value] || 'info'
+})
+
 const handleViewReports = () => {
   ElMessage.info('巡检报告功能开发中')
 }
+
+onMounted(async () => {
+  const id = Number(route.params.id)
+  if (!id) return
+  try {
+    const res = await getReservoirDetail(id)
+    const data = res.data
+    if (data) {
+      reservoirName.value = data.name || ''
+      reservoirCode.value = data.code || ''
+      reservoirLocation.value = data.location || ''
+      reservoirWatershed.value = data.watershed || ''
+      waterGrade.value = data.water_grade || ''
+    }
+  } catch {
+    ElMessage.error('获取水库详情失败')
+  }
+})
 </script>

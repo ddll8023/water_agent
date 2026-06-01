@@ -17,11 +17,12 @@
 
 <script setup>
 /**
- * 单指标 24 小时趋势弹窗
- * 功能描述：使用 ECharts 渲染 mock 24h 折线 + 标准限值虚线
+ * 单指标 24 小时趋势弹窗（已对接真实数据）
+ * 功能描述：调取后端监测记录列表接口，获取指定站点+指标 24h 数据，渲染 ECharts 折线图
  * 依赖组件：无
  */
 import { ref, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import {
@@ -32,7 +33,7 @@ import {
   TitleComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { generateHourlyTrend } from '../mock'
+import { getMonitoringRecordsList } from '@/api/monitoring'
 
 echarts.use([
   LineChart,
@@ -47,7 +48,9 @@ echarts.use([
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   indicatorName: { type: String, default: 'pH' },
-  standardLimit: { type: [Number, null], default: null }
+  standardLimit: { type: [Number, null], default: null },
+  stationId: { type: Number, default: undefined },
+  indicatorId: { type: Number, default: undefined }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -55,8 +58,7 @@ const emit = defineEmits(['update:modelValue'])
 const chartRef = ref(null)
 let chartInstance = null
 
-const buildOption = () => {
-  const { xAxis, series } = generateHourlyTrend(1, 7, 1.5)
+const buildOption = (xAxisData, seriesData) => {
   const color = '#409EFF'
   const markLines = []
   if (props.standardLimit !== null && props.standardLimit !== undefined) {
@@ -73,7 +75,7 @@ const buildOption = () => {
     grid: { left: 50, right: 20, top: 30, bottom: 40 },
     xAxis: {
       type: 'category',
-      data: xAxis,
+      data: xAxisData,
       axisLabel: { interval: 3, fontSize: 11, color: '#909399' }
     },
     yAxis: { type: 'value', name: props.indicatorName, scale: true },
@@ -81,7 +83,7 @@ const buildOption = () => {
       {
         name: props.indicatorName,
         type: 'line',
-        data: series,
+        data: seriesData,
         smooth: true,
         symbol: 'circle',
         symbolSize: 4,
@@ -94,13 +96,51 @@ const buildOption = () => {
   }
 }
 
-const handleOpen = () => {
-  nextTick(() => {
+const fetchTrendData = async () => {
+  if (!props.stationId || !props.indicatorId) return { xAxis: [], series: [] }
+
+  const now = new Date()
+  const start = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+
+  try {
+    const res = await getMonitoringRecordsList({
+      station_id: props.stationId,
+      indicator_id: props.indicatorId,
+      start_time: _formatDateTime(start),
+      end_time: _formatDateTime(now),
+      page: 1,
+      page_size: 100
+    })
+    const records = res.data?.lists || []
+    // 按 record_time 升序排列
+    records.sort(
+      (a, b) => new Date(a.record_time).getTime() - new Date(b.record_time).getTime()
+    )
+    return {
+      xAxis: records.map((r) => r.record_time),
+      series: records.map((r) => r.value)
+    }
+  } catch {
+    return { xAxis: [], series: [] }
+  }
+}
+
+const _formatDateTime = (date) => {
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+const handleOpen = async () => {
+  nextTick(async () => {
     if (!chartRef.value) return
     if (!chartInstance) {
       chartInstance = echarts.init(chartRef.value)
     }
-    chartInstance.setOption(buildOption(), true)
+    const { xAxis, series } = await fetchTrendData()
+    if (!xAxis.length) {
+      ElMessage.info('该指标暂无趋势数据')
+    }
+    chartInstance.setOption(buildOption(xAxis, series), true)
   })
 }
 

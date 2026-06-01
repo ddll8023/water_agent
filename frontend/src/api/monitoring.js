@@ -20,3 +20,19 @@ export function getMonitoringRecordsList(params) {
     params
   })
 }
+
+/**
+ * 获取最新监测记录
+ * @param {Object} params - 查询参数
+ * @param {number} params.reservoir_id - 水库 ID
+ * @param {number} params.station_id - 站点 ID
+ * @param {number} params.indicator_id - 指标 ID
+ * @returns {Promise} 最新监测记录
+ */
+export function getLastMonitoringRecord(params) {
+  return request({
+    method: 'get',
+    url: '/monitoring/last',
+    params
+  })
+}

@@ -22,6 +22,14 @@ class GetMonitoringRecordsListRequest(BaseModel):
     )
 
 
+class GetLastMonitoringRecordRequest(BaseModel):
+    """获取最新监测记录请求参数"""
+
+    reservoir_id: int = Field(description="水库ID")
+    station_id: int = Field(description="站点ID")
+    indicator_id: int = Field(description="指标ID")
+
+
 class GetMonitoringRecordsListResponse(BaseModel):
     """获取监测记录列表响应参数"""
 
@@ -30,6 +38,20 @@ class GetMonitoringRecordsListResponse(BaseModel):
     station_id: int = Field(description="站点ID")
     indicator_id: int = Field(description="指标ID")
     value: float = Field(description="监测值")
+    record_time: datetime = Field(description="监测时间")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GetLastMonitoringRecordResponse(BaseModel):
+    """获取最新监测记录响应参数"""
+
+    id: int = Field(description="监测记录ID")
+    reservoir_id: int = Field(description="水库ID")
+    station_id: int = Field(description="站点ID")
+    indicator_id: int = Field(description="指标ID")
+    value: float = Field(description="监测值")
+    quality_flag: Literal[0, 1, 2] = Field(description="数据质量标志")
     record_time: datetime = Field(description="监测时间")
 
     model_config = ConfigDict(from_attributes=True)

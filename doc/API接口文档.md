@@ -1699,3 +1699,57 @@ Authorization: Bearer <token>
 | pagination.page_size   | int          | 每页数量                                        |
 | pagination.total       | int          | 总记录数                                        |
 | pagination.total_pages | int          | 总页数                                          |
+
+### 8.2 获取最新监测记录
+
+- **GET** `/api/monitoring/last`
+- **描述**：根据站点 ID 和指标 ID 获取最新一条监测记录。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| reservoir_id  | int    | query  | 是   | 水库 ID                               |
+| station_id    | int    | query  | 是   | 站点 ID                               |
+| indicator_id  | int    | query  | 是   | 指标 ID                               |
+
+**请求示例**：
+
+```
+GET /api/monitoring/last?reservoir_id=1&station_id=1&indicator_id=3
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1024,
+    "reservoir_id": 1,
+    "station_id": 1,
+    "indicator_id": 3,
+    "value": 0.082,
+    "quality_flag": 1,
+    "record_time": "2026-06-01 10:30:00"
+  }
+}
+```
+
+| 字段           | 类型     | 说明                                          |
+| -------------- | -------- | --------------------------------------------- |
+| id             | int      | 监测记录 ID                                   |
+| reservoir_id   | int      | 水库 ID                                       |
+| station_id     | int      | 站点 ID                                       |
+| indicator_id   | int      | 指标 ID                                       |
+| value          | float    | 监测值                                        |
+| quality_flag   | int      | 数据质量标志：0 可疑，1 正常，2 无效          |
+| record_time    | datetime | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`       |
+
+**错误场景**：
+
+| 错误码 | 场景                       |
+| ------ | -------------------------- |
+| 1002   | 数据不存在（监测记录不存在） |

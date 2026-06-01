@@ -13,6 +13,8 @@ from app.schemas import monitorings as schemas_monitorings
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.common import PaginationInfo, PaginatedResponse
 import math
+from app.utils.exception import ServiceException
+from app.schemas.common import ErrorCode
 
 logger = setup_logger(__name__)
 
@@ -96,27 +98,6 @@ async def collect_water_quality_data():
             logger.error(f"定时采集失败: {e}")
 
 
-async def _fetch_real_data():
-    """调用真实接口获取最新一条监测记录"""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                constants_monitoring.API_URL,
-                headers=constants_monitoring.API_HEADERS,
-                params=constants_monitoring.API_PARAMS,
-            )
-            resp.raise_for_status()
-            result = resp.json()
-            records = result.get("data", {}).get("records", [])
-            if not records:
-                logger.warning("API返回空记录")
-                return None
-            return records[0]
-    except Exception as e:
-        logger.error(f"调用真实接口失败: {e}")
-        return None
-
-
 async def get_monitoring_records_list(
     db: AsyncSession,
     get_monitoring_records_list_request: schemas_monitorings.GetMonitoringRecordsListRequest,
@@ -181,3 +162,50 @@ async def get_monitoring_records_list(
             ),
         ),
     )
+
+
+async def get_last_monitoring_record(
+    db: AsyncSession,
+    get_last_monitoring_record_request: schemas_monitorings.GetLastMonitoringRecordRequest,
+):
+    """获取最新监测记录"""
+
+    monitoring_record_entity = await db.scalar(
+        select(models_monitoring.MonitoringRecord)
+        .where(
+            and_(
+                models_monitoring.MonitoringRecord.station_id
+                == get_last_monitoring_record_request.station_id,
+                models_monitoring.MonitoringRecord.indicator_id
+                == get_last_monitoring_record_request.indicator_id,
+            )
+        )
+        .order_by(models_monitoring.MonitoringRecord.record_time.desc())
+    )
+    if monitoring_record_entity is None:
+        raise ServiceException(ErrorCode.NOT_FOUND, "监测记录不存在")
+
+    return schemas_monitorings.GetLastMonitoringRecordResponse.model_validate(
+        monitoring_record_entity
+    )
+
+
+async def _fetch_real_data():
+    """调用真实接口获取最新一条监测记录"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                constants_monitoring.API_URL,
+                headers=constants_monitoring.API_HEADERS,
+                params=constants_monitoring.API_PARAMS,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            records = result.get("data", {}).get("records", [])
+            if not records:
+                logger.warning("API返回空记录")
+                return None
+            return records[0]
+    except Exception as e:
+        logger.error(f"调用真实接口失败: {e}")
+        return None
