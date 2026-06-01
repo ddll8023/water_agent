@@ -1628,3 +1628,74 @@ Authorization: Bearer <token>
 | 错误码 | 场景                     |
 | ------ | ------------------------ |
 | 1002   | 数据不存在（指标不存在） |
+
+---
+
+## 八、监测记录管理（/api/monitoring）
+
+监测记录查询接口。需要 Bearer Token 认证，admin 与 user 角色均可访问。
+
+### 8.1 获取监测记录列表
+
+- **GET** `/api/monitoring/records`
+- **描述**：分页获取监测记录列表，支持按水库、站点、指标、时间范围、数据质量标志筛选，按监测时间倒序。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数           | 类型            | 位置   | 必填 | 说明                                                            |
+| -------------- | --------------- | ------ | ---- | --------------------------------------------------------------- |
+| Authorization  | string          | header | 是   | Bearer Token，格式 `Bearer <token>`                          |
+| page           | int             | query  | 否   | 页码，默认 1                                                    |
+| page_size      | int             | query  | 否   | 每页记录数，默认 10，最大 100                                   |
+| reservoir_id   | int\|null       | query  | 否   | 水库 ID 筛选                                                    |
+| station_id     | int\|null       | query  | 否   | 站点 ID 筛选                                                    |
+| indicator_id   | int\|null       | query  | 否   | 指标 ID 筛选                                                    |
+| start_time     | datetime\|null  | query  | 否   | 开始时间，格式 `YYYY-MM-DD HH:MM:SS`                        |
+| end_time       | datetime\|null  | query  | 否   | 结束时间，格式 `YYYY-MM-DD HH:MM:SS`                        |
+| quality_flag   | int\|null       | query  | 否   | 数据质量标志：0 可疑，1 正常，2 无效                            |
+
+**请求示例**：
+
+```
+GET /api/monitoring/records?page=1&page_size=10&reservoir_id=1&quality_flag=1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1024,
+        "reservoir_id": 1,
+        "station_id": 1,
+        "indicator_id": 3,
+        "value": 0.082,
+        "record_time": "2026-06-01 10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 128,
+      "total_pages": 13
+    }
+  }
+}
+```
+
+| 字段                   | 类型         | 说明                                            |
+| ---------------------- | ------------ | ----------------------------------------------- |
+| lists[].id             | int          | 监测记录 ID                                     |
+| lists[].reservoir_id   | int          | 水库 ID                                         |
+| lists[].station_id     | int          | 站点 ID                                         |
+| lists[].indicator_id   | int          | 指标 ID                                         |
+| lists[].value          | float        | 监测值                                          |
+| lists[].record_time    | datetime     | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`         |
+| pagination.page        | int          | 当前页码                                        |
+| pagination.page_size   | int          | 每页数量                                        |
+| pagination.total       | int          | 总记录数                                        |
+| pagination.total_pages | int          | 总页数                                          |

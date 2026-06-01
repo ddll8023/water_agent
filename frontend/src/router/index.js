@@ -25,6 +25,18 @@ const routes = [
         name: 'ReservoirManage',
         component: () => import('@/views/system/ReservoirManage.vue'),
         meta: { title: '水库站点配置管理' }
+      },
+      {
+        path: 'monitoring/records',
+        name: 'MonitoringRecords',
+        component: () => import('@/views/monitoring/MonitoringRecords.vue'),
+        meta: { title: '监测数据记录' }
+      },
+      {
+        path: 'monitoring/reservoirs/:id',
+        name: 'ReservoirMonitoringDetail',
+        component: () => import('@/views/monitoring/ReservoirMonitoringDetail.vue'),
+        meta: { title: '实时监测' }
       }
     ]
   },

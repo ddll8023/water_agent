@@ -1,8 +1,39 @@
-"""监测数据路由（预留）"""
+from fastapi import APIRouter, Depends, Query, Body, Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from sqlalchemy.sql.schema import Identity
+from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas.response import success, error
+from app.schemas.common import ApiResponse, ErrorCode, PaginatedResponse
+from app.utils.exception import ServiceException
 
-router = APIRouter(prefix="/api/monitoring", tags=["监测数据"])
+from app.core.security import get_current_user, require_role
+from app.schemas import monitorings as schemas_monitorings
+from app.services import monitoring as services_monitoring
+import math
 
-# 模拟接口已移除，改为定时采集任务
-# 改为定时采集任务，参见 app/services/monitoring.py
+router = APIRouter(prefix="/api/monitoring", tags=["监测数据模块"])
+
+
+@router.get(
+    "/records",
+    response_model=ApiResponse[
+        PaginatedResponse[schemas_monitorings.GetMonitoringRecordsListResponse]
+    ],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取监测记录列表",
+)
+async def get_monitoring_records_list(
+    db: AsyncSession = Depends(get_db),
+    get_monitoring_records_list_request: schemas_monitorings.GetMonitoringRecordsListRequest = Query(
+        ...
+    ),
+):
+    try:
+        result = await services_monitoring.get_monitoring_records_list(
+            db, get_monitoring_records_list_request
+        )
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)

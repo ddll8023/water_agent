@@ -17,6 +17,16 @@
           router
           class="border-r-0"
         >
+          <el-sub-menu index="monitoring">
+            <template #title>
+              <el-icon><DataLine /></el-icon>
+              <span>监测管理</span>
+            </template>
+            <el-menu-item index="/monitoring/records">
+              <el-icon><Document /></el-icon>
+              <span>监测数据记录</span>
+            </el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="system">
             <template #title>
               <el-icon><Setting /></el-icon>
@@ -98,6 +108,8 @@ import {
   Setting,
   User,
   Collection,
+  DataLine,
+  Document,
   Fold,
   Expand,
   ArrowDown,

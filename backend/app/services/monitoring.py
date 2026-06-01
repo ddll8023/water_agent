@@ -3,12 +3,16 @@
 import random
 import httpx
 from datetime import datetime
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from app.core.database import commit_or_rollback, get_background_db_session
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
 from app.constants import monitoring as constants_monitoring
 from app.utils.logger_config import setup_logger
+from app.schemas import monitorings as schemas_monitorings
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.schemas.common import PaginationInfo, PaginatedResponse
+import math
 
 logger = setup_logger(__name__)
 
@@ -111,3 +115,69 @@ async def _fetch_real_data():
     except Exception as e:
         logger.error(f"调用真实接口失败: {e}")
         return None
+
+
+async def get_monitoring_records_list(
+    db: AsyncSession,
+    get_monitoring_records_list_request: schemas_monitorings.GetMonitoringRecordsListRequest,
+):
+    """获取监测记录列表"""
+    total = await db.scalar(select(func.count(models_monitoring.MonitoringRecord.id)))
+
+    stmt = select(models_monitoring.MonitoringRecord)
+    if get_monitoring_records_list_request.reservoir_id is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.reservoir_id
+            == get_monitoring_records_list_request.reservoir_id
+        )
+    if get_monitoring_records_list_request.station_id is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.station_id
+            == get_monitoring_records_list_request.station_id
+        )
+    if get_monitoring_records_list_request.indicator_id is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.indicator_id
+            == get_monitoring_records_list_request.indicator_id
+        )
+    if get_monitoring_records_list_request.start_time is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.record_time
+            >= get_monitoring_records_list_request.start_time
+        )
+    if get_monitoring_records_list_request.end_time is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.record_time
+            <= get_monitoring_records_list_request.end_time
+        )
+    if get_monitoring_records_list_request.quality_flag is not None:
+        stmt = stmt.where(
+            models_monitoring.MonitoringRecord.quality_flag
+            == get_monitoring_records_list_request.quality_flag
+        )
+
+    monitoring_records_entity_list = (
+        await db.scalars(
+            stmt.order_by(models_monitoring.MonitoringRecord.record_time.desc())
+            .offset(
+                (get_monitoring_records_list_request.page - 1)
+                * get_monitoring_records_list_request.page_size
+            )
+            .limit(get_monitoring_records_list_request.page_size)
+        )
+    ).all()
+
+    return PaginatedResponse(
+        lists=[
+            schemas_monitorings.GetMonitoringRecordsListResponse.model_validate(entity)
+            for entity in monitoring_records_entity_list
+        ],
+        pagination=PaginationInfo(
+            page=get_monitoring_records_list_request.page,
+            page_size=get_monitoring_records_list_request.page_size,
+            total=total,
+            total_pages=math.ceil(
+                total / get_monitoring_records_list_request.page_size
+            ),
+        ),
+    )
