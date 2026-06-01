@@ -1,45 +1,113 @@
-"""监测数据模拟服务"""
+"""监测数据定时采集服务"""
 
+import random
+import httpx
 from datetime import datetime
+from sqlalchemy import select, and_
+from app.core.database import commit_or_rollback, get_background_db_session
+from app.models import monitoring as models_monitoring
+from app.models import station as models_station
+from app.constants import monitoring as constants_monitoring
+from app.utils.logger_config import setup_logger
 
-from app.utils.exception import ServiceException
-from app.schemas.common import ErrorCode
-from app.schemas import monitorings as schemas_monitorings
-from app.utils.mock_data_generator import RTU_STATION_CONFIG, generate_rtu_indicators
+logger = setup_logger(__name__)
 
 
-async def mock_monitoring_record(
-    get_mock_monitoring_record: schemas_monitorings.GetMockMonitoringRecordRequest,
-):
-    """模拟自动站 RTU 数据"""
-    station_id = get_mock_monitoring_record.station_id
-    station_config = RTU_STATION_CONFIG.get(station_id)
-    if not station_config:
-        raise ServiceException(
-            ErrorCode.DATA_NOT_FOUND, f"未找到站点配置: station_id={station_id}"
-        )
+async def collect_water_quality_data():
+    """定时采集水质数据：遍历所有在线站点，调用 API 采集并入库"""
+    logger.info("开始执行定时采集任务")
+    real_record = await _fetch_real_data()
+    if not real_record:
+        return
 
-    if station_config.get("offline"):
-        raise ServiceException(
-            ErrorCode.DATA_NOT_FOUND, f"站点离线: {station_config['code']}"
-        )
+    monitor_time_str = real_record.get("monitorTime")
+    monitor_time = datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
+    now = datetime.now()
 
-    raw_indicators = generate_rtu_indicators(station_config["water_grade"])
-    indicators = [
-        schemas_monitorings.MockRtuIndicatorItem(
-            indicator_code=code,
-            indicator_name=name,
-            value=value,
-            unit=unit,
-        )
-        for code, name, value, unit in raw_indicators
-    ]
-    return schemas_monitorings.MockRtuDataResponse(
-        station_id=station_id,
-        station_code=station_config["code"],
-        reservoir_id=station_config["reservoir_id"],
-        reservoir_name=station_config["reservoir_name"],
-        record_time=datetime.now(),
-        indicators=indicators,
-        water_grade=station_config["water_grade"],
-    )
+    async with get_background_db_session() as db:
+        try:
+            station_entity_list = (
+                await db.scalars(
+                    select(models_station.MonitoringStation).where(
+                        models_station.MonitoringStation.status == 1
+                    )
+                )
+            ).all()
+
+            if not station_entity_list:
+                logger.warning("没有在线的监测站点，跳过本次采集")
+                return
+
+            total_records = 0
+            for station in station_entity_list:
+                reservoir_id = station.reservoir_id
+                for (
+                    api_field,
+                    indicator_id,
+                ) in constants_monitoring.FIELD_TO_INDICATOR.items():
+                    raw_value = real_record.get(api_field)
+                    if raw_value is None:
+                        logger.warning(
+                            f"API记录缺少字段 {api_field}，站点ID={station.id}"
+                        )
+                        continue
+
+                    existing = await db.scalar(
+                        select(models_monitoring.MonitoringRecord).where(
+                            and_(
+                                models_monitoring.MonitoringRecord.station_id
+                                == station.id,
+                                models_monitoring.MonitoringRecord.indicator_id
+                                == indicator_id,
+                                models_monitoring.MonitoringRecord.record_time
+                                == monitor_time,
+                            )
+                        )
+                    )
+                    if existing is not None:
+                        continue
+
+                    offset_range = (-0.05, 0.05)
+                    offset = random.uniform(*offset_range)
+                    value = round(raw_value * (1 + offset), 4)
+
+                    record = models_monitoring.MonitoringRecord(
+                        reservoir_id=reservoir_id,
+                        station_id=station.id,
+                        indicator_id=indicator_id,
+                        value=value,
+                        data_source="auto",
+                        quality_flag=1,
+                        record_time=monitor_time,
+                        created_at=now,
+                    )
+                    db.add(record)
+                    total_records += 1
+
+                station.last_data_time = monitor_time
+
+            await commit_or_rollback(db)
+            logger.info(f"成功采集 {total_records} 条记录")
+        except Exception as e:
+            logger.error(f"定时采集失败: {e}")
+
+
+async def _fetch_real_data():
+    """调用真实接口获取最新一条监测记录"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                constants_monitoring.API_URL,
+                headers=constants_monitoring.API_HEADERS,
+                params=constants_monitoring.API_PARAMS,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+            records = result.get("data", {}).get("records", [])
+            if not records:
+                logger.warning("API返回空记录")
+                return None
+            return records[0]
+    except Exception as e:
+        logger.error(f"调用真实接口失败: {e}")
+        return None

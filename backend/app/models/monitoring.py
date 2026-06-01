@@ -6,6 +6,7 @@ from sqlalchemy import (
     ForeignKey,
     SmallInteger,
     Index,
+    UniqueConstraint,
     DECIMAL,
 )
 from app.core.database import Base
@@ -31,6 +32,10 @@ class MonitoringRecord(Base):
     created_at = Column[datetime](DateTime, default=datetime.now, comment="创建时间")
 
     __table_args__ = (
+        UniqueConstraint(
+            "station_id", "indicator_id", "record_time",
+            name="uq_station_indicator_time",
+        ),
         Index("idx_reservoir_time", reservoir_id, record_time),
         Index("idx_station_time", station_id, record_time),
         Index("idx_indicator_time", indicator_id, record_time),
