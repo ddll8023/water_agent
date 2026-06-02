@@ -26,6 +26,10 @@
               <el-icon><DataLine /></el-icon>
               <span>监测管理</span>
             </template>
+            <el-menu-item index="/alerts/list">
+              <el-icon><WarningFilled /></el-icon>
+              <span>预警中心</span>
+            </el-menu-item>
             <el-menu-item index="/monitoring/records">
               <el-icon><Document /></el-icon>
               <span>监测数据记录</span>
@@ -118,7 +122,8 @@ import {
   Expand,
   ArrowDown,
   SwitchButton,
-  House
+  House,
+  WarningFilled
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

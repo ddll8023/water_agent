@@ -13,6 +13,7 @@ from app.routers import stations as stations_router
 from app.routers import indicators as indicators_router
 from app.routers import monitoring as monitoring_router
 from app.routers import dashboard as dashboard_router
+from app.routers import alerts as alerts_router
 from app.services.monitoring import collect_water_quality_data
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_db
@@ -74,6 +75,7 @@ app.include_router(stations_router.router)
 app.include_router(indicators_router.router)
 app.include_router(monitoring_router.router)
 app.include_router(dashboard_router.router)
+app.include_router(alerts_router.router)
 
 
 @app.get("/health")

@@ -1932,6 +1932,104 @@ Authorization: Bearer <token>
 | indicators[].code           | string         | 指标编码                           |
 | indicators[].value          | string\|null   | 最新监测值（保留 4 位小数）       |
 | indicators[].unit           | string\|null   | 单位                               |
+| indicators[].code           | string         | 指标编码                           |
+| indicators[].value          | string\|null   | 最新监测值（保留 4 位小数）       |
+| indicators[].unit           | string\|null   | 单位                               |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 2003   | 权限不足               |
+| 5001   | 系统内部错误           |
+
+---
+
+## 十、预警管理（/api/v1/alerts）
+
+预警列表查询接口。需要 Bearer Token 认证，admin 与 user 角色均可访问。
+
+### 10.1 获取预警列表
+
+- **GET** `/api/v1/alerts`
+- **描述**：分页获取预警列表，支持按水库、预警等级、状态、检出时间范围筛选，按检出时间倒序。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型            | 位置   | 必填 | 说明                                              |
+| ------------- | --------------- | ------ | ---- | ------------------------------------------------- |
+| Authorization | string          | header | 是   | Bearer Token，格式 `Bearer <token>`            |
+| page          | int             | query  | 否   | 页码，默认 1                                      |
+| page_size     | int             | query  | 否   | 每页记录数，默认 20，最大 100                     |
+| reservoir_id  | int\|null       | query  | 否   | 水库 ID 筛选                                      |
+| alert_level   | string\|null    | query  | 否   | 预警等级：info / warning / critical               |
+| status        | string\|null    | query  | 否   | 状态：new / confirmed / processing / resolved     |
+| start_time    | datetime\|null  | query  | 否   | 检出开始时间，格式 `YYYY-MM-DD HH:MM:SS`      |
+| end_time      | datetime\|null  | query  | 否   | 检出结束时间，格式 `YYYY-MM-DD HH:MM:SS`      |
+
+**请求示例**：
+
+```
+GET /api/v1/alerts?page=1&page_size=20&alert_level=critical&status=new
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "reservoir_id": 1,
+        "handler_id": null,
+        "title": "总磷超标预警",
+        "alert_level": "critical",
+        "indicators": [
+          {
+            "name": "总磷",
+            "value": 0.35,
+            "limit": 0.2
+          }
+        ],
+        "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
+        "suggestion": "立即排查上游污染源，启动应急监测方案",
+        "status": "new",
+        "detected_at": "2026-06-02 08:30:00",
+        "resolved_at": null,
+        "created_at": "2026-06-02 08:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 5,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段                   | 类型            | 说明                                              |
+| ---------------------- | --------------- | ------------------------------------------------- |
+| lists[].id             | int             | 预警 ID                                           |
+| lists[].reservoir_id   | int             | 水库 ID                                           |
+| lists[].handler_id     | int\|null       | 处理人 ID                                         |
+| lists[].title          | string          | 预警标题                                          |
+| lists[].alert_level    | string          | 预警等级：info / warning / critical               |
+| lists[].indicators     | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
+| lists[].source_desc    | string\|null    | 溯源描述                                          |
+| lists[].suggestion     | string\|null    | 处置建议                                          |
+| lists[].status         | string          | 状态：new / confirmed / processing / resolved     |
+| lists[].detected_at    | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| lists[].resolved_at    | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| lists[].created_at     | datetime        | 创建时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| pagination.page        | int             | 当前页码                                          |
+| pagination.page_size   | int             | 每页数量                                          |
+| pagination.total       | int             | 总记录数                                          |
+| pagination.total_pages | int             | 总页数                                            |
 
 **错误场景**：
 

@@ -1,0 +1,337 @@
+<template>
+  <div>
+    <el-breadcrumb separator="/" class="mb-4">
+      <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+      <el-breadcrumb-item>预警中心</el-breadcrumb-item>
+    </el-breadcrumb>
+
+    <header class="flex items-center gap-2 mb-4">
+      <h1 class="text-xl font-semibold text-gray-900">预警中心</h1>
+      <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="!relative !top-0">
+        <span />
+      </el-badge>
+    </header>
+
+    <el-card shadow="never" class="mb-4">
+      <el-form :model="filter" inline label-width="auto" @keyup.enter="handleSearch">
+        <el-form-item label="所属水库">
+          <el-select
+            v-model="filter.reservoir_id"
+            placeholder="全部"
+            clearable
+            filterable
+            class="!w-44"
+            @change="handleSearch"
+          >
+            <el-option
+              v-for="item in reservoirOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="告警级别">
+          <el-select
+            v-model="filter.alert_level"
+            placeholder="全部"
+            clearable
+            class="!w-36"
+            @change="handleSearch"
+          >
+            <el-option label="提示" value="info" />
+            <el-option label="警告" value="warning" />
+            <el-option label="严重" value="critical" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="处理状态">
+          <el-select
+            v-model="filter.status"
+            placeholder="全部"
+            clearable
+            class="!w-36"
+            @change="handleSearch"
+          >
+            <el-option label="新增" value="new" />
+            <el-option label="已确认" value="confirmed" />
+            <el-option label="处理中" value="processing" />
+            <el-option label="已解决" value="resolved" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="检出时间">
+          <el-date-picker
+            v-model="timeRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="开始日期"
+            end-placeholder="结束日期"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            class="!w-64"
+            @change="handleSearch"
+          />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">
+            <el-icon><Search /></el-icon>
+            查询
+          </el-button>
+          <el-button @click="handleReset">
+            <el-icon><RefreshLeft /></el-icon>
+            重置
+          </el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <div class="flex items-center justify-between mb-3">
+      <span class="text-sm text-gray-500">
+        共 <strong class="text-gray-700">{{ pagination.total }}</strong> 条告警记录
+      </span>
+    </div>
+
+    <el-card shadow="never">
+      <el-table
+        v-loading="loading"
+        :data="alertList"
+        border
+        stripe
+        highlight-current-row
+        class="w-full"
+      >
+        <el-table-column label="告警标题" min-width="200">
+          <template #default="{ row }">
+            <el-link type="primary" :underline="false" @click="handleViewDetail(row)">
+              {{ row.title }}
+            </el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="所属水库" width="140">
+          <template #default="{ row }">
+            {{ getReservoirName(row.reservoir_id) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="告警级别" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getLevelTagType(row.alert_level)" size="small" effect="dark">
+              {{ levelLabels[row.alert_level] ?? row.alert_level }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="指标摘要" min-width="260">
+          <template #default="{ row }">
+            <div v-if="row.indicators && row.indicators.length" class="text-xs leading-relaxed">
+              <div v-for="(indicator, idx) in row.indicators" :key="idx">
+                {{ indicator.name }} {{ indicator.value }} &gt; {{ indicator.limit }}
+              </div>
+            </div>
+            <span v-else class="text-gray-400">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="检出时间" width="160" align="center">
+          <template #default="{ row }">
+            {{ formatDateTime(row.detected_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="处理状态" width="110" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getStatusTagType(row.status)" size="small">
+              {{ statusLabels[row.status] ?? row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="处理人" width="100" align="center">
+          <template #default="{ row }">
+            <span v-if="row.handler_id" class="text-gray-700">
+              {{ getHandlerName(row.handler_id) }}
+            </span>
+            <span v-else class="text-gray-400">未分配</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="100" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="handleViewDetail(row)">
+              查看详情
+            </el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty
+            :description="hasSearched ? '未找到匹配的告警记录' : '暂无预警记录，系统运行正常'"
+          >
+            <span v-if="hasSearched" class="text-xs text-gray-400">请调整筛选条件</span>
+          </el-empty>
+        </template>
+      </el-table>
+
+      <div class="flex justify-end mt-4">
+        <el-pagination
+          v-model:current-page="pagination.page"
+          v-model:page-size="pagination.page_size"
+          :total="pagination.total"
+          :page-sizes="[10, 20, 50, 100]"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
+    </el-card>
+  </div>
+</template>
+
+<script setup>
+/**
+ * 预警中心
+ * 功能描述：全系统告警的统一管理列表页，支持按水库、级别、状态、时间筛选
+ * 依赖组件：无
+ */
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { Search, RefreshLeft } from '@element-plus/icons-vue'
+import { formatDateTime } from '@/utils/format'
+import { getAlertList } from '@/api/alert'
+import { getReservoirList } from '@/api/reservoir'
+
+const loading = ref(false)
+const hasSearched = ref(false)
+
+const filter = reactive({
+  reservoir_id: null,
+  alert_level: null,
+  status: null
+})
+const timeRange = ref(null)
+
+const alertList = ref([])
+const reservoirOptions = ref([])
+const userOptions = ref([])
+
+const unreadCount = ref(0)
+
+const pagination = reactive({
+  page: 1,
+  page_size: 20,
+  total: 0,
+  total_pages: 0
+})
+
+const levelLabels = {
+  info: '提示',
+  warning: '警告',
+  critical: '严重'
+}
+
+const levelTagTypeMap = {
+  info: 'info',
+  warning: 'warning',
+  critical: 'danger'
+}
+
+const statusLabels = {
+  new: '新增',
+  confirmed: '已确认',
+  processing: '处理中',
+  resolved: '已解决'
+}
+
+const statusTagTypeMap = {
+  new: '',
+  confirmed: 'warning',
+  processing: 'primary',
+  resolved: 'success'
+}
+
+const getLevelTagType = (level) => levelTagTypeMap[level] || 'info'
+const getStatusTagType = (status) => statusTagTypeMap[status] || 'info'
+
+const getReservoirName = (id) => {
+  const item = reservoirOptions.value.find((r) => r.id === id)
+  return item ? item.name : `ID:${id}`
+}
+
+const getHandlerName = (id) => {
+  const item = userOptions.value.find((u) => u.id === id)
+  return item ? item.real_name || item.username : `ID:${id}`
+}
+
+const fetchReservoirOptions = async () => {
+  try {
+    const res = await getReservoirList({ page: 1, page_size: 9999 })
+    reservoirOptions.value = res.data.lists || []
+  } catch {
+    reservoirOptions.value = []
+  }
+}
+
+const buildParams = () => ({
+  page: pagination.page,
+  page_size: pagination.page_size,
+  reservoir_id: filter.reservoir_id || undefined,
+  alert_level: filter.alert_level || undefined,
+  status: filter.status || undefined,
+  start_time: timeRange.value?.[0] || undefined,
+  end_time: timeRange.value?.[1] || undefined
+})
+
+const validateDateRange = () => {
+  if (timeRange.value && timeRange.value[0] && timeRange.value[1]) {
+    if (timeRange.value[1] < timeRange.value[0]) {
+      ElMessage.warning('结束日期不能早于开始日期')
+      return false
+    }
+  }
+  return true
+}
+
+const fetchAlertList = async () => {
+  if (!validateDateRange()) return
+  loading.value = true
+  hasSearched.value = true
+  try {
+    const res = await getAlertList(buildParams())
+    alertList.value = res.data.lists || []
+    pagination.total = res.data.pagination.total
+    pagination.total_pages = res.data.pagination.total_pages
+  } catch (e) {
+    ElMessage.error(e.message || '获取预警列表失败')
+    alertList.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = () => {
+  pagination.page = 1
+  fetchAlertList()
+}
+
+const handleReset = () => {
+  filter.reservoir_id = null
+  filter.alert_level = null
+  filter.status = null
+  timeRange.value = null
+  handleSearch()
+}
+
+const handlePageChange = () => {
+  fetchAlertList()
+}
+
+const handleSizeChange = () => {
+  pagination.page = 1
+  fetchAlertList()
+}
+
+const router = useRouter()
+
+const handleViewDetail = (row) => {
+  router.push(`/alerts/${row.id}`)
+}
+
+onMounted(async () => {
+  await fetchReservoirOptions()
+  await fetchAlertList()
+})
+</script>

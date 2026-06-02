@@ -27,6 +27,12 @@ const routes = [
         meta: { title: '水库站点配置管理' }
       },
       {
+        path: 'alerts/list',
+        name: 'AlertCenter',
+        component: () => import('@/views/alert/AlertCenter.vue'),
+        meta: { title: '预警中心' }
+      },
+      {
         path: 'monitoring/records',
         name: 'MonitoringRecords',
         component: () => import('@/views/monitoring/MonitoringRecords.vue'),
