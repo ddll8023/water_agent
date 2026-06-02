@@ -34,6 +34,7 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { getMonitoringRecordsTrend } from '@/api/monitoring'
+import { formatDateTime } from '@/utils/format'
 
 echarts.use([
   LineChart,
@@ -115,7 +116,7 @@ const fetchTrendData = async () => {
       (a, b) => new Date(a.record_time).getTime() - new Date(b.record_time).getTime()
     )
     return {
-      xAxis: records.map((r) => r.record_time),
+      xAxis: records.map((r) => formatDateTime(r.record_time)),
       series: records.map((r) => r.value)
     }
   } catch {

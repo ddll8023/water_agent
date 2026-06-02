@@ -50,6 +50,11 @@
               <span>{{ item.limitLabel }}</span>
             </div>
 
+            <div class="flex items-center justify-between text-xs text-gray-400 mt-1">
+              <span />
+              <span>{{ formatDateTime(item.recordTime) }}</span>
+            </div>
+
             <el-divider class="!my-3" />
 
             <div class="flex justify-end">
@@ -88,6 +93,7 @@ import { getLastMonitoringRecord } from '@/api/monitoring'
 import { getStationList } from '@/api/station'
 import { getIndicatorList } from '@/api/indicator'
 import IndicatorTrendDialog from './IndicatorTrendDialog.vue'
+import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const reservoirId = computed(() => Number(route.params.id))

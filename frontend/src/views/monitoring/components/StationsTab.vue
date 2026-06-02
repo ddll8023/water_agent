@@ -29,7 +29,7 @@
     </el-table-column>
     <el-table-column label="最后数据时间" width="180" align="center">
       <template #default="{ row }">
-        <span class="text-gray-500">{{ row.last_data_time || '暂无数据' }}</span>
+        <span class="text-gray-500">{{ formatDateTime(row.last_data_time) || '暂无数据' }}</span>
       </template>
     </el-table-column>
     <template #empty>
@@ -48,6 +48,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStationList } from '@/api/station'
+import { formatDateTime } from '@/utils/format'
 
 const route = useRoute()
 const reservoirId = computed(() => Number(route.params.id))

@@ -112,7 +112,11 @@
           <span class="font-mono">{{ row.value }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="record_time" label="监测时间" width="170" align="center" />
+      <el-table-column label="监测时间" width="170" align="center">
+        <template #default="{ row }">
+          {{ formatDateTime(row.record_time) }}
+        </template>
+      </el-table-column>
       <el-table-column label="数据质量" width="100" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.quality_flag !== null && row.quality_flag !== undefined" :type="getQualityTagType(row.quality_flag)" size="small">
@@ -158,6 +162,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, RefreshLeft } from '@element-plus/icons-vue'
+import { formatDateTime } from '@/utils/format'
 import { getMonitoringRecordsList } from '@/api/monitoring'
 import { getReservoirList } from '@/api/reservoir'
 import { getStationList } from '@/api/station'

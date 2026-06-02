@@ -71,6 +71,7 @@ import {
 import { CanvasRenderer } from 'echarts/renderers'
 import { getMonitoringRecordsTrend } from '@/api/monitoring'
 import { getIndicatorList } from '@/api/indicator'
+import { formatDateTime } from '@/utils/format'
 
 echarts.use([
   LineChart,
@@ -120,7 +121,7 @@ const indicatorMap = ref({})
 
 const chartRef = ref(null)
 let chartInstance = null
-let resizeHandler = null
+let resizeObserver = null
 
 const INDICATOR_COLOR_PALETTE = [
   '#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399',
@@ -140,7 +141,7 @@ const fetchTrendData = async (indicatorId, startTime, endTime) => {
       (a, b) => new Date(a.record_time).getTime() - new Date(b.record_time).getTime()
     )
     return {
-      xAxis: records.map((r) => r.record_time),
+      xAxis: records.map((r) => formatDateTime(r.record_time)),
       series: records.map((r) => r.value)
     }
   } catch {
@@ -218,6 +219,7 @@ const renderChart = async () => {
     chartInstance.clear()
   }
   chartInstance.setOption(option, true)
+  chartInstance.resize()
 }
 
 const _getLimit = (indicator) => {
@@ -266,15 +268,21 @@ onMounted(async () => {
   await fetchIndicatorOptions()
   nextTick(() => {
     renderChart()
-    resizeHandler = () => chartInstance && chartInstance.resize()
-    window.addEventListener('resize', resizeHandler)
+    if (chartRef.value) {
+      resizeObserver = new ResizeObserver(() => {
+        if (chartInstance) {
+          chartInstance.resize()
+        }
+      })
+      resizeObserver.observe(chartRef.value)
+    }
   })
 })
 
 onBeforeUnmount(() => {
-  if (resizeHandler) {
-    window.removeEventListener('resize', resizeHandler)
-    resizeHandler = null
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
   }
   if (chartInstance) {
     chartInstance.dispose()
