@@ -1950,6 +1950,66 @@ Authorization: Bearer <token>
 | 2003   | 权限不足               |
 | 5001   | 系统内部错误           |
 
+### 9.3 获取最近告警记录
+
+- **GET** `/api/v1/dashboard/last-alert`
+- **描述**：获取最近5条告警记录，用于仪表盘最新告警时间线展示。需要 Bearer Token 认证，需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+
+**请求示例**：
+
+```
+GET /api/v1/dashboard/last-alert
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    {
+      "alert_id": 1,
+      "reservoir_id": 1,
+      "title": "总磷超标预警",
+      "alert_level": "critical",
+      "indicators": [
+        {
+          "name": "总磷",
+          "value": 0.35,
+          "limit": 0.2
+        }
+      ],
+      "status": "pending",
+      "detected_at": "2026-06-01 08:30:00"
+    }
+  ]
+}
+```
+
+| 字段                | 类型     | 说明                                                  |
+| ------------------- | -------- | ----------------------------------------------------- |
+| data[].alert_id     | int      | 告警 ID                                               |
+| data[].reservoir_id | int      | 水库 ID                                               |
+| data[].title        | string   | 告警标题                                              |
+| data[].alert_level  | string   | 告警等级：info / warning / critical                   |
+| data[].indicators   | array    | 超标指标列表，每项含 name/value/limit                 |
+| data[].status       | string   | 状态：pending / confirmed / processing / resolved     |
+| data[].detected_at  | datetime | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`               |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 2003   | 权限不足               |
+| 5001   | 系统内部错误           |
+
 ---
 
 ## 十、预警管理（/api/v1/alerts）
