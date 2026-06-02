@@ -12,13 +12,13 @@ export function getDashboardOverview() {
 }
 
 /**
- * 获取首页水库卡片列表（含当前水质类别与三项核心指标）
+ * 获取首页水库卡片列表（含核心指标最新值）
  * @returns {Promise<{data: Array}>}
  */
 export function getReservoirOverviewList() {
   return request({
     method: 'get',
-    url: '/dashboard/reservoirs'
+    url: '/v1/dashboard/reservoir-cards'
   })
 }
 

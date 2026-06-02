@@ -1862,3 +1862,80 @@ Authorization: Bearer <token>
 | ------ | ---------------------- |
 | 2003   | 权限不足               |
 | 5001   | 系统内部错误           |
+
+### 9.2 获取水库卡片列表
+
+- **GET** `/api/v1/dashboard/reservoir-cards`
+- **描述**：获取仪表盘页面所有启用状态的水库卡片列表，每个卡片包含水库基本信息、站点统计、告警数以及各核心指标的最新监测值。需要 Bearer Token 认证，需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+
+**请求示例**：
+
+```
+GET /api/v1/dashboard/reservoir-cards
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": [
+    {
+      "id": 1,
+      "name": "三峡水库",
+      "code": "SX-001",
+      "location": "湖北省宜昌市",
+      "water_grade": "Ⅱ类",
+      "watershed": "长江流域",
+      "station_count": 5,
+      "online_station_count": 4,
+      "alert_count": 2,
+      "indicators": [
+        {
+          "name": "溶解氧",
+          "code": "rjy",
+          "value": "6.5",
+          "unit": "mg/L"
+        },
+        {
+          "name": "氨氮",
+          "code": "ad",
+          "value": "0.35",
+          "unit": "mg/L"
+        }
+      ]
+    }
+  ]
+}
+```
+
+| 字段                        | 类型           | 说明                               |
+| --------------------------- | -------------- | ---------------------------------- |
+| data[].id                   | int            | 水库 ID                            |
+| data[].name                 | string         | 水库名称                           |
+| data[].code                 | string         | 水库编号                           |
+| data[].location             | string\|null   | 所在位置                           |
+| data[].water_grade          | string\|null   | 水质等级（如 Ⅱ类、Ⅲ类）           |
+| data[].watershed            | string\|null   | 所属流域                           |
+| data[].station_count        | int            | 站点总数                           |
+| data[].online_station_count | int            | 在线站点数                         |
+| data[].alert_count          | int            | 告警记录总数（quality_flag != 1）  |
+| data[].indicators           | array          | 核心指标最新监测值列表             |
+| indicators[].name           | string         | 指标名称                           |
+| indicators[].code           | string         | 指标编码                           |
+| indicators[].value          | string\|null   | 最新监测值（保留 4 位小数）       |
+| indicators[].unit           | string\|null   | 单位                               |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 2003   | 权限不足               |
+| 5001   | 系统内部错误           |

@@ -82,8 +82,8 @@
             <header class="flex items-center justify-between mb-2">
               <span class="text-sm font-semibold text-gray-900 truncate">{{ r.name }}</span>
               <el-badge
-                v-if="r.active_alert_count > 0"
-                :value="r.active_alert_count"
+                v-if="r.alert_count > 0"
+                :value="r.alert_count"
                 type="danger"
               />
             </header>
@@ -95,23 +95,11 @@
             >
               {{ r.water_grade || '暂无数据' }}
             </el-tag>
-            <ul class="grid grid-cols-3 gap-1 text-xs text-gray-500">
-              <li>
-                <span>氨氮</span>
+            <ul class="grid gap-1 text-xs text-gray-500" :class="indicatorGridClass(r.indicators)">
+              <li v-for="ind in r.indicators" :key="ind.code">
+                <span>{{ ind.name }}</span>
                 <p class="text-sm font-medium text-gray-900 mt-0.5">
-                  {{ formatIndicator(r.indicators?.nh3n, r.indicators?.unit_nh3n || 'mg/L') }}
-                </p>
-              </li>
-              <li>
-                <span>总磷</span>
-                <p class="text-sm font-medium text-gray-900 mt-0.5">
-                  {{ formatIndicator(r.indicators?.tp, r.indicators?.unit_tp || 'mg/L') }}
-                </p>
-              </li>
-              <li>
-                <span>溶解氧</span>
-                <p class="text-sm font-medium text-gray-900 mt-0.5">
-                  {{ formatIndicator(r.indicators?.do, r.indicators?.unit_do || 'mg/L') }}
+                  {{ formatIndicator(ind.value, ind.unit) }}
                 </p>
               </li>
             </ul>
@@ -174,7 +162,7 @@ import {
   WarningFilled,
   CircleCloseFilled
 } from '@element-plus/icons-vue'
-import { getDashboardOverview } from '@/api/dashboard'
+import { getDashboardOverview, getReservoirOverviewList } from '@/api/dashboard'
 
 const REFRESH_INTERVAL = 300
 const ALERT_LIMIT = 5
@@ -219,6 +207,13 @@ const waterGradeTagType = (grade) => WATER_GRADE_TAG_TYPE[grade] || 'info'
 const alertLevelTagType = (level) => ALERT_LEVEL_TAG[level] || 'info'
 const alertLevelLabel = (level) => ALERT_LEVEL_LABEL[level] || '告警'
 
+const indicatorGridClass = (indicators) => {
+  if (!indicators?.length) return 'grid-cols-1'
+  if (indicators.length <= 3) return 'grid-cols-3'
+  if (indicators.length <= 4) return 'grid-cols-4'
+  return 'grid-cols-3'
+}
+
 const formatIndicator = (value, unit) => {
   if (value === null || value === undefined || value === '') return '--'
   return `${value}${unit || ''}`
@@ -251,19 +246,30 @@ const loadAll = async () => {
     overviewLoading.value = true
   }
   overviewError.value = false
+  reservoirsLoading.value = true
+  reservoirsError.value = false
+  alertsLoading.value = true
+  alertsError.value = false
 
-  const [r1] = await Promise.allSettled([getDashboardOverview()])
+  const [r1, r2, r3] = await Promise.allSettled([
+    getDashboardOverview(),
+    getReservoirOverviewList(),
+  ])
 
   if (r1.status === 'fulfilled') {
     overview.value = r1.value.data || null
   } else {
     overviewError.value = true
   }
-  overviewLoading.value = false
 
-  reservoirs.value = []
+  if (r2.status === 'fulfilled') {
+    reservoirs.value = r2.value.data || []
+  } else {
+    reservoirsError.value = true
+  }
+
+  overviewLoading.value = false
   reservoirsLoading.value = false
-  reservoirsError.value = false
   alerts.value = []
   alertsLoading.value = false
   alertsError.value = false

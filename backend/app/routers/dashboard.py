@@ -28,3 +28,20 @@ async def get_dashboard_overview(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/reservoir-cards",
+    response_model=ApiResponse[list[schemas_dashboard.ReservoirCardResponse]],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取水库卡片列表",
+)
+async def get_reservoir_cards(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """获取水库卡片列表"""
+    try:
+        result = await services_dashboard.get_reservoir_cards(db)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)

@@ -1,10 +1,12 @@
 """仪表盘总览统计服务"""
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
 from app.models import reservoir as models_reservoir
+from app.models import indicator as models_indicator
 from app.schemas import dashboard as schemas_dashboard
 
 
@@ -42,3 +44,143 @@ async def get_dashboard_overview(db: AsyncSession):
         alert_count=alert_count or 0,
         offline_stations=offline_stations or 0,
     )
+
+
+async def get_reservoir_cards(db: AsyncSession):
+    """获取水库卡片列表（含核心指标最新值）"""
+    station_total = (
+        select(func.count(models_station.MonitoringStation.id))
+        .where(
+            models_station.MonitoringStation.reservoir_id
+            == models_reservoir.Reservoir.id
+        )
+        .correlate(models_reservoir.Reservoir)
+        .scalar_subquery()
+    )
+    station_online = (
+        select(func.count(models_station.MonitoringStation.id))
+        .where(
+            models_station.MonitoringStation.reservoir_id
+            == models_reservoir.Reservoir.id,
+            models_station.MonitoringStation.status == 1,
+        )
+        .correlate(models_reservoir.Reservoir)
+        .scalar_subquery()
+    )
+    alert_sub = (
+        select(func.count(models_monitoring.MonitoringRecord.id))
+        .where(
+            models_monitoring.MonitoringRecord.reservoir_id
+            == models_reservoir.Reservoir.id,
+            models_monitoring.MonitoringRecord.quality_flag != 1,
+        )
+        .correlate(models_reservoir.Reservoir)
+        .scalar_subquery()
+    )
+
+    stmt = (
+        select(
+            models_reservoir.Reservoir.id,
+            models_reservoir.Reservoir.name,
+            models_reservoir.Reservoir.code,
+            models_reservoir.Reservoir.location,
+            models_reservoir.Reservoir.water_grade,
+            models_reservoir.Reservoir.watershed,
+            station_total.label("station_count"),
+            station_online.label("online_station_count"),
+            alert_sub.label("alert_count"),
+        )
+        .where(
+            models_reservoir.Reservoir.status == 1,
+        )
+        .order_by(
+            models_reservoir.Reservoir.sort_order,
+        )
+    )
+
+    reservoir_rows = (await db.execute(stmt)).all()
+
+    core_indicator_ids = (
+        await db.scalars(
+            select(models_indicator.Indicator.id).where(
+                models_indicator.Indicator.is_core == 1
+            )
+        )
+    ).all()
+
+    if not reservoir_rows or not core_indicator_ids:
+        return []
+
+    reservoir_ids = [row.id for row in reservoir_rows]
+
+    ranked = (
+        select(
+            models_monitoring.MonitoringRecord.reservoir_id,
+            models_monitoring.MonitoringRecord.indicator_id,
+            models_monitoring.MonitoringRecord.value,
+            models_indicator.Indicator.name,
+            models_indicator.Indicator.code,
+            models_indicator.Indicator.unit,
+            func.row_number()
+            .over(
+                partition_by=[
+                    models_monitoring.MonitoringRecord.reservoir_id,
+                    models_monitoring.MonitoringRecord.indicator_id,
+                ],
+                order_by=models_monitoring.MonitoringRecord.record_time.desc(),
+            )
+            .label("rn"),
+        )
+        .join(
+            models_indicator.Indicator,
+            models_monitoring.MonitoringRecord.indicator_id
+            == models_indicator.Indicator.id,
+        )
+        .where(
+            models_monitoring.MonitoringRecord.reservoir_id.in_(reservoir_ids),
+            models_monitoring.MonitoringRecord.indicator_id.in_(
+                core_indicator_ids
+            ),
+        )
+        .subquery()
+    )
+
+    latest_indicator_rows = (
+        await db.execute(
+            select(
+                ranked.c.reservoir_id,
+                ranked.c.indicator_id,
+                ranked.c.value,
+                ranked.c.name,
+                ranked.c.code,
+                ranked.c.unit,
+            ).where(ranked.c.rn == 1)
+        )
+    ).all()
+
+    ind_map: dict[int, list] = {}
+    for row in latest_indicator_rows:
+        ind_map.setdefault(row.reservoir_id, []).append(
+            schemas_dashboard.ReservoirCardIndicatorItem(
+                name=row.name,
+                code=row.code,
+                value=str(round(row.value, 4)) if row.value is not None else None,
+                unit=row.unit,
+            )
+        )
+
+    return [
+        schemas_dashboard.ReservoirCardResponse(
+            id=row.id,
+            name=row.name,
+            code=row.code,
+            location=row.location,
+            water_grade=row.water_grade,
+            watershed=row.watershed,
+            station_count=row.station_count or 0,
+            online_station_count=row.online_station_count or 0,
+            alert_count=row.alert_count or 0,
+            indicators=ind_map.get(row.id, []),
+        )
+        for row in reservoir_rows
+    ]
