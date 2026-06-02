@@ -120,25 +120,32 @@
         <el-timeline v-else>
           <el-timeline-item
             v-for="a in alerts"
-            :key="a.id"
-            :type="alertLevelTagType(a.level)"
+            :key="a.alert_id"
+            :type="alertLevelTagType(a.alert_level)"
             :timestamp="formatRelativeTime(a.detected_at)"
             placement="top"
           >
             <div>
               <el-tag
-                :type="alertLevelTagType(a.level)"
+                :type="alertLevelTagType(a.alert_level)"
                 size="small"
                 effect="light"
                 class="mr-2"
               >
-                {{ alertLevelLabel(a.level) }}
+                {{ alertLevelLabel(a.alert_level) }}
               </el-tag>
               <span class="text-sm text-gray-900">{{ a.title }}</span>
-              <p class="text-xs text-gray-500 mt-1">
-                <span>{{ a.reservoir_name }}</span>
-                <span v-if="a.station_name" class="mx-1">·</span>
-                <span v-if="a.station_name">{{ a.station_name }}</span>
+              <p
+                v-if="a.indicators && a.indicators.length"
+                class="text-xs text-gray-500 mt-1"
+              >
+                <span
+                  v-for="(ind, idx) in a.indicators"
+                  :key="idx"
+                >
+                  <span v-if="idx > 0" class="mx-1">·</span>
+                  {{ ind.name }} {{ ind.value }}{{ ind.limit ? `/${ind.limit}` : '' }}
+                </span>
               </p>
             </div>
           </el-timeline-item>
@@ -162,7 +169,7 @@ import {
   WarningFilled,
   CircleCloseFilled
 } from '@element-plus/icons-vue'
-import { getDashboardOverview, getReservoirOverviewList } from '@/api/dashboard'
+import { getDashboardOverview, getReservoirOverviewList, getLatestAlerts } from '@/api/dashboard'
 
 const REFRESH_INTERVAL = 300
 const ALERT_LIMIT = 5
@@ -254,6 +261,7 @@ const loadAll = async () => {
   const [r1, r2, r3] = await Promise.allSettled([
     getDashboardOverview(),
     getReservoirOverviewList(),
+    getLatestAlerts(),
   ])
 
   if (r1.status === 'fulfilled') {
@@ -268,11 +276,15 @@ const loadAll = async () => {
     reservoirsError.value = true
   }
 
+  if (r3.status === 'fulfilled') {
+    alerts.value = r3.value.data || []
+  } else {
+    alertsError.value = true
+  }
+
   overviewLoading.value = false
   reservoirsLoading.value = false
-  alerts.value = []
   alertsLoading.value = false
-  alertsError.value = false
 
   isFirstLoad = false
   countdown.value = REFRESH_INTERVAL

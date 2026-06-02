@@ -23,13 +23,12 @@ export function getReservoirOverviewList() {
 }
 
 /**
- * 获取最新告警列表
- * @param {{limit?:number}} params
+ * 获取最近5条告警记录
+ * @returns {Promise<{data: Array<{alert_id:number, reservoir_id:number, title:string, alert_level:string, indicators:Array, status:string, detected_at:string}>}>}
  */
-export function getLatestAlerts(params = {}) {
+export function getLatestAlerts() {
   return request({
     method: 'get',
-    url: '/dashboard/alerts/latest',
-    params
+    url: '/v1/dashboard/last-alert'
   })
 }

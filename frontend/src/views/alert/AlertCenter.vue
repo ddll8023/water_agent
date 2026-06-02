@@ -52,10 +52,10 @@
             class="!w-36"
             @change="handleSearch"
           >
-            <el-option label="新增" value="new" />
-            <el-option label="已确认" value="confirmed" />
-            <el-option label="处理中" value="processing" />
-            <el-option label="已解决" value="resolved" />
+            <el-option label="新增" :value="0" />
+            <el-option label="已确认" :value="1" />
+            <el-option label="处理中" :value="2" />
+            <el-option label="已解决" :value="3" />
           </el-select>
         </el-form-item>
         <el-form-item label="检出时间">
@@ -230,17 +230,17 @@ const levelTagTypeMap = {
 }
 
 const statusLabels = {
-  new: '新增',
-  confirmed: '已确认',
-  processing: '处理中',
-  resolved: '已解决'
+  0: '新增',
+  1: '已确认',
+  2: '处理中',
+  3: '已解决'
 }
 
 const statusTagTypeMap = {
-  new: '',
-  confirmed: 'warning',
-  processing: 'primary',
-  resolved: 'success'
+  0: '',
+  1: 'warning',
+  2: 'primary',
+  3: 'success'
 }
 
 const getLevelTagType = (level) => levelTagTypeMap[level] || 'info'

@@ -8,6 +8,7 @@ from app.models import station as models_station
 from app.models import reservoir as models_reservoir
 from app.models import indicator as models_indicator
 from app.schemas import dashboard as schemas_dashboard
+from app.models import alert as models_alert
 
 
 async def get_dashboard_overview(db: AsyncSession):
@@ -138,9 +139,7 @@ async def get_reservoir_cards(db: AsyncSession):
         )
         .where(
             models_monitoring.MonitoringRecord.reservoir_id.in_(reservoir_ids),
-            models_monitoring.MonitoringRecord.indicator_id.in_(
-                core_indicator_ids
-            ),
+            models_monitoring.MonitoringRecord.indicator_id.in_(core_indicator_ids),
         )
         .subquery()
     )
@@ -183,4 +182,19 @@ async def get_reservoir_cards(db: AsyncSession):
             indicators=ind_map.get(row.id, []),
         )
         for row in reservoir_rows
+    ]
+
+
+async def get_last_alert(
+    db: AsyncSession,
+):
+    """获取最近一次告警记录"""
+    alert_entity_list = await db.scalars(
+        select(models_alert.AlertEvent)
+        .order_by(models_alert.AlertEvent.detected_at.desc())
+        .limit(5)
+    )
+    return [
+        schemas_dashboard.GetLastAlertResponse.model_validate(row)
+        for row in alert_entity_list
     ]

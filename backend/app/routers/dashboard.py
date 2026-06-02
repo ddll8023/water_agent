@@ -45,3 +45,20 @@ async def get_reservoir_cards(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/last-alert",
+    response_model=ApiResponse[list[schemas_dashboard.GetLastAlertResponse]],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取最近5条告警记录",
+)
+async def get_last_alert(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """获取最近5条告警记录"""
+    try:
+        result = await services_dashboard.get_last_alert(db)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)

@@ -7,7 +7,7 @@ import request from '@/utils/request'
  * @param {number} [params.page_size] - 每页记录数
  * @param {number} [params.reservoir_id] - 水库 ID
  * @param {string} [params.alert_level] - 预警等级：info/warning/critical
- * @param {string} [params.status] - 状态：new/confirmed/processing/resolved
+ * @param {number} [params.status] - 状态：0=待确认/1=已确认/2=处置中/3=已解决
  * @param {string} [params.start_time] - 检出开始时间，格式 YYYY-MM-DD HH:mm:ss
  * @param {string} [params.end_time] - 检出结束时间，格式 YYYY-MM-DD HH:mm:ss
  * @returns {Promise} 预警分页数据
@@ -35,7 +35,7 @@ export function getAlertDetail(id) {
 /**
  * 更新预警状态
  * @param {number} id - 预警 ID
- * @param {string} status - 目标状态：confirmed / processing / resolved
+ * @param {number} status - 目标状态：1=已确认 / 2=处置中 / 3=已解决
  * @returns {Promise}
  */
 export function updateAlertStatus(id, status) {

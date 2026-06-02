@@ -16,7 +16,7 @@
             <el-tag v-if="alertDetail.alert_level" :type="levelTagType" effect="dark" size="small">
               {{ levelLabel }}
             </el-tag>
-            <el-tag v-if="alertDetail.status" :type="statusTagType" size="small">
+            <el-tag v-if="alertDetail.status !== null" :type="statusTagType" size="small">
               {{ statusLabel }}
             </el-tag>
           </div>
@@ -31,18 +31,18 @@
         </div>
         <el-button-group class="flex-shrink-0 ml-4">
           <el-button
-            :type="alertDetail.status === 'new' ? 'warning' : 'default'"
-            :disabled="alertDetail.status !== 'new'"
+            :type="alertDetail.status === 0 ? 'warning' : 'default'"
+            :disabled="alertDetail.status !== 0"
             @click="handleConfirm"
           >确认预警</el-button>
           <el-button
-            :type="alertDetail.status === 'confirmed' ? 'primary' : 'default'"
-            :disabled="alertDetail.status !== 'confirmed'"
+            :type="alertDetail.status === 1 ? 'primary' : 'default'"
+            :disabled="alertDetail.status !== 1"
             @click="handleStartProcess"
           >开始处置</el-button>
           <el-button
-            :type="alertDetail.status === 'processing' ? 'success' : 'default'"
-            :disabled="alertDetail.status !== 'processing'"
+            :type="alertDetail.status === 2 ? 'success' : 'default'"
+            :disabled="alertDetail.status !== 2"
             @click="handleResolve"
           >标记解决</el-button>
         </el-button-group>
@@ -243,7 +243,7 @@ const alertDetail = reactive({
   indicators: [],
   source_desc: '',
   suggestion: '',
-  status: '',
+  status: null,
   detected_at: null,
   resolved_at: null,
   created_at: null
@@ -287,12 +287,12 @@ const levelTagType = computed(() => {
 })
 
 const statusLabel = computed(() => {
-  const map = { new: '待确认', confirmed: '处置中', processing: '处置中', resolved: '已解决' }
+  const map = { 0: '待确认', 1: '处置中', 2: '处置中', 3: '已解决' }
   return map[alertDetail.status] || alertDetail.status
 })
 
 const statusTagType = computed(() => {
-  const map = { new: '', confirmed: 'warning', processing: 'primary', resolved: 'success' }
+  const map = { 0: '', 1: 'warning', 2: 'primary', 3: 'success' }
   return map[alertDetail.status] || 'info'
 })
 
@@ -456,7 +456,7 @@ const loadSimilarData = async () => {
 const handleConfirm = async () => {
   try {
     await ElMessageBox.confirm('确认该预警信息无误？', '确认预警', { type: 'warning' })
-    alertDetail.status = 'confirmed'
+    alertDetail.status = 1
     ElMessage.success('预警已确认')
   } catch {
     // cancelled
@@ -466,7 +466,7 @@ const handleConfirm = async () => {
 const handleStartProcess = async () => {
   try {
     await ElMessageBox.confirm('开始处置该预警？', '开始处置', { type: 'info' })
-    alertDetail.status = 'processing'
+    alertDetail.status = 2
     ElMessage.success('已开始处置')
   } catch {
     // cancelled
@@ -476,7 +476,7 @@ const handleStartProcess = async () => {
 const handleResolve = async () => {
   try {
     await ElMessageBox.confirm('确认该预警已解决？', '标记解决', { type: 'success' })
-    alertDetail.status = 'resolved'
+    alertDetail.status = 3
     alertDetail.resolved_at = new Date().toISOString()
     ElMessage.success('预警已标记为已解决')
   } catch {
