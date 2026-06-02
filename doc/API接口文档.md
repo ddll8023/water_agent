@@ -2037,3 +2037,71 @@ Authorization: Bearer <token>
 | ------ | ---------------------- |
 | 2003   | 权限不足               |
 | 5001   | 系统内部错误           |
+
+### 10.2 获取预警详情
+
+- **GET** `/api/v1/alerts/{id}`
+- **描述**：根据预警 ID 获取单条预警的完整详情。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 预警 ID                               |
+
+**请求示例**：
+
+```
+GET /api/v1/alerts/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "reservoir_id": 1,
+    "handler_id": null,
+    "title": "梅山水库总磷超标预警",
+    "alert_level": "critical",
+    "indicators": [
+      {
+        "name": "总磷",
+        "value": 0.35,
+        "limit": 0.2
+      }
+    ],
+    "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
+    "suggestion": "立即排查上游污染源，启动应急监测方案",
+    "status": "new",
+    "detected_at": "2026-06-02 08:30:00",
+    "resolved_at": null,
+    "created_at": "2026-06-02 08:30:00"
+  }
+}
+```
+
+| 字段          | 类型            | 说明                                              |
+| ------------- | --------------- | ------------------------------------------------- |
+| id            | int             | 预警 ID                                           |
+| reservoir_id  | int             | 水库 ID                                           |
+| handler_id    | int\|null       | 处理人 ID                                         |
+| title         | string          | 预警标题                                          |
+| alert_level   | string          | 预警等级：info / warning / critical               |
+| indicators    | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
+| source_desc   | string\|null    | 溯源描述                                          |
+| suggestion    | string\|null    | 处置建议                                          |
+| status        | string          | 状态：new / confirmed / processing / resolved     |
+| detected_at   | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| resolved_at   | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| created_at    | datetime        | 创建时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（预警记录不存在） |

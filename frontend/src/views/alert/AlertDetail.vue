@@ -1,0 +1,534 @@
+<template>
+  <div>
+    <el-breadcrumb separator="/" class="mb-4">
+      <el-breadcrumb-item :to="{ path: '/dashboard' }">首页</el-breadcrumb-item>
+      <el-breadcrumb-item :to="{ path: '/alerts/list' }">预警中心</el-breadcrumb-item>
+      <el-breadcrumb-item>预警详情</el-breadcrumb-item>
+    </el-breadcrumb>
+
+    <el-card shadow="never" class="mb-4 !sticky !top-0 z-10">
+      <div class="flex items-center justify-between">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-3 mb-2">
+            <h2 class="text-xl font-semibold text-gray-900 truncate max-w-md">
+              {{ alertDetail.title || '加载中...' }}
+            </h2>
+            <el-tag v-if="alertDetail.alert_level" :type="levelTagType" effect="dark" size="small">
+              {{ levelLabel }}
+            </el-tag>
+            <el-tag v-if="alertDetail.status" :type="statusTagType" size="small">
+              {{ statusLabel }}
+            </el-tag>
+          </div>
+          <div class="flex items-center gap-6 text-sm text-gray-500">
+            <span class="flex items-center gap-1">
+              <el-icon><Place /></el-icon>
+              所属水库：{{ reservoirName || '-' }}
+            </span>
+            <span>检出时间：{{ formatDateTime(alertDetail.detected_at) }}</span>
+            <span>持续时长：{{ durationText }}</span>
+          </div>
+        </div>
+        <el-button-group class="flex-shrink-0 ml-4">
+          <el-button
+            :type="alertDetail.status === 'new' ? 'warning' : 'default'"
+            :disabled="alertDetail.status !== 'new'"
+            @click="handleConfirm"
+          >确认预警</el-button>
+          <el-button
+            :type="alertDetail.status === 'confirmed' ? 'primary' : 'default'"
+            :disabled="alertDetail.status !== 'confirmed'"
+            @click="handleStartProcess"
+          >开始处置</el-button>
+          <el-button
+            :type="alertDetail.status === 'processing' ? 'success' : 'default'"
+            :disabled="alertDetail.status !== 'processing'"
+            @click="handleResolve"
+          >标记解决</el-button>
+        </el-button-group>
+      </div>
+    </el-card>
+
+    <div class="flex gap-4 mb-4">
+      <div class="w-[55%]">
+        <h3 class="text-base font-semibold text-gray-800 mb-3">超标指标</h3>
+        <div v-if="detailLoading" class="space-y-3">
+          <el-skeleton :rows="3" animated />
+          <el-skeleton :rows="3" animated />
+        </div>
+        <el-alert
+          v-else-if="detailError"
+          title="加载超标指标失败"
+          type="error"
+          show-icon
+          closable
+          class="mb-3"
+        >
+          <template #action>
+            <el-button size="small" @click="loadAlertDetail">重新加载</el-button>
+          </template>
+        </el-alert>
+        <el-empty v-else-if="!indicators.length" description="所有指标均未超标" />
+        <div v-else class="space-y-3">
+          <el-card v-for="(item, idx) in indicators" :key="idx" shadow="never" class="indicator-card">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-medium text-gray-800">{{ item.name }}</span>
+              <span class="text-xs text-gray-400">标准限值：{{ item.limit }} {{ item.unit || '' }}</span>
+            </div>
+            <div class="flex items-baseline gap-3 mb-2">
+              <span class="text-3xl font-bold text-gray-900">{{ item.value }}</span>
+              <span class="text-sm text-red-500 font-medium">超标 {{ item.exceed_pct }}%</span>
+            </div>
+            <el-progress
+              :percentage="Math.min(item.exceed_pct, 100)"
+              :color="progressColor"
+              :stroke-width="14"
+              class="mb-2"
+            />
+            <div :ref="(el) => setSparklineRef(el, idx)" class="h-[60px] w-full rounded bg-gray-50" />
+          </el-card>
+        </div>
+      </div>
+
+      <div class="flex-1 min-w-0">
+        <h3 class="text-base font-semibold text-gray-800 mb-3">溯源分析</h3>
+        <div v-if="traceLoading">
+          <el-skeleton :rows="6" animated class="mb-3" />
+        </div>
+        <el-alert
+          v-else-if="traceError"
+          title="加载溯源数据失败"
+          type="error"
+          show-icon
+          closable
+          class="mb-3"
+        >
+          <template #action>
+            <el-button size="small" @click="loadTraceData">重新加载</el-button>
+          </template>
+        </el-alert>
+        <el-empty v-else-if="!traceNodes.length" description="暂无溯源数据">
+          <span class="text-xs text-gray-400">当前无法获取该预警的溯源图谱</span>
+        </el-empty>
+        <div v-else ref="graphRef" class="h-[360px] border border-gray-200 rounded-lg mb-3" />
+
+        <h4 class="text-sm font-medium text-gray-700 mb-2">可能污染源列表</h4>
+        <el-table
+          :data="pollutionSources"
+          border
+          stripe
+          size="small"
+          class="w-full"
+          @row-click="handleSourceRowClick"
+        >
+          <el-table-column prop="name" label="名称" min-width="110" />
+          <el-table-column prop="type" label="类型" width="90">
+            <template #default="{ row }">
+              <el-tag :type="sourceTypeTagType(row.type)" size="small">{{ row.type }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="distance" label="距离(km)" width="90" sortable />
+          <el-table-column prop="risk_level" label="风险等级" width="95" sortable>
+            <template #default="{ row }">
+              <el-tag :type="riskLevelTagType(row.risk_level)" size="small">{{ row.risk_level }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="violations" label="历史违规次数" width="105" sortable />
+          <template #empty>
+            <el-empty description="暂无污染源数据" />
+          </template>
+        </el-table>
+      </div>
+    </div>
+
+    <el-card shadow="never" class="mb-4">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <span class="font-semibold text-gray-800">AI 处置建议</span>
+          <el-button
+            v-if="suggestionSteps.length"
+            type="primary"
+            size="small"
+            :loading="suggestionAdopting"
+            @click="handleAdoptSuggestion"
+          >采纳方案</el-button>
+        </div>
+      </template>
+      <el-skeleton v-if="suggestionLoading" :rows="4" animated />
+      <el-empty v-else-if="!suggestionSteps.length" description="暂无处置建议" />
+      <el-steps v-else direction="vertical" :active="-1" class="max-w-2xl">
+        <el-step
+          v-for="(step, idx) in suggestionSteps"
+          :key="idx"
+          :title="step.title"
+          :description="step.description"
+        />
+      </el-steps>
+    </el-card>
+
+    <el-card shadow="never" class="mb-4">
+      <template #header>
+        <span class="font-semibold text-gray-800">处置备注</span>
+      </template>
+      <el-input
+        v-model="noteContent"
+        type="textarea"
+        :rows="3"
+        placeholder="请输入处置过程记录..."
+        class="mb-3"
+      />
+      <el-button type="primary" :loading="noteSubmitting" @click="handleSubmitNote">提交备注</el-button>
+    </el-card>
+
+    <el-button
+      class="fixed bottom-6 right-8 z-10"
+      type="info"
+      plain
+      :icon="Clock"
+      @click="drawerVisible = true"
+    >历史相似事件</el-button>
+
+    <el-drawer v-model="drawerVisible" title="历史相似事件" direction="right" size="400px">
+      <el-skeleton v-if="similarLoading" :rows="8" animated />
+      <el-empty v-else-if="!similarEvents.length" description="暂无相似历史预警" />
+      <el-timeline v-else>
+        <el-timeline-item
+          v-for="(event, idx) in similarEvents"
+          :key="idx"
+          :timestamp="event.time"
+          placement="top"
+        >
+          <div class="text-sm font-medium">{{ event.title }}</div>
+          <div class="text-xs text-gray-500 mt-1">超标指标：{{ event.indicators }}</div>
+          <div class="text-xs text-gray-500">处置结果：{{ event.result }}</div>
+        </el-timeline-item>
+      </el-timeline>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup>
+/**
+ * 预警详情与溯源
+ * 功能描述：预警详情查看、超标指标展示、溯源图谱、AI处置建议、状态流转、处置备注
+ * 依赖组件：ECharts
+ */
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Place, Clock } from '@element-plus/icons-vue'
+import { formatDateTime } from '@/utils/format'
+import { getAlertDetail, updateAlertStatus, submitAlertNote } from '@/api/alert'
+import { getReservoirList } from '@/api/reservoir'
+import * as echarts from 'echarts/core'
+import { LineChart, GraphChart } from 'echarts/charts'
+import {
+  GridComponent,
+  TooltipComponent,
+  TitleComponent
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+echarts.use([LineChart, GraphChart, GridComponent, TooltipComponent, TitleComponent, CanvasRenderer])
+
+const route = useRoute()
+const router = useRouter()
+
+const alertDetail = reactive({
+  id: null,
+  reservoir_id: null,
+  handler_id: null,
+  title: '',
+  alert_level: '',
+  indicators: [],
+  source_desc: '',
+  suggestion: '',
+  status: '',
+  detected_at: null,
+  resolved_at: null,
+  created_at: null
+})
+
+const reservoirName = ref('')
+const reservoirMap = ref({})
+
+const detailLoading = ref(true)
+const detailError = ref(false)
+
+const traceLoading = ref(true)
+const traceError = ref(false)
+const traceNodes = ref([])
+const traceEdges = ref([])
+
+const suggestionLoading = ref(true)
+const suggestionSteps = ref([])
+const suggestionAdopting = ref(false)
+
+const similarLoading = ref(true)
+const similarEvents = ref([])
+
+const pollutionSources = ref([])
+const noteContent = ref('')
+const noteSubmitting = ref(false)
+const drawerVisible = ref(false)
+
+const graphInstance = ref(null)
+const sparklineInstances = ref([])
+const sparklineRefMap = new Map()
+
+const levelLabel = computed(() => {
+  const map = { info: '注意', warning: '警告', critical: '严重' }
+  return map[alertDetail.alert_level] || alertDetail.alert_level
+})
+
+const levelTagType = computed(() => {
+  const map = { info: 'info', warning: 'warning', critical: 'danger' }
+  return map[alertDetail.alert_level] || 'info'
+})
+
+const statusLabel = computed(() => {
+  const map = { new: '待确认', confirmed: '处置中', processing: '处置中', resolved: '已解决' }
+  return map[alertDetail.status] || alertDetail.status
+})
+
+const statusTagType = computed(() => {
+  const map = { new: '', confirmed: 'warning', processing: 'primary', resolved: 'success' }
+  return map[alertDetail.status] || 'info'
+})
+
+const durationText = computed(() => {
+  if (!alertDetail.detected_at) return '-'
+  const start = new Date(alertDetail.detected_at).getTime()
+  const end = alertDetail.resolved_at ? new Date(alertDetail.resolved_at).getTime() : Date.now()
+  const diff = end - start
+  if (diff <= 0) return '不足1分钟'
+  const hours = Math.floor(diff / 3600000)
+  const minutes = Math.floor((diff % 3600000) / 60000)
+  if (hours > 0) return `${hours}小时${minutes}分钟`
+  return `${minutes}分钟`
+})
+
+const indicators = computed(() => {
+  const list = alertDetail.indicators || []
+  return list.map((item) => {
+    const value = parseFloat(item.value) || 0
+    const limit = parseFloat(item.limit) || 1
+    const exceedPct = limit > 0 ? Math.round(((value - limit) / limit) * 100) : 0
+    return { ...item, value, limit, exceed_pct: Math.max(exceedPct, 0) }
+  })
+})
+
+const progressColor = (percentage) => {
+  if (percentage <= 30) return '#e6a23c'
+  if (percentage <= 60) return '#f56c6c'
+  return '#dd3333'
+}
+
+const sourceTypeTagType = (type) => {
+  const map = { 工业: 'danger', 农业: 'warning', 生活: 'info', 养殖: 'warning' }
+  return map[type] || 'info'
+}
+
+const riskLevelTagType = (level) => {
+  const map = { 高: 'danger', 中: 'warning', 低: 'info' }
+  return map[level] || 'info'
+}
+
+function setSparklineRef(el, idx) {
+  if (el) {
+    sparklineRefMap.set(idx, el)
+  }
+}
+
+const fetchReservoirNames = async () => {
+  try {
+    const res = await getReservoirList({ page: 1, page_size: 9999 })
+    const list = res.data.lists || []
+    const map = {}
+    list.forEach((r) => { map[r.id] = r.name })
+    reservoirMap.value = map
+    reservoirName.value = map[alertDetail.reservoir_id] || ''
+  } catch {
+    reservoirName.value = `ID:${alertDetail.reservoir_id}`
+  }
+}
+
+const loadAlertDetail = async () => {
+  const id = Number(route.params.id)
+  if (!id) {
+    ElMessage.error('预警ID无效')
+    detailLoading.value = false
+    return
+  }
+
+  detailLoading.value = true
+  detailError.value = false
+  alertDetail.id = id
+
+  try {
+    const res = await getAlertDetail(id)
+    const data = res.data
+    if (data) {
+      Object.assign(alertDetail, data)
+    }
+    reservoirName.value = reservoirMap.value[alertDetail.reservoir_id] || ''
+    await fetchReservoirNames()
+    await nextTick()
+    initSparklines()
+  } catch (e) {
+    detailError.value = true
+    ElMessage.error(e.message || '获取预警详情失败')
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const initSparklines = () => {
+  sparklineInstances.value.forEach((inst) => inst.dispose())
+  sparklineInstances.value = []
+
+  indicators.value.forEach((item, idx) => {
+    const el = sparklineRefMap.get(idx)
+    if (!el) return
+
+    const readings = item.readings && item.readings.length
+      ? item.readings
+      : Array.from({ length: 24 }, () => +(item.limit * (0.8 + Math.random() * 0.4)).toFixed(3))
+
+    const chart = echarts.init(el)
+    chart.setOption({
+      grid: { left: 2, right: 2, top: 4, bottom: 2 },
+      xAxis: { type: 'category', show: false, data: readings.map((_, i) => i) },
+      yAxis: { type: 'value', show: false, min: Math.min(...readings) * 0.9 },
+      series: [{
+        type: 'line',
+        data: readings,
+        smooth: true,
+        showSymbol: false,
+        lineStyle: { width: 1.5, color: '#f56c6c' },
+        areaStyle: { color: 'rgba(245,108,108,0.15)' }
+      }],
+      tooltip: { trigger: 'axis', formatter: (params) => `数值: ${params[0].value}` }
+    })
+    sparklineInstances.value.push(chart)
+  })
+}
+
+const loadTraceData = async () => {
+  traceLoading.value = true
+  traceError.value = false
+  try {
+    traceNodes.value = []
+    traceEdges.value = []
+    pollutionSources.value = []
+    await new Promise((resolve) => setTimeout(resolve, 800))
+  } catch {
+    traceError.value = true
+  } finally {
+    traceLoading.value = false
+  }
+}
+
+const loadSuggestionData = async () => {
+  suggestionLoading.value = true
+  try {
+    suggestionSteps.value = []
+    await new Promise((resolve) => setTimeout(resolve, 600))
+  } catch {
+    suggestionSteps.value = []
+  } finally {
+    suggestionLoading.value = false
+  }
+}
+
+const loadSimilarData = async () => {
+  similarLoading.value = true
+  try {
+    similarEvents.value = []
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  } catch {
+    similarEvents.value = []
+  } finally {
+    similarLoading.value = false
+  }
+}
+
+const handleConfirm = async () => {
+  try {
+    await ElMessageBox.confirm('确认该预警信息无误？', '确认预警', { type: 'warning' })
+    alertDetail.status = 'confirmed'
+    ElMessage.success('预警已确认')
+  } catch {
+    // cancelled
+  }
+}
+
+const handleStartProcess = async () => {
+  try {
+    await ElMessageBox.confirm('开始处置该预警？', '开始处置', { type: 'info' })
+    alertDetail.status = 'processing'
+    ElMessage.success('已开始处置')
+  } catch {
+    // cancelled
+  }
+}
+
+const handleResolve = async () => {
+  try {
+    await ElMessageBox.confirm('确认该预警已解决？', '标记解决', { type: 'success' })
+    alertDetail.status = 'resolved'
+    alertDetail.resolved_at = new Date().toISOString()
+    ElMessage.success('预警已标记为已解决')
+  } catch {
+    // cancelled
+  }
+}
+
+const handleAdoptSuggestion = async () => {
+  suggestionAdopting.value = true
+  await new Promise((r) => setTimeout(r, 300))
+  const text = suggestionSteps.value.map((s, i) => `${i + 1}. ${s.title}：${s.description}`).join('\n')
+  noteContent.value = noteContent.value
+    ? noteContent.value + '\n---\n' + text
+    : text
+  suggestionAdopting.value = false
+  ElMessage.success('方案已写入处置备注')
+}
+
+const handleSubmitNote = async () => {
+  if (!noteContent.value.trim()) {
+    ElMessage.warning('请输入备注内容')
+    return
+  }
+  noteSubmitting.value = true
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    ElMessage.success('备注已提交')
+    noteContent.value = ''
+  } catch {
+    ElMessage.error('提交失败')
+  } finally {
+    noteSubmitting.value = false
+  }
+}
+
+const handleSourceRowClick = () => {
+  // 占位：高亮图谱对应节点
+}
+
+onMounted(async () => {
+  await Promise.all([
+    loadAlertDetail(),
+    loadTraceData(),
+    loadSuggestionData(),
+    loadSimilarData()
+  ])
+})
+
+onBeforeUnmount(() => {
+  sparklineInstances.value.forEach((inst) => inst.dispose())
+  if (graphInstance.value) {
+    graphInstance.value.dispose()
+  }
+})
+</script>

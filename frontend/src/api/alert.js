@@ -19,3 +19,43 @@ export function getAlertList(params) {
     params
   })
 }
+
+/**
+ * 获取预警详情
+ * @param {number} id - 预警 ID
+ * @returns {Promise} 预警详情数据
+ */
+export function getAlertDetail(id) {
+  return request({
+    method: 'get',
+    url: `/v1/alerts/${id}`
+  })
+}
+
+/**
+ * 更新预警状态
+ * @param {number} id - 预警 ID
+ * @param {string} status - 目标状态：confirmed / processing / resolved
+ * @returns {Promise}
+ */
+export function updateAlertStatus(id, status) {
+  return request({
+    method: 'put',
+    url: `/v1/alerts/${id}/status`,
+    data: { status }
+  })
+}
+
+/**
+ * 提交处置备注
+ * @param {number} id - 预警 ID
+ * @param {string} content - 备注内容
+ * @returns {Promise}
+ */
+export function submitAlertNote(id, content) {
+  return request({
+    method: 'post',
+    url: `/v1/alerts/${id}/notes`,
+    data: { content }
+  })
+}

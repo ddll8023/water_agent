@@ -33,6 +33,12 @@ const routes = [
         meta: { title: '预警中心' }
       },
       {
+        path: 'alerts/:id',
+        name: 'AlertDetail',
+        component: () => import('@/views/alert/AlertDetail.vue'),
+        meta: { title: '预警详情' }
+      },
+      {
         path: 'monitoring/records',
         name: 'MonitoringRecords',
         component: () => import('@/views/monitoring/MonitoringRecords.vue'),

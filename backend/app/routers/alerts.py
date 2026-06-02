@@ -14,6 +14,24 @@ router = APIRouter(prefix="/api/v1/alerts", tags=["预警模块"])
 
 
 @router.get(
+    "/{id}",
+    response_model=ApiResponse[schemas_alerts.GetAlertDetailResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取预警详情",
+)
+async def get_alert_detail(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: int,
+):
+    """根据预警ID查询预警详情"""
+    try:
+        result = await services_alerts.get_alert_detail(db, id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
+@router.get(
     "",
     response_model=ApiResponse[PaginatedResponse[schemas_alerts.GetAlertListResponse]],
     dependencies=[Depends(require_role("admin", "user"))],

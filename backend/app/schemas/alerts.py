@@ -31,3 +31,22 @@ class GetAlertListResponse(BaseModel):
     created_at: datetime = Field(description="创建时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GetAlertDetailResponse(BaseModel):
+    """获取预警详情响应参数"""
+
+    id: int = Field(description="预警ID")
+    reservoir_id: int = Field(description="水库ID")
+    handler_id: int | None = Field(None, description="处理人ID")
+    title: str = Field(description="预警标题")
+    alert_level: str = Field(description="预警等级")
+    indicators: list | None = Field(None, description="超标指标列表")
+    source_desc: str | None = Field(None, description="溯源描述")
+    suggestion: str | None = Field(None, description="处置建议")
+    status: str = Field(description="状态")
+    detected_at: datetime = Field(description="检出时间")
+    resolved_at: datetime | None = Field(None, description="解决时间")
+    created_at: datetime = Field(description="创建时间")
+
+    model_config = ConfigDict(from_attributes=True)
