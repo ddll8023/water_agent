@@ -142,9 +142,7 @@
         </el-table-column>
         <el-table-column label="处理人" width="100" align="center">
           <template #default="{ row }">
-            <span v-if="row.handler_id" class="text-gray-700">
-              {{ getHandlerName(row.handler_id) }}
-            </span>
+            <span v-if="row.handler_name" class="text-gray-700">{{ row.handler_name }}</span>
             <span v-else class="text-gray-400">未分配</span>
           </template>
         </el-table-column>
@@ -206,7 +204,6 @@ const timeRange = ref(null)
 
 const alertList = ref([])
 const reservoirOptions = ref([])
-const userOptions = ref([])
 
 const unreadCount = ref(0)
 
@@ -249,11 +246,6 @@ const getStatusTagType = (status) => statusTagTypeMap[status] || 'info'
 const getReservoirName = (id) => {
   const item = reservoirOptions.value.find((r) => r.id === id)
   return item ? item.name : `ID:${id}`
-}
-
-const getHandlerName = (id) => {
-  const item = userOptions.value.find((u) => u.id === id)
-  return item ? item.real_name || item.username : `ID:${id}`
 }
 
 const fetchReservoirOptions = async () => {

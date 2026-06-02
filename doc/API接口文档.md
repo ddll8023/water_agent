@@ -2051,7 +2051,7 @@ Authorization: Bearer <token>
       {
         "id": 1,
         "reservoir_id": 1,
-        "handler_id": null,
+        "handler_name": "张三",
         "title": "总磷超标预警",
         "alert_level": "critical",
         "indicators": [
@@ -2061,12 +2061,9 @@ Authorization: Bearer <token>
             "limit": 0.2
           }
         ],
-        "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
-        "suggestion": "立即排查上游污染源，启动应急监测方案",
         "status": "new",
         "detected_at": "2026-06-02 08:30:00",
-        "resolved_at": null,
-        "created_at": "2026-06-02 08:30:00"
+        "resolved_at": null
       }
     ],
     "pagination": {
@@ -2083,16 +2080,13 @@ Authorization: Bearer <token>
 | ---------------------- | --------------- | ------------------------------------------------- |
 | lists[].id             | int             | 预警 ID                                           |
 | lists[].reservoir_id   | int             | 水库 ID                                           |
-| lists[].handler_id     | int\|null       | 处理人 ID                                         |
+| lists[].handler_name   | string\|null    | 处理人姓名（LEFT JOIN user 表获取）               |
 | lists[].title          | string          | 预警标题                                          |
 | lists[].alert_level    | string          | 预警等级：info / warning / critical               |
 | lists[].indicators     | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
-| lists[].source_desc    | string\|null    | 溯源描述                                          |
-| lists[].suggestion     | string\|null    | 处置建议                                          |
 | lists[].status         | string          | 状态：new / confirmed / processing / resolved     |
 | lists[].detected_at    | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | lists[].resolved_at    | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
-| lists[].created_at     | datetime        | 创建时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | pagination.page        | int             | 当前页码                                          |
 | pagination.page_size   | int             | 每页数量                                          |
 | pagination.total       | int             | 总记录数                                          |

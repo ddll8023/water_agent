@@ -6,6 +6,7 @@ from app.models import alert as models_alert
 from app.schemas import alerts as schemas_alerts
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
+from app.models import user as models_user
 
 
 async def get_alert_detail(
@@ -13,12 +14,12 @@ async def get_alert_detail(
     alert_id: int,
 ):
     """获取预警详情"""
-    entity = await db.get(models_alert.AlertEvent, alert_id)
+    alert_entity = await db.get(models_alert.AlertEvent, alert_id)
 
-    if not entity:
+    if not alert_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
 
-    return schemas_alerts.GetAlertDetailResponse.model_validate(entity)
+    return schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)
 
 
 async def get_alert_list(
@@ -28,7 +29,9 @@ async def get_alert_list(
     """获取预警列表"""
     total = await db.scalar(select(func.count(models_alert.AlertEvent.id)))
 
-    stmt = select(models_alert.AlertEvent)
+    stmt = select(models_alert.AlertEvent, models_user.User.real_name).outerjoin(
+        models_user.User, models_alert.AlertEvent.handler_id == models_user.User.id
+    )
     if request.reservoir_id is not None:
         stmt = stmt.where(models_alert.AlertEvent.reservoir_id == request.reservoir_id)
     if request.alert_level is not None:
@@ -41,18 +44,21 @@ async def get_alert_list(
         stmt = stmt.where(models_alert.AlertEvent.detected_at <= request.end_time)
 
     alert_entity_list = (
-        await db.scalars(
+        await db.execute(
             stmt.order_by(models_alert.AlertEvent.detected_at.desc())
             .offset((request.page - 1) * request.page_size)
             .limit(request.page_size)
         )
     ).all()
 
+    result_list: list[schemas_alerts.GetAlertListResponse] = []
+    for alert_event, handler_name in alert_entity_list:
+        resp = schemas_alerts.GetAlertListResponse.model_validate(alert_event)
+        resp.handler_name = handler_name
+        result_list.append(resp)
+
     return PaginatedResponse(
-        lists=[
-            schemas_alerts.GetAlertListResponse.model_validate(entity)
-            for entity in alert_entity_list
-        ],
+        lists=result_list,
         pagination=PaginationInfo(
             page=request.page,
             page_size=request.page_size,
