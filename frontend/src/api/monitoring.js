@@ -38,6 +38,20 @@ export function getLastMonitoringRecord(params) {
 }
 
 /**
+ * 获取水库各指标最新监测值
+ * @param {Object} params - 查询参数
+ * @param {number} params.reservoir_id - 水库 ID
+ * @returns {Promise} 各指标最新监测值列表
+ */
+export function getReservoirLatestIndicators(params) {
+  return request({
+    method: 'get',
+    url: '/monitoring/last',
+    params
+  })
+}
+
+/**
  * 获取监测记录趋势
  * @param {Object} params - 查询参数
  * @param {number} params.reservoir_id - 水库 ID

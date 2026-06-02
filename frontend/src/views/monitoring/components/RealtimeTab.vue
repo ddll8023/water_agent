@@ -46,8 +46,8 @@
             </div>
 
             <div class="flex items-center justify-between text-xs text-gray-400 mt-2">
-              <span>限值</span>
-              <span>{{ item.limitLabel }}</span>
+              <span>标准限值</span>
+              <span>{{ item.standardLimit ?? '-' }}</span>
             </div>
 
             <div class="flex items-center justify-between text-xs text-gray-400 mt-1">
@@ -73,7 +73,6 @@
       :indicator-name="activeIndicator?.indicatorName || ''"
       :standard-limit="activeIndicator?.standardLimit ?? null"
       :reservoir-id="reservoirId"
-      :station-id="activeIndicator?.stationId ?? undefined"
       :indicator-id="activeIndicator?.indicatorId ?? undefined"
     />
   </div>
@@ -82,15 +81,14 @@
 <script setup>
 /**
  * 实时数据 Tab
- * 功能描述：根据当前水库 ID，获取站点+指标列表，调取最新监测记录呈现为指标卡片网格
+ * 功能描述：根据当前水库 ID，获取各指标最新监测值并呈现为指标卡片网格
  * 依赖组件：IndicatorTrendDialog
  */
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { DataAnalysis } from '@element-plus/icons-vue'
-import { getLastMonitoringRecord } from '@/api/monitoring'
-import { getStationList } from '@/api/station'
+import { getReservoirLatestIndicators } from '@/api/monitoring'
 import { getIndicatorList } from '@/api/indicator'
 import IndicatorTrendDialog from './IndicatorTrendDialog.vue'
 import { formatDateTime } from '@/utils/format'
@@ -103,60 +101,13 @@ const cardList = ref([])
 const dialogVisible = ref(false)
 const activeIndicator = ref(null)
 
-/** 获取该水库下所有站点 */
-const fetchStations = async () => {
-  const res = await getStationList({
-    reservoir_id: reservoirId.value || undefined,
-    page: 1,
-    page_size: 9999
-  })
-  return res.data?.lists || []
-}
-
-/** 获取所有指标 */
+/** 获取所有指标元数据（编码、单位、标准限值） */
 const fetchIndicators = async () => {
   const res = await getIndicatorList({ page: 1, page_size: 9999 })
   return res.data?.lists || []
 }
 
-/** 对每个站点+指标组合，获取最新监测记录 */
-const fetchAllLastRecords = async (stations, indicators) => {
-  const results = []
-  const promises = []
-  for (const station of stations) {
-    for (const indicator of indicators) {
-      promises.push(
-        getLastMonitoringRecord({
-          reservoir_id: reservoirId.value,
-          station_id: station.id,
-          indicator_id: indicator.id
-        })
-          .then((res) => ({
-            indicatorId: indicator.id,
-            indicatorName: indicator.name,
-            indicatorCode: indicator.code,
-            unit: indicator.unit || '',
-            stationId: station.id,
-            stationName: station.name,
-            value: res.data?.value ?? '-',
-            recordTime: res.data?.record_time ?? '',
-            qualityFlag: res.data?.quality_flag,
-            standardLimit: _getLimit(indicator)
-          }))
-          .catch(() => null)
-      )
-    }
-  }
-  const settled = await Promise.allSettled(promises)
-  for (const s of settled) {
-    if (s.status === 'fulfilled' && s.value) {
-      results.push(s.value)
-    }
-  }
-  return results
-}
-
-/** 取指标的标准限值（优先取核心限值，无则取最大值） */
+/** 取指标的标准限值（取五类限值中的最大值） */
 const _getLimit = (indicator) => {
   const limits = [
     indicator.standard_limit_i,
@@ -171,15 +122,32 @@ const _getLimit = (indicator) => {
 onMounted(async () => {
   loading.value = true
   try {
-    const [stations, indicators] = await Promise.all([
-      fetchStations(),
+    const [recordsData, indicators] = await Promise.all([
+      getReservoirLatestIndicators({ reservoir_id: reservoirId.value }),
       fetchIndicators()
     ])
-    if (!stations.length || !indicators.length) {
+
+    const records = recordsData?.data?.records || []
+    if (!records.length) {
       cardList.value = []
       return
     }
-    cardList.value = await fetchAllLastRecords(stations, indicators)
+
+    const indicatorMap = new Map(indicators.map((i) => [i.id, i]))
+
+    cardList.value = records.map((record) => {
+      const indicator = indicatorMap.get(record.indicator_id) || {}
+      return {
+        indicatorId: record.indicator_id,
+        indicatorName: record.indicator_name,
+        indicatorCode: indicator.code || '',
+        unit: indicator.unit || '',
+        value: record.value ?? '-',
+        recordTime: record.record_time || '',
+        qualityFlag: record.quality_flag,
+        standardLimit: _getLimit(indicator)
+      }
+    })
   } catch (e) {
     ElMessage.error('获取实时监测数据失败')
     cardList.value = []

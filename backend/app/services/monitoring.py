@@ -7,6 +7,7 @@ from sqlalchemy import select, and_, func
 from app.core.database import commit_or_rollback, get_background_db_session
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
+from app.models import indicator as models_indicator
 from app.constants import monitoring as constants_monitoring
 from app.utils.logger_config import setup_logger
 from app.schemas import monitorings as schemas_monitorings
@@ -164,29 +165,69 @@ async def get_monitoring_records_list(
     )
 
 
-async def get_last_monitoring_record(
+async def get_reservoir_latest_indicators(
     db: AsyncSession,
-    get_last_monitoring_record_request: schemas_monitorings.GetLastMonitoringRecordRequest,
+    request: schemas_monitorings.GetReservoirLatestIndicatorsRequest,
 ):
-    """获取最新监测记录"""
+    """获取水库各指标最新监测值"""
+    reservoir_id = request.reservoir_id
 
-    monitoring_record_entity = await db.scalar(
-        select(models_monitoring.MonitoringRecord)
+    latest_time_subq = (
+        select(
+            models_monitoring.MonitoringRecord.indicator_id,
+            func.max(models_monitoring.MonitoringRecord.record_time).label("max_time"),
+        )
         .where(
+            models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
+        )
+        .group_by(models_monitoring.MonitoringRecord.indicator_id)
+        .subquery()
+    )
+
+    stmt = (
+        select(
+            models_monitoring.MonitoringRecord,
+            models_indicator.Indicator.name,
+        )
+        .join(
+            latest_time_subq,
             and_(
-                models_monitoring.MonitoringRecord.station_id
-                == get_last_monitoring_record_request.station_id,
                 models_monitoring.MonitoringRecord.indicator_id
-                == get_last_monitoring_record_request.indicator_id,
+                == latest_time_subq.c.indicator_id,
+                models_monitoring.MonitoringRecord.record_time
+                == latest_time_subq.c.max_time,
+            ),
+        )
+        .join(
+            models_indicator.Indicator,
+            models_monitoring.MonitoringRecord.indicator_id
+            == models_indicator.Indicator.id,
+        )
+        .where(
+            models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
+        )
+    )
+
+    rows = (await db.execute(stmt)).all()
+
+    if not rows:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "该水库暂无监测数据")
+
+    records = []
+    for record_entity, indicator_name in rows:
+        records.append(
+            schemas_monitorings.IndicatorLatestValueItem(
+                indicator_id=record_entity.indicator_id,
+                indicator_name=indicator_name,
+                value=record_entity.value,
+                quality_flag=record_entity.quality_flag,
+                record_time=record_entity.record_time,
             )
         )
-        .order_by(models_monitoring.MonitoringRecord.record_time.desc())
-    )
-    if monitoring_record_entity is None:
-        raise ServiceException(ErrorCode.NOT_FOUND, "监测记录不存在")
 
-    return schemas_monitorings.GetLastMonitoringRecordResponse.model_validate(
-        monitoring_record_entity
+    return schemas_monitorings.GetReservoirLatestIndicatorsResponse(
+        reservoir_id=reservoir_id,
+        records=records,
     )
 
 

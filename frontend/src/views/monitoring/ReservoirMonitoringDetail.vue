@@ -38,10 +38,10 @@
         <el-tab-pane label="实时数据" name="realtime">
           <realtime-tab />
         </el-tab-pane>
-        <el-tab-pane label="历史趋势" name="trend">
+        <el-tab-pane label="历史趋势" name="trend" lazy>
           <trend-tab />
         </el-tab-pane>
-        <el-tab-pane label="监测站点" name="stations">
+        <el-tab-pane label="监测站点" name="stations" lazy>
           <stations-tab />
         </el-tab-pane>
       </el-tabs>

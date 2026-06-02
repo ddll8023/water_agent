@@ -3,6 +3,8 @@ from typing import Literal
 from datetime import datetime
 
 
+# ========== 辅助类（Support）==========
+
 class GetMonitoringRecordsTrendResponseItem(BaseModel):
     """获取监测记录趋势响应参数项"""
 
@@ -13,6 +15,20 @@ class GetMonitoringRecordsTrendResponseItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class IndicatorLatestValueItem(BaseModel):
+    """指标最新值项"""
+
+    indicator_id: int = Field(description="指标ID")
+    indicator_name: str = Field(description="指标名称")
+    value: float = Field(description="最新监测值")
+    quality_flag: Literal[0, 1, 2] = Field(description="数据质量标志：0 可疑，1 正常，2 无效")
+    record_time: datetime = Field(description="监测时间")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== 请求类（Request）==========
 
 class GetMonitoringRecordsListRequest(BaseModel):
     """获取监测记录列表请求参数"""
@@ -41,6 +57,12 @@ class GetLastMonitoringRecordRequest(BaseModel):
     indicator_id: int = Field(description="指标ID")
 
 
+class GetReservoirLatestIndicatorsRequest(BaseModel):
+    """获取水库各指标最新值请求参数"""
+
+    reservoir_id: int = Field(description="水库ID")
+
+
 class GetMonitoringRecordsTrendRequest(BaseModel):
     """获取监测记录趋势请求参数"""
 
@@ -53,6 +75,8 @@ class GetMonitoringRecordsTrendRequest(BaseModel):
         None, description="结束时间，格式：YYYY-MM-DD HH:MM:SS"
     )
 
+
+# ========== 响应类（Response）==========
 
 class GetMonitoringRecordsListResponse(BaseModel):
     """获取监测记录列表响应参数"""
@@ -79,6 +103,13 @@ class GetLastMonitoringRecordResponse(BaseModel):
     record_time: datetime = Field(description="监测时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GetReservoirLatestIndicatorsResponse(BaseModel):
+    """获取水库各指标最新值响应参数"""
+
+    reservoir_id: int = Field(description="水库ID")
+    records: list[IndicatorLatestValueItem] = Field(description="各指标最新监测值列表")
 
 
 class GetMonitoringRecordsTrendResponse(BaseModel):

@@ -41,20 +41,20 @@ async def get_monitoring_records_list(
 
 @router.get(
     "/last",
-    response_model=ApiResponse[schemas_monitorings.GetLastMonitoringRecordResponse],
+    response_model=ApiResponse[
+        schemas_monitorings.GetReservoirLatestIndicatorsResponse
+    ],
     dependencies=[Depends(require_role("admin", "user"))],
-    summary="获取最新监测记录",
+    summary="获取水库各指标最新监测值",
 )
-async def get_last_monitoring_record(
+async def get_reservoir_latest_indicators(
     db: AsyncSession = Depends(get_db),
-    get_last_monitoring_record_request: schemas_monitorings.GetLastMonitoringRecordRequest = Query(
-        ..., description="获取最新监测记录请求参数"
+    request: schemas_monitorings.GetReservoirLatestIndicatorsRequest = Query(
+        ..., description="获取水库各指标最新值请求参数"
     ),
 ):
     try:
-        result = await services_monitoring.get_last_monitoring_record(
-            db, get_last_monitoring_record_request
-        )
+        result = await services_monitoring.get_reservoir_latest_indicators(db, request)
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)

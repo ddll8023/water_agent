@@ -43,7 +43,11 @@
       <template #header>
         <span class="text-sm text-gray-700">历史趋势</span>
       </template>
-      <div ref="chartRef" class="w-full h-[400px]" />
+      <div v-if="!hasQueried" class="flex flex-col items-center justify-center h-[400px] text-gray-400">
+        <el-icon class="text-4xl mb-3"><Search /></el-icon>
+        <span>请选择指标和时间范围后点击"查询"</span>
+      </div>
+      <div v-show="hasQueried" ref="chartRef" class="w-full h-[400px]" />
     </el-card>
   </div>
 </template>
@@ -118,6 +122,7 @@ const timeRange = ref(null)
 const selectedIndicators = ref([])
 const indicatorOptions = ref([])
 const indicatorMap = ref({})
+const hasQueried = ref(false)
 
 const chartRef = ref(null)
 let chartInstance = null
@@ -251,23 +256,23 @@ const fetchIndicatorOptions = async () => {
 }
 
 const handleQuery = () => {
+  hasQueried.value = true
   nextTick(renderChart)
 }
 
 const handleIndicatorChange = () => {
-  nextTick(renderChart)
+  // 仅更新选择，不自动查询
 }
 
 const handleReset = () => {
+  hasQueried.value = false
   timeRange.value = null
   selectedIndicators.value = indicatorOptions.value.slice(0, 3).map((i) => i.id)
-  nextTick(renderChart)
 }
 
 onMounted(async () => {
   await fetchIndicatorOptions()
   nextTick(() => {
-    renderChart()
     if (chartRef.value) {
       resizeObserver = new ResizeObserver(() => {
         if (chartInstance) {
