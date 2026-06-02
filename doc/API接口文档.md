@@ -1808,3 +1808,57 @@ Authorization: Bearer <token>
 | lists[].record_time  | datetime | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`       |
 | lists[].value        | float    | 监测值                                        |
 | total                | int      | 总记录数                                      |
+
+---
+
+## 九、仪表盘概览（/api/v1/dashboard）
+
+仪表盘总览统计接口。需要 Bearer Token 认证，且要求 admin 或 user 角色。
+
+### 9.1 获取仪表盘总览
+
+- **GET** `/api/v1/dashboard/overview`
+- **描述**：获取仪表盘首页总览统计。需要 Bearer Token 认证，需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+
+**请求示例**：
+
+```
+GET /api/v1/dashboard/overview
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "reservoir_count": 12,
+    "normal_count": 45,
+    "abnormal_count": 3,
+    "alert_count": 8,
+    "offline_stations": 2
+  }
+}
+```
+
+| 字段             | 类型 | 说明                         |
+| ---------------- | ---- | ---------------------------- |
+| reservoir_count  | int  | 启用水库总数                 |
+| normal_count     | int  | 在线监测站点数               |
+| abnormal_count   | int  | 可疑监测记录数（质量标志=0） |
+| alert_count      | int  | 告警记录总数（质量标志 0/2） |
+| offline_stations | int  | 离线监测站点数               |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 2003   | 权限不足               |
+| 5001   | 系统内部错误           |

@@ -17,6 +17,10 @@
           router
           class="border-r-0"
         >
+          <el-menu-item index="/dashboard">
+            <el-icon><House /></el-icon>
+            <span>首页</span>
+          </el-menu-item>
           <el-sub-menu index="monitoring">
             <template #title>
               <el-icon><DataLine /></el-icon>
@@ -113,7 +117,8 @@ import {
   Fold,
   Expand,
   ArrowDown,
-  SwitchButton
+  SwitchButton,
+  House
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
