@@ -13,12 +13,14 @@ async def get_role_list(
     db: AsyncSession, get_role_list_request: schemas_roles.GetRoleListRequest
 ):
     """获取角色列表"""
-    total = await db.scalar(select(func.count(models_role.Role.id)))
+
     stmt = select(models_role.Role)
     if get_role_list_request.keyword:
         stmt = stmt.where(
             models_role.Role.name.ilike(f"%{get_role_list_request.keyword}%")
         )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+
     role_entity_list = await db.scalars(
         stmt.order_by(models_role.Role.id.desc())
         .offset((get_role_list_request.page - 1) * get_role_list_request.page_size)

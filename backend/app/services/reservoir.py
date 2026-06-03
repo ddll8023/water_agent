@@ -17,7 +17,6 @@ async def get_reservoir_list(
     get_reservoir_list_request: schemas_reservoir.GetReservoirListRequest,
 ):
     """获取水库列表"""
-    total = await db.scalar(select(func.count(models_reservoir.Reservoir.id)))
     stmt = select(models_reservoir.Reservoir)
     if get_reservoir_list_request.keyword:
         stmt = stmt.where(
@@ -38,6 +37,7 @@ async def get_reservoir_list(
         stmt = stmt.where(
             models_reservoir.Reservoir.status == get_reservoir_list_request.status
         )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
     reservoir_entity_list = await db.scalars(
         stmt.order_by(models_reservoir.Reservoir.id.desc())
         .offset(

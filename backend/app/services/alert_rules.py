@@ -17,14 +17,16 @@ from app.core.database import commit_or_rollback
 
 async def create_alert_rule(
     db: AsyncSession,
-    request: schemas_alert_rules.CreateAlertRuleRequest,
+    create_alert_rule_request: schemas_alert_rules.CreateAlertRuleRequest,
 ):
     """创建预警规则"""
-    indicator = await db.get(models_indicator.Indicator, request.indicator_id)
+    indicator = await db.get(
+        models_indicator.Indicator, create_alert_rule_request.indicator_id
+    )
     if not indicator:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "关联指标不存在")
 
-    rule = models_alert_rule.AlertRule(**request.model_dump())
+    rule = models_alert_rule.AlertRule(**create_alert_rule_request.model_dump())
     db.add(rule)
     await commit_or_rollback(db)
     return True
@@ -32,22 +34,25 @@ async def create_alert_rule(
 
 async def get_alert_rule_list(
     db: AsyncSession,
-    request: schemas_alert_rules.GetAlertRuleListRequest,
+    get_alert_rule_list_request: schemas_alert_rules.GetAlertRuleListRequest,
 ):
     """获取预警规则列表"""
     base_stmt = select(models_alert_rule.AlertRule)
 
-    if request.indicator_id is not None:
+    if get_alert_rule_list_request.indicator_id is not None:
         base_stmt = base_stmt.where(
-            models_alert_rule.AlertRule.indicator_id == request.indicator_id
+            models_alert_rule.AlertRule.indicator_id
+            == get_alert_rule_list_request.indicator_id
         )
-    if request.reservoir_id is not None:
+    if get_alert_rule_list_request.reservoir_id is not None:
         base_stmt = base_stmt.where(
-            models_alert_rule.AlertRule.reservoir_id == request.reservoir_id
+            models_alert_rule.AlertRule.reservoir_id
+            == get_alert_rule_list_request.reservoir_id
         )
-    if request.is_active is not None:
+    if get_alert_rule_list_request.is_active is not None:
         base_stmt = base_stmt.where(
-            models_alert_rule.AlertRule.is_active == request.is_active
+            models_alert_rule.AlertRule.is_active
+            == get_alert_rule_list_request.is_active
         )
 
     total = await db.scalar(select(func.count()).select_from(base_stmt.subquery()))
@@ -55,8 +60,11 @@ async def get_alert_rule_list(
     items = (
         await db.scalars(
             base_stmt.order_by(models_alert_rule.AlertRule.id)
-            .offset((request.page - 1) * request.page_size)
-            .limit(request.page_size)
+            .offset(
+                (get_alert_rule_list_request.page - 1)
+                * get_alert_rule_list_request.page_size
+            )
+            .limit(get_alert_rule_list_request.page_size)
         )
     ).all()
 
@@ -66,10 +74,10 @@ async def get_alert_rule_list(
             for item in items
         ],
         pagination=PaginationInfo(
-            page=request.page,
-            page_size=request.page_size,
+            page=get_alert_rule_list_request.page,
+            page_size=get_alert_rule_list_request.page_size,
             total=total or 0,
-            total_pages=math.ceil((total or 0) / request.page_size) if total else 0,
+            total_pages=math.ceil((total or 0) / get_alert_rule_list_request.page_size),
         ),
     )
 
@@ -135,20 +143,26 @@ async def evaluate_alert_rules(
 
     triggered_items = []
     for rule in rules:
-        limit = _resolve_limit(indicator_entity, rule.trigger_class, rule.compare_direction)
+        limit = _resolve_limit(
+            indicator_entity, rule.trigger_class, rule.compare_direction
+        )
         if limit is None:
             continue
 
         if rule.compare_direction == "gt" and current_value > limit:
-            triggered_items.append({
-                "rule": rule,
-                "limit": float(limit),
-            })
+            triggered_items.append(
+                {
+                    "rule": rule,
+                    "limit": float(limit),
+                }
+            )
         elif rule.compare_direction == "lt" and current_value < limit:
-            triggered_items.append({
-                "rule": rule,
-                "limit": float(limit),
-            })
+            triggered_items.append(
+                {
+                    "rule": rule,
+                    "limit": float(limit),
+                }
+            )
 
     if not triggered_items:
         return False
@@ -161,12 +175,14 @@ async def evaluate_alert_rules(
     limit = max_level_item["limit"]
 
     title = f"{reservoir_name}指标告警（{indicator_entity.name}={current_value}, 限值={limit}{indicator_entity.unit or ''}）"
-    alert_indicators = [{
-        "name": indicator_entity.name,
-        "value": current_value,
-        "limit": limit,
-        "unit": indicator_entity.unit or "",
-    }]
+    alert_indicators = [
+        {
+            "name": indicator_entity.name,
+            "value": current_value,
+            "limit": limit,
+            "unit": indicator_entity.unit or "",
+        }
+    ]
 
     alert = models_alert.AlertEvent(
         reservoir_id=reservoir_id,
@@ -195,9 +211,7 @@ def _resolve_limit(
     return getattr(indicator, f"standard_limit_{cls}_lower", None)
 
 
-async def _get_matched_rules(
-    db: AsyncSession, indicator_id: int, reservoir_id: int
-):
+async def _get_matched_rules(db: AsyncSession, indicator_id: int, reservoir_id: int):
     """查询匹配的预警规则（水库级优先，回退全局规则）"""
     stmt = select(models_alert_rule.AlertRule).where(
         and_(
@@ -220,9 +234,7 @@ async def _get_matched_rules(
     return reservoir_rules
 
 
-async def _has_unresolved_alert(
-    db: AsyncSession, reservoir_id: int
-) -> bool:
+async def _has_unresolved_alert(db: AsyncSession, reservoir_id: int) -> bool:
     """检查该水库是否存在未关闭预警"""
     stmt = select(models_alert.AlertEvent).where(
         and_(

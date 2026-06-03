@@ -68,6 +68,7 @@ class GetAlertRuleListResponse(BaseModel):
     trigger_class: str = Field(description="触发限值等级")
     alert_level: int = Field(description="预警等级")
     is_active: int = Field(description="是否启用")
+    remark: str | None = Field(None, description="备注说明")
 
     model_config = ConfigDict(from_attributes=True)
 

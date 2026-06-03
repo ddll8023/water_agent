@@ -121,7 +121,6 @@ async def get_monitoring_records_list(
     get_monitoring_records_list_request: schemas_monitorings.GetMonitoringRecordsListRequest,
 ):
     """获取监测记录列表"""
-    total = await db.scalar(select(func.count(models_monitoring.MonitoringRecord.id)))
 
     stmt = select(models_monitoring.MonitoringRecord)
     if get_monitoring_records_list_request.reservoir_id is not None:
@@ -154,6 +153,7 @@ async def get_monitoring_records_list(
             models_monitoring.MonitoringRecord.quality_flag
             == get_monitoring_records_list_request.quality_flag
         )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
     monitoring_records_entity_list = (
         await db.scalars(

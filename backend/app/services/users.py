@@ -14,7 +14,6 @@ async def get_user_list(
     db: AsyncSession, get_user_list_request: schemas_users.GetUserListRequest
 ):
     """获取用户列表"""
-    total = await db.scalar(select(func.count(models_user.User.id)))
 
     stmt = select(models_user.User)
 
@@ -32,6 +31,7 @@ async def get_user_list(
         .offset((get_user_list_request.page - 1) * get_user_list_request.page_size)
         .limit(get_user_list_request.page_size)
     )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
     return PaginatedResponse[schemas_users.GetUserListResponse](
         lists=[

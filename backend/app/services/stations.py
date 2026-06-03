@@ -40,7 +40,6 @@ async def get_monitoring_station_list(
     get_monitoring_station_list_request: schemas_stations.GetMonitoringStationListRequest,
 ):
     """获取监测站点列表"""
-    total = await db.scalar(select(func.count(models_station.MonitoringStation.id)))
 
     stmt = select(models_station.MonitoringStation)
     if get_monitoring_station_list_request.reservoir_id is not None:
@@ -65,6 +64,8 @@ async def get_monitoring_station_list(
             models_station.MonitoringStation.type
             == get_monitoring_station_list_request.type
         )
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
+
     monitoring_station_entities_list = await db.scalars(
         stmt.order_by(models_station.MonitoringStation.id.desc())
         .offset(

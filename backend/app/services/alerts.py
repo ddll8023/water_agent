@@ -29,7 +29,6 @@ async def get_alert_list(
     request: schemas_alerts.GetAlertListRequest,
 ):
     """获取预警列表"""
-    total = await db.scalar(select(func.count(models_alert.AlertEvent.id)))
 
     stmt = select(models_alert.AlertEvent, models_user.User.real_name).outerjoin(
         models_user.User, models_alert.AlertEvent.handler_id == models_user.User.id
@@ -44,6 +43,8 @@ async def get_alert_list(
         stmt = stmt.where(models_alert.AlertEvent.detected_at >= request.start_time)
     if request.end_time is not None:
         stmt = stmt.where(models_alert.AlertEvent.detected_at <= request.end_time)
+
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
     alert_entity_list = (
         await db.execute(

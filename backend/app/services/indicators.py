@@ -38,7 +38,6 @@ async def get_indicator_list(
     get_indicator_list_request: schemas_indicators.GetIndicatorListRequest,
 ):
     """获取指标列表"""
-    total = await db.scalar(select(func.count(models_indicator.Indicator.id)))
     stmt = select(models_indicator.Indicator)
     if get_indicator_list_request.name:
         stmt = stmt.where(
@@ -58,6 +57,8 @@ async def get_indicator_list(
         stmt = stmt.where(
             models_indicator.Indicator.is_core == get_indicator_list_request.is_core
         )
+
+    total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
     indicator_entitie_list = await db.scalars(
         stmt.order_by(models_indicator.Indicator.id)
