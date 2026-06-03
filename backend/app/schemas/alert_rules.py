@@ -1,11 +1,11 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
-
 # ========== 辅助类（Support）==========
 
 
 # ========== 请求类（Request）==========
+
 
 class CreateAlertRuleRequest(BaseModel):
     """创建预警规则请求"""
@@ -16,12 +16,8 @@ class CreateAlertRuleRequest(BaseModel):
     compare_direction: str = Field(
         ..., description="比较方向：gt=超上限告警 lt=低下限告警"
     )
-    trigger_class: str = Field(
-        ..., description="触发限值等级：I/II/III/IV/V"
-    )
-    alert_level: int = Field(
-        ..., description="预警等级：1=info 2=warning 3=critical"
-    )
+    trigger_class: str = Field(..., description="触发限值等级：I/II/III/IV/V")
+    alert_level: int = Field(..., description="预警等级：1=info 2=warning 3=critical")
     is_active: int | None = Field(1, description="是否启用：0禁用 1启用")
     remark: str | None = Field(None, description="备注说明")
 
@@ -35,9 +31,7 @@ class UpdateAlertRuleRequest(BaseModel):
     compare_direction: str | None = Field(
         None, description="比较方向：gt=超上限告警 lt=低下限告警"
     )
-    trigger_class: str | None = Field(
-        None, description="触发限值等级：I/II/III/IV/V"
-    )
+    trigger_class: str | None = Field(None, description="触发限值等级：I/II/III/IV/V")
     alert_level: int | None = Field(
         None, description="预警等级：1=info 2=warning 3=critical"
     )
@@ -56,6 +50,7 @@ class GetAlertRuleListRequest(BaseModel):
 
 
 # ========== 响应类（Response）==========
+
 
 class GetAlertRuleListResponse(BaseModel):
     """预警规则列表响应"""
@@ -85,7 +80,7 @@ class GetAlertRuleDetailResponse(BaseModel):
     alert_level: int = Field(description="预警等级")
     is_active: int = Field(description="是否启用")
     remark: str | None = Field(None, description="备注说明")
-    created_at: datetime = Field(description="创建时间")
-    updated_at: datetime = Field(description="更新时间")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: datetime = Field(..., description="更新时间")
 
     model_config = ConfigDict(from_attributes=True)
