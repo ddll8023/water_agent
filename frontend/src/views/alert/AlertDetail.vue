@@ -308,13 +308,15 @@ const sparklineInstances = ref([])
 const sparklineRefMap = new Map()
 
 const levelLabel = computed(() => {
-  const map = { info: '注意', warning: '警告', critical: '严重' }
-  return map[alertDetail.alert_level] || alertDetail.alert_level
+  const map = { 1: '注意', 2: '警告', 3: '严重' }
+  const level = alertDetail.alert_level
+  return map[level] ?? map[Number(level)] ?? level
 })
 
 const levelTagType = computed(() => {
-  const map = { info: 'info', warning: 'warning', critical: 'danger' }
-  return map[alertDetail.alert_level] || 'info'
+  const map = { 1: 'info', 2: 'warning', 3: 'danger' }
+  const level = alertDetail.alert_level
+  return map[level] ?? map[Number(level)] ?? 'info'
 })
 
 const statusLabel = computed(() => {

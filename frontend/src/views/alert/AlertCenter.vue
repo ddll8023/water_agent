@@ -39,9 +39,9 @@
             class="!w-36"
             @change="handleSearch"
           >
-            <el-option label="提示" value="info" />
-            <el-option label="警告" value="warning" />
-            <el-option label="严重" value="critical" />
+            <el-option label="提示" :value="1" />
+            <el-option label="警告" :value="2" />
+            <el-option label="严重" :value="3" />
           </el-select>
         </el-form-item>
         <el-form-item label="处理状态">
@@ -226,15 +226,15 @@ const pagination = reactive({
 })
 
 const levelLabels = {
-  info: '提示',
-  warning: '警告',
-  critical: '严重'
+  1: '提示',
+  2: '警告',
+  3: '严重'
 }
 
 const levelTagTypeMap = {
-  info: 'info',
-  warning: 'warning',
-  critical: 'danger'
+  1: 'info',
+  2: 'warning',
+  3: 'danger'
 }
 
 const statusLabels = {
@@ -251,7 +251,7 @@ const statusTagTypeMap = {
   3: 'success'
 }
 
-const getLevelTagType = (level) => levelTagTypeMap[level] || 'info'
+const getLevelTagType = (level) => levelTagTypeMap[level] ?? levelTagTypeMap[Number(level)] ?? 'info'
 const getStatusTagType = (status) => statusTagTypeMap[status] || 'info'
 
 const getReservoirName = (id) => {

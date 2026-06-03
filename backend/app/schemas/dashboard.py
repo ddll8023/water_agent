@@ -58,7 +58,7 @@ class GetLastAlertResponse(BaseModel):
     alert_id: int = Field(alias="id", description="告警ID")
     reservoir_id: int = Field(description="水库ID")
     title: str = Field(description="告警标题")
-    alert_level: str = Field(description="告警等级")
+    alert_level: int = Field(description="告警等级：1=info 2=warning 3=critical")
     indicators: list[dict] = Field(
         default_factory=list,
         description="超标指标列表_name_value_limit",

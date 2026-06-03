@@ -16,6 +16,7 @@ from app.schemas.common import PaginationInfo, PaginatedResponse
 import math
 from app.utils.exception import ServiceException
 from app.schemas.common import ErrorCode
+from app.services.alert_rules import evaluate_alert_rules
 
 logger = setup_logger(__name__)
 
@@ -98,7 +99,14 @@ async def collect_water_quality_data():
                     db.add(record)
                     total_records += 1
 
-                    # 监测告警
+                    await evaluate_alert_rules(
+                        db,
+                        indicator_id=indicator_id,
+                        reservoir_id=reservoir_id,
+                        indicator_entity=indicator_entity_dict.get(indicator_id),
+                        current_value=value,
+                        record_time=monitor_time,
+                    )
 
                 station.last_data_time = monitor_time
 

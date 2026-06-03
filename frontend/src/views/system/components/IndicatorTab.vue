@@ -81,35 +81,35 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="标准限值" min-width="280">
+      <el-table-column label="标准限值" min-width="400">
         <template #default="{ row }">
           <div class="flex items-center gap-2 flex-wrap">
             <el-tag
-              v-if="row.standard_limit_i !== null"
+              v-if="row.standard_limit_i_lower !== null || row.standard_limit_i_upper !== null"
               size="small"
               type="success"
-            >Ⅰ {{ row.standard_limit_i }}</el-tag>
+            >Ⅰ {{ formatLimit(row.standard_limit_i_lower, row.standard_limit_i_upper) }}</el-tag>
             <el-tag
-              v-if="row.standard_limit_ii !== null"
+              v-if="row.standard_limit_ii_lower !== null || row.standard_limit_ii_upper !== null"
               size="small"
               type="success"
-            >Ⅱ {{ row.standard_limit_ii }}</el-tag>
+            >Ⅱ {{ formatLimit(row.standard_limit_ii_lower, row.standard_limit_ii_upper) }}</el-tag>
             <el-tag
-              v-if="row.standard_limit_iii !== null"
+              v-if="row.standard_limit_iii_lower !== null || row.standard_limit_iii_upper !== null"
               size="small"
               type="warning"
-            >Ⅲ {{ row.standard_limit_iii }}</el-tag>
+            >Ⅲ {{ formatLimit(row.standard_limit_iii_lower, row.standard_limit_iii_upper) }}</el-tag>
             <el-tag
-              v-if="row.standard_limit_iv !== null"
+              v-if="row.standard_limit_iv_lower !== null || row.standard_limit_iv_upper !== null"
               size="small"
               type="warning"
-            >Ⅳ {{ row.standard_limit_iv }}</el-tag>
+            >Ⅳ {{ formatLimit(row.standard_limit_iv_lower, row.standard_limit_iv_upper) }}</el-tag>
             <el-tag
-              v-if="row.standard_limit_v !== null"
+              v-if="row.standard_limit_v_lower !== null || row.standard_limit_v_upper !== null"
               size="small"
               type="danger"
-            >Ⅴ {{ row.standard_limit_v }}</el-tag>
-            <span v-if="row.standard_limit_i === null && row.standard_limit_ii === null && row.standard_limit_iii === null && row.standard_limit_iv === null && row.standard_limit_v === null">-</span>
+            >Ⅴ {{ formatLimit(row.standard_limit_v_lower, row.standard_limit_v_upper) }}</el-tag>
+            <span v-if="!hasAnyLimit(row)">-</span>
           </div>
         </template>
       </el-table-column>
@@ -192,72 +192,143 @@
             <el-radio :value="0">否</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-divider content-position="left">标准限值</el-divider>
+        <el-divider content-position="left">标准限值（下限 ~ 上限）</el-divider>
         <el-row :gutter="20">
-          <el-col :span="8">
-            <el-form-item label="Ⅰ类" prop="standard_limit_i">
+          <el-col :span="12">
+            <el-form-item label="Ⅰ类下限" prop="standard_limit_i_lower">
               <el-input-number
-                v-model="createForm.standard_limit_i"
+                v-model="createForm.standard_limit_i_lower"
                 :min="0"
                 :max="999999"
                 :precision="4"
                 controls-position="right"
                 class="w-full"
-                placeholder="Ⅰ类限值"
+                placeholder="Ⅰ类下限"
               />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="Ⅱ类" prop="standard_limit_ii">
+          <el-col :span="12">
+            <el-form-item label="Ⅰ类上限" prop="standard_limit_i_upper">
               <el-input-number
-                v-model="createForm.standard_limit_ii"
+                v-model="createForm.standard_limit_i_upper"
                 :min="0"
                 :max="999999"
                 :precision="4"
                 controls-position="right"
                 class="w-full"
-                placeholder="Ⅱ类限值"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="Ⅲ类" prop="standard_limit_iii">
-              <el-input-number
-                v-model="createForm.standard_limit_iii"
-                :min="0"
-                :max="999999"
-                :precision="4"
-                controls-position="right"
-                class="w-full"
-                placeholder="Ⅲ类限值"
+                placeholder="Ⅰ类上限"
               />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
-          <el-col :span="8">
-            <el-form-item label="Ⅳ类" prop="standard_limit_iv">
+          <el-col :span="12">
+            <el-form-item label="Ⅱ类下限" prop="standard_limit_ii_lower">
               <el-input-number
-                v-model="createForm.standard_limit_iv"
+                v-model="createForm.standard_limit_ii_lower"
                 :min="0"
                 :max="999999"
                 :precision="4"
                 controls-position="right"
                 class="w-full"
-                placeholder="Ⅳ类限值"
+                placeholder="Ⅱ类下限"
               />
             </el-form-item>
           </el-col>
-          <el-col :span="8">
-            <el-form-item label="Ⅴ类" prop="standard_limit_v">
+          <el-col :span="12">
+            <el-form-item label="Ⅱ类上限" prop="standard_limit_ii_upper">
               <el-input-number
-                v-model="createForm.standard_limit_v"
+                v-model="createForm.standard_limit_ii_upper"
                 :min="0"
                 :max="999999"
                 :precision="4"
                 controls-position="right"
                 class="w-full"
-                placeholder="Ⅴ类限值"
+                placeholder="Ⅱ类上限"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Ⅲ类下限" prop="standard_limit_iii_lower">
+              <el-input-number
+                v-model="createForm.standard_limit_iii_lower"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅲ类下限"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="Ⅲ类上限" prop="standard_limit_iii_upper">
+              <el-input-number
+                v-model="createForm.standard_limit_iii_upper"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅲ类上限"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Ⅳ类下限" prop="standard_limit_iv_lower">
+              <el-input-number
+                v-model="createForm.standard_limit_iv_lower"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅳ类下限"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="Ⅳ类上限" prop="standard_limit_iv_upper">
+              <el-input-number
+                v-model="createForm.standard_limit_iv_upper"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅳ类上限"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="Ⅴ类下限" prop="standard_limit_v_lower">
+              <el-input-number
+                v-model="createForm.standard_limit_v_lower"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅴ类下限"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="Ⅴ类上限" prop="standard_limit_v_upper">
+              <el-input-number
+                v-model="createForm.standard_limit_v_upper"
+                :min="0"
+                :max="999999"
+                :precision="4"
+                controls-position="right"
+                class="w-full"
+                placeholder="Ⅴ类上限"
               />
             </el-form-item>
           </el-col>
@@ -350,11 +421,16 @@ const createForm = reactive({
   code: '',
   unit: '',
   category: '',
-  standard_limit_i: null,
-  standard_limit_ii: null,
-  standard_limit_iii: null,
-  standard_limit_iv: null,
-  standard_limit_v: null,
+  standard_limit_i_lower: null,
+  standard_limit_i_upper: null,
+  standard_limit_ii_lower: null,
+  standard_limit_ii_upper: null,
+  standard_limit_iii_lower: null,
+  standard_limit_iii_upper: null,
+  standard_limit_iv_lower: null,
+  standard_limit_iv_upper: null,
+  standard_limit_v_lower: null,
+  standard_limit_v_upper: null,
   is_core: 0
 })
 
@@ -387,11 +463,16 @@ const openEditDialog = async (row) => {
     createForm.code = detail.code
     createForm.unit = detail.unit || ''
     createForm.category = detail.category || ''
-    createForm.standard_limit_i = detail.standard_limit_i ?? null
-    createForm.standard_limit_ii = detail.standard_limit_ii ?? null
-    createForm.standard_limit_iii = detail.standard_limit_iii ?? null
-    createForm.standard_limit_iv = detail.standard_limit_iv ?? null
-    createForm.standard_limit_v = detail.standard_limit_v ?? null
+    createForm.standard_limit_i_lower = detail.standard_limit_i_lower ?? null
+    createForm.standard_limit_i_upper = detail.standard_limit_i_upper ?? null
+    createForm.standard_limit_ii_lower = detail.standard_limit_ii_lower ?? null
+    createForm.standard_limit_ii_upper = detail.standard_limit_ii_upper ?? null
+    createForm.standard_limit_iii_lower = detail.standard_limit_iii_lower ?? null
+    createForm.standard_limit_iii_upper = detail.standard_limit_iii_upper ?? null
+    createForm.standard_limit_iv_lower = detail.standard_limit_iv_lower ?? null
+    createForm.standard_limit_iv_upper = detail.standard_limit_iv_upper ?? null
+    createForm.standard_limit_v_lower = detail.standard_limit_v_lower ?? null
+    createForm.standard_limit_v_upper = detail.standard_limit_v_upper ?? null
     createForm.is_core = detail.is_core ?? 0
   } catch (e) {
     ElMessage.error(e.message || '获取指标详情失败')
@@ -408,11 +489,16 @@ const resetCreateForm = () => {
   createForm.code = ''
   createForm.unit = ''
   createForm.category = ''
-  createForm.standard_limit_i = null
-  createForm.standard_limit_ii = null
-  createForm.standard_limit_iii = null
-  createForm.standard_limit_iv = null
-  createForm.standard_limit_v = null
+  createForm.standard_limit_i_lower = null
+  createForm.standard_limit_i_upper = null
+  createForm.standard_limit_ii_lower = null
+  createForm.standard_limit_ii_upper = null
+  createForm.standard_limit_iii_lower = null
+  createForm.standard_limit_iii_upper = null
+  createForm.standard_limit_iv_lower = null
+  createForm.standard_limit_iv_upper = null
+  createForm.standard_limit_v_lower = null
+  createForm.standard_limit_v_upper = null
   createForm.is_core = 0
   createFormRef.value?.clearValidate()
 }
@@ -431,11 +517,16 @@ const handleCreateIndicator = async () => {
       code: createForm.code,
       unit: createForm.unit || undefined,
       category: createForm.category || undefined,
-      standard_limit_i: createForm.standard_limit_i ?? undefined,
-      standard_limit_ii: createForm.standard_limit_ii ?? undefined,
-      standard_limit_iii: createForm.standard_limit_iii ?? undefined,
-      standard_limit_iv: createForm.standard_limit_iv ?? undefined,
-      standard_limit_v: createForm.standard_limit_v ?? undefined,
+      standard_limit_i_lower: createForm.standard_limit_i_lower ?? undefined,
+      standard_limit_i_upper: createForm.standard_limit_i_upper ?? undefined,
+      standard_limit_ii_lower: createForm.standard_limit_ii_lower ?? undefined,
+      standard_limit_ii_upper: createForm.standard_limit_ii_upper ?? undefined,
+      standard_limit_iii_lower: createForm.standard_limit_iii_lower ?? undefined,
+      standard_limit_iii_upper: createForm.standard_limit_iii_upper ?? undefined,
+      standard_limit_iv_lower: createForm.standard_limit_iv_lower ?? undefined,
+      standard_limit_iv_upper: createForm.standard_limit_iv_upper ?? undefined,
+      standard_limit_v_lower: createForm.standard_limit_v_lower ?? undefined,
+      standard_limit_v_upper: createForm.standard_limit_v_upper ?? undefined,
       is_core: createForm.is_core
     }
     const payload = Object.fromEntries(
@@ -456,6 +547,18 @@ const handleCreateIndicator = async () => {
   } finally {
     createLoading.value = false
   }
+}
+
+const formatLimit = (lower, upper) => {
+  if (lower !== null && upper !== null) return `${lower}~${upper}`
+  if (lower !== null) return `≥${lower}`
+  if (upper !== null) return `≤${upper}`
+  return ''
+}
+
+const hasAnyLimit = (row) => {
+  const classes = ['i', 'ii', 'iii', 'iv', 'v']
+  return classes.some((c) => row[`standard_limit_${c}_lower`] !== null || row[`standard_limit_${c}_upper`] !== null)
 }
 
 const handleDelete = async (id) => {

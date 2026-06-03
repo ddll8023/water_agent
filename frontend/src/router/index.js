@@ -27,6 +27,12 @@ const routes = [
         meta: { title: '水库站点配置管理' }
       },
       {
+        path: 'system/alert-rules',
+        name: 'AlertRules',
+        component: () => import('@/views/system/AlertRules.vue'),
+        meta: { title: '预警规则管理' }
+      },
+      {
         path: 'alerts/list',
         name: 'AlertCenter',
         component: () => import('@/views/alert/AlertCenter.vue'),

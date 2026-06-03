@@ -1341,11 +1341,13 @@ Authorization: Bearer <token>
 | code               | string       | body   | 是   | 指标编码                              |
 | unit               | string\|null | body   | 否   | 单位，如 mg/L                         |
 | category           | string\|null | body   | 否   | 分类：物理 / 化学 / 生物 / 综合       |
-| standard_limit_i   | float\|null  | body   | 否   | Ⅰ类限值                              |
+| standard_limit_i_lower | float\|null  | body   | 否   | Ⅰ类下限值
+| standard_limit_i_upper | float\|null  | body   | 否   | Ⅰ类上限值                              |
 | standard_limit_ii  | float\|null  | body   | 否   | Ⅱ类限值                              |
 | standard_limit_iii | float\|null  | body   | 否   | Ⅲ类限值                              |
 | standard_limit_iv  | float\|null  | body   | 否   | Ⅳ类限值                              |
-| standard_limit_v   | float\|null  | body   | 否   | Ⅴ类限值                              |
+| standard_limit_v_lower | float\|null  | body   | 否   | Ⅴ类下限值
+| standard_limit_v_upper | float\|null  | body   | 否   | Ⅴ类上限值                              |
 | is_core            | int\|null    | body   | 否   | 是否核心指标：0=否，1=是              |
 
 **请求体示例**：
@@ -1356,11 +1358,16 @@ Authorization: Bearer <token>
   "code": "TP",
   "unit": "mg/L",
   "category": "化学",
-  "standard_limit_i": 0.02,
-  "standard_limit_ii": 0.1,
-  "standard_limit_iii": 0.2,
-  "standard_limit_iv": 0.3,
-  "standard_limit_v": 0.4,
+  "standard_limit_i_lower": null,
+  "standard_limit_i_upper": 0.02,
+  "standard_limit_ii_lower": null,
+  "standard_limit_ii_upper": 0.1,
+  "standard_limit_iii_lower": null,
+  "standard_limit_iii_upper": 0.2,
+  "standard_limit_iv_lower": null,
+  "standard_limit_iv_upper": 0.3,
+  "standard_limit_v_lower": null,
+  "standard_limit_v_upper": 0.4,
   "is_core": 1
 }
 ```
@@ -1431,11 +1438,16 @@ Authorization: Bearer <token>
         "code": "TP",
         "unit": "mg/L",
         "category": "化学",
-        "standard_limit_i": 0.02,
-        "standard_limit_ii": 0.1,
-        "standard_limit_iii": 0.2,
-        "standard_limit_iv": 0.3,
-        "standard_limit_v": 0.4,
+        "standard_limit_i_lower": null,
+  "standard_limit_i_upper": 0.02,
+        "standard_limit_ii_lower": null,
+  "standard_limit_ii_upper": 0.1,
+        "standard_limit_iii_lower": null,
+  "standard_limit_iii_upper": 0.2,
+        "standard_limit_iv_lower": null,
+  "standard_limit_iv_upper": 0.3,
+        "standard_limit_v_lower": null,
+  "standard_limit_v_upper": 0.4,
         "is_core": 1,
         "created_at": "2026-05-28T12:00:00"
       }
@@ -1457,11 +1469,13 @@ Authorization: Bearer <token>
 | lists[].code               | string       | 指标编码                 |
 | lists[].unit               | string\|null | 单位                     |
 | lists[].category           | string\|null | 分类                     |
-| lists[].standard_limit_i   | float\|null  | Ⅰ类限值                 |
+| lists[].standard_limit_i_lower | float\|null  | Ⅰ类下限值
+| lists[].standard_limit_i_upper | float\|null  | Ⅰ类上限值                 |
 | lists[].standard_limit_ii  | float\|null  | Ⅱ类限值                 |
 | lists[].standard_limit_iii | float\|null  | Ⅲ类限值                 |
 | lists[].standard_limit_iv  | float\|null  | Ⅳ类限值                 |
-| lists[].standard_limit_v   | float\|null  | Ⅴ类限值                 |
+| lists[].standard_limit_v_lower | float\|null  | Ⅴ类下限值
+| lists[].standard_limit_v_upper | float\|null  | Ⅴ类上限值                 |
 | lists[].is_core            | int\|null    | 是否核心指标：0=否，1=是 |
 | lists[].created_at         | datetime\|null | 创建时间               |
 | pagination.page            | int          | 当前页码                 |
@@ -1501,11 +1515,16 @@ Authorization: Bearer <token>
     "code": "TP",
     "unit": "mg/L",
     "category": "化学",
-    "standard_limit_i": 0.02,
-    "standard_limit_ii": 0.1,
-    "standard_limit_iii": 0.2,
-    "standard_limit_iv": 0.3,
-    "standard_limit_v": 0.4,
+    "standard_limit_i_lower": null,
+  "standard_limit_i_upper": 0.02,
+    "standard_limit_ii_lower": null,
+  "standard_limit_ii_upper": 0.1,
+    "standard_limit_iii_lower": null,
+  "standard_limit_iii_upper": 0.2,
+    "standard_limit_iv_lower": null,
+  "standard_limit_iv_upper": 0.3,
+    "standard_limit_v_lower": null,
+  "standard_limit_v_upper": 0.4,
     "is_core": 1
   }
 }
@@ -1561,11 +1580,16 @@ Authorization: Bearer <token>
   "name": "总磷（TP）",
   "unit": "mg/L",
   "category": "化学",
-  "standard_limit_i": 0.02,
-  "standard_limit_ii": 0.1,
-  "standard_limit_iii": 0.2,
-  "standard_limit_iv": 0.3,
-  "standard_limit_v": 0.4,
+  "standard_limit_i_lower": null,
+  "standard_limit_i_upper": 0.02,
+  "standard_limit_ii_lower": null,
+  "standard_limit_ii_upper": 0.1,
+  "standard_limit_iii_lower": null,
+  "standard_limit_iii_upper": 0.2,
+  "standard_limit_iv_lower": null,
+  "standard_limit_iv_upper": 0.3,
+  "standard_limit_v_lower": null,
+  "standard_limit_v_upper": 0.4,
   "is_core": 1
 }
 ```
@@ -1978,7 +2002,7 @@ Authorization: Bearer <token>
       "alert_id": 1,
       "reservoir_id": 1,
       "title": "总磷超标预警",
-      "alert_level": "critical",
+      "alert_level": 3,
       "indicators": [
         {
           "name": "总磷",
@@ -1998,9 +2022,9 @@ Authorization: Bearer <token>
 | data[].alert_id     | int      | 告警 ID                                               |
 | data[].reservoir_id | int      | 水库 ID                                               |
 | data[].title        | string   | 告警标题                                              |
-| data[].alert_level  | string   | 告警等级：info / warning / critical                   |
+| data[].alert_level  | int      | 告警等级：1=info / 2=warning / 3=critical                   |
 | data[].indicators   | array    | 超标指标列表，每项含 name/value/limit                 |
-| data[].status       | string   | 状态：pending / confirmed / processing / resolved     |
+| data[].status       | int      | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决     |
 | data[].detected_at  | datetime | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`               |
 
 **错误场景**：
@@ -2028,7 +2052,7 @@ Authorization: Bearer <token>
 | page          | int             | query  | 否   | 页码，默认 1                                      |
 | page_size     | int             | query  | 否   | 每页记录数，默认 20，最大 100                     |
 | reservoir_id  | int\|null       | query  | 否   | 水库 ID 筛选                                      |
-| alert_level   | string\|null    | query  | 否   | 预警等级：info / warning / critical               |
+| alert_level   | int\|null       | query  | 否   | 预警等级：1=info / 2=warning / 3=critical               |
 | status        | int\|null       | query  | 否   | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决     |
 | start_time    | datetime\|null  | query  | 否   | 检出开始时间，格式 `YYYY-MM-DD HH:MM:SS`      |
 | end_time      | datetime\|null  | query  | 否   | 检出结束时间，格式 `YYYY-MM-DD HH:MM:SS`      |
@@ -2036,7 +2060,7 @@ Authorization: Bearer <token>
 **请求示例**：
 
 ```
-GET /api/v1/alerts?page=1&page_size=20&alert_level=critical&status=0
+GET /api/v1/alerts?page=1&page_size=20&alert_level=3&status=0
 Authorization: Bearer <token>
 ```
 
@@ -2053,7 +2077,7 @@ Authorization: Bearer <token>
         "reservoir_id": 1,
         "handler_name": "张三",
         "title": "总磷超标预警",
-        "alert_level": "critical",
+        "alert_level": 3,
         "indicators": [
           {
             "name": "总磷",
@@ -2082,7 +2106,7 @@ Authorization: Bearer <token>
 | lists[].reservoir_id   | int             | 水库 ID                                           |
 | lists[].handler_name   | string\|null    | 处理人姓名（LEFT JOIN user 表获取）               |
 | lists[].title          | string          | 预警标题                                          |
-| lists[].alert_level    | string          | 预警等级：info / warning / critical               |
+| lists[].alert_level    | int             | 预警等级：1=info / 2=warning / 3=critical               |
 | lists[].indicators     | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
 | lists[].status         | int             | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决     |
 | lists[].detected_at    | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
@@ -2128,7 +2152,7 @@ Authorization: Bearer <token>
     "reservoir_id": 1,
     "handler_id": null,
     "title": "梅山水库总磷超标预警",
-    "alert_level": "critical",
+    "alert_level": 3,
     "indicators": [
       {
         "name": "总磷",
@@ -2152,7 +2176,7 @@ Authorization: Bearer <token>
 | reservoir_id  | int             | 水库 ID                                           |
 | handler_id    | int\|null       | 处理人 ID                                         |
 | title         | string          | 预警标题                                          |
-| alert_level   | string          | 预警等级：info / warning / critical               |
+| alert_level   | int             | 预警等级：1=info / 2=warning / 3=critical               |
 | indicators    | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
 | source_desc   | string\|null    | 溯源描述                                          |
 | suggestion    | string\|null    | 处置建议                                          |
@@ -2200,7 +2224,7 @@ Authorization: Bearer <token>
     "reservoir_id": 1,
     "handler_id": 1,
     "title": "梅山水库总磷超标预警",
-    "alert_level": "critical",
+    "alert_level": 3,
     "indicators": [
       {
         "name": "总磷",
@@ -2223,7 +2247,7 @@ Authorization: Bearer <token>
 | reservoir_id  | int             | 水库 ID                                           |
 | handler_id    | int\|null       | 处理人 ID                                         |
 | title         | string          | 预警标题                                          |
-| alert_level   | string          | 预警等级：info / warning / critical               |
+| alert_level   | int             | 预警等级：1=info / 2=warning / 3=critical               |
 | indicators    | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
 | source_desc   | string\|null    | 溯源描述                                          |
 | suggestion    | string\|null    | 处置建议                                          |
@@ -2364,3 +2388,292 @@ Authorization: Bearer <token>
 | 错误码 | 场景                   |
 | ------ | ---------------------- |
 | 5001   | 服务器内部错误         |
+
+---
+
+## 十一、预警规则管理（/api/v1/alert-rules）
+
+预警规则 CRUD 接口。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 11.1 获取预警规则列表
+
+- **POST** `/api/v1/alert-rules/list`
+- **描述**：分页获取预警规则列表，支持按指标、水库、启用状态筛选。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| indicator_id  | int\|null    | body   | 否   | 指标 ID 筛选                          |
+| reservoir_id  | int\|null    | body   | 否   | 水库 ID 筛选（null=全局规则）         |
+| is_active     | int\|null    | body   | 否   | 启用状态筛选：0=禁用，1=启用          |
+| page          | int          | body   | 是   | 页码，默认 1                          |
+| page_size     | int          | body   | 是   | 每页记录数，默认 10                   |
+
+**请求体示例**：
+
+```json
+{
+  "indicator_id": null,
+  "reservoir_id": null,
+  "is_active": null,
+  "page": 1,
+  "page_size": 10
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "rule_name": "COD超Ⅲ类限值-警告",
+        "indicator_id": 3,
+        "reservoir_id": null,
+        "compare_direction": "gt",
+        "trigger_class": "III",
+        "alert_level": 2,
+        "is_active": 1
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 10,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段                   | 类型         | 说明                                              |
+| ---------------------- | ------------ | ------------------------------------------------- |
+| lists[].id             | int          | 规则 ID                                           |
+| lists[].rule_name      | string       | 规则名称                                          |
+| lists[].indicator_id   | int          | 关联指标 ID                                       |
+| lists[].reservoir_id   | int\|null    | 水库 ID，null=全局规则                            |
+| lists[].compare_direction | string     | 比较方向：gt=超上限告警，lt=低下限告警            |
+| lists[].trigger_class  | string       | 触发限值等级：I/II/III/IV/V                       |
+| lists[].alert_level    | int          | 预警等级：1=info / 2=warning / 3=critical         |
+| lists[].is_active      | int          | 是否启用：0=禁用，1=启用                          |
+| pagination.page        | int          | 当前页码                                          |
+| pagination.page_size   | int          | 每页数量                                          |
+| pagination.total       | int          | 总记录数                                          |
+| pagination.total_pages | int          | 总页数                                            |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 2003   | 权限不足               |
+| 5001   | 服务器内部错误         |
+
+### 11.2 获取预警规则详情
+
+- **GET** `/api/v1/alert-rules/{id}`
+- **描述**：根据规则 ID 获取预警规则详细信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 规则 ID                               |
+
+**请求示例**：
+
+```
+GET /api/v1/alert-rules/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "rule_name": "COD超Ⅲ类限值-警告",
+    "indicator_id": 3,
+    "reservoir_id": null,
+    "compare_direction": "gt",
+    "trigger_class": "III",
+    "alert_level": 2,
+    "is_active": 1,
+    "remark": "化学需氧量超过20mg/L触发警告",
+    "created_at": "2025-01-01T00:00:00",
+    "updated_at": "2025-01-01T00:00:00"
+  }
+}
+```
+
+| 字段               | 类型         | 说明                                              |
+| ------------------ | ------------ | ------------------------------------------------- |
+| id                 | int          | 规则 ID                                           |
+| rule_name          | string       | 规则名称                                          |
+| indicator_id       | int          | 关联指标 ID                                       |
+| reservoir_id       | int\|null    | 水库 ID，null=全局规则                            |
+| compare_direction  | string       | 比较方向：gt=超上限告警，lt=低下限告警            |
+| trigger_class      | string       | 触发限值等级：I/II/III/IV/V                       |
+| alert_level        | int          | 预警等级：1=info / 2=warning / 3=critical         |
+| is_active          | int          | 是否启用：0=禁用，1=启用                          |
+| remark             | string\|null | 备注说明                                          |
+| created_at         | datetime     | 创建时间                                          |
+| updated_at         | datetime     | 更新时间                                          |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（规则不存在） |
+| 2003   | 权限不足                 |
+
+### 11.3 创建预警规则
+
+- **POST** `/api/v1/alert-rules/create`
+- **描述**：管理员新增预警规则。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数              | 类型         | 位置   | 必填 | 说明                                              |
+| ----------------- | ------------ | ------ | ---- | ------------------------------------------------- |
+| Authorization     | string       | header | 是   | Bearer Token，格式 `Bearer <token>`           |
+| rule_name         | string       | body   | 是   | 规则名称                                          |
+| indicator_id      | int          | body   | 是   | 关联指标 ID                                       |
+| reservoir_id      | int\|null    | body   | 否   | 水库 ID，不传或 null 表示全局规则                 |
+| compare_direction | string       | body   | 是   | 比较方向：gt=超上限告警，lt=低下限告警            |
+| trigger_class     | string       | body   | 是   | 触发限值等级：I/II/III/IV/V                       |
+| alert_level       | int          | body   | 是   | 预警等级：1=info / 2=warning / 3=critical         |
+| is_active         | int          | body   | 否   | 是否启用：0=禁用，1=启用，默认 1                  |
+| remark            | string\|null | body   | 否   | 备注说明                                          |
+
+**请求体示例**：
+
+```json
+{
+  "rule_name": "COD超Ⅲ类限值-警告",
+  "indicator_id": 3,
+  "reservoir_id": null,
+  "compare_direction": "gt",
+  "trigger_class": "III",
+  "alert_level": 2,
+  "is_active": 1,
+  "remark": "化学需氧量超过20mg/L触发警告"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1001   | 参数错误（缺少必填项）       |
+| 1002   | 数据不存在（关联指标不存在） |
+| 2003   | 权限不足                     |
+
+### 11.4 更新预警规则
+
+- **PUT** `/api/v1/alert-rules/{id}`
+- **描述**：管理员更新预警规则信息。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数              | 类型         | 位置   | 必填 | 说明                                              |
+| ----------------- | ------------ | ------ | ---- | ------------------------------------------------- |
+| Authorization     | string       | header | 是   | Bearer Token，格式 `Bearer <token>`           |
+| id                | int          | path   | 是   | 规则 ID                                           |
+| rule_name         | string\|null | body   | 否   | 规则名称                                          |
+| indicator_id      | int\|null    | body   | 否   | 关联指标 ID                                       |
+| reservoir_id      | int\|null    | body   | 否   | 水库 ID，null=全局规则                            |
+| compare_direction | string\|null | body   | 否   | 比较方向：gt=超上限告警，lt=低下限告警            |
+| trigger_class     | string\|null | body   | 否   | 触发限值等级：I/II/III/IV/V                       |
+| alert_level       | int\|null    | body   | 否   | 预警等级：1=info / 2=warning / 3=critical         |
+| is_active         | int\|null    | body   | 否   | 是否启用：0=禁用，1=启用                          |
+| remark            | string\|null | body   | 否   | 备注说明                                          |
+
+**请求体示例**：
+
+```json
+{
+  "rule_name": "COD超Ⅴ类限值-严重",
+  "trigger_class": "V",
+  "alert_level": 3
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（规则不存在） |
+| 2003   | 权限不足                 |
+
+### 11.5 删除预警规则
+
+- **DELETE** `/api/v1/alert-rules/{id}`
+- **描述**：管理员删除指定预警规则。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 规则 ID                               |
+
+**请求示例**：
+
+```
+DELETE /api/v1/alert-rules/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（规则不存在） |
+| 2003   | 权限不足                 |

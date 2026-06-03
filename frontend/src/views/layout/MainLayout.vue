@@ -48,6 +48,10 @@
               <el-icon><Collection /></el-icon>
               <span>水库站点配置管理</span>
             </el-menu-item>
+            <el-menu-item index="/system/alert-rules">
+              <el-icon><WarningFilled /></el-icon>
+              <span>预警规则管理</span>
+            </el-menu-item>
           </el-sub-menu>
         </el-menu>
       </el-scrollbar>

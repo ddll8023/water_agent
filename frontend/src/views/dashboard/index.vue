@@ -182,9 +182,9 @@ const WATER_GRADE_TAG_TYPE = {
   'Ⅴ类': 'danger',
   '劣Ⅴ类': 'danger'
 }
-const ALERT_LEVEL_TAG = { info: 'info', warning: 'warning', critical: 'danger' }
-const ALERT_LEVEL_LABEL = { info: '提示', warning: '预警', critical: '告警' }
+const ALERT_LEVEL_TAG = { 1: 'info', 2: 'warning', 3: 'danger' }
 
+const ALERT_LEVEL_LABEL = { 1: '提示', 2: '预警', 3: '告警' }
 const router = useRouter()
 
 const overview = ref(null)
@@ -211,8 +211,8 @@ const offlineCount = computed(() => overview.value?.offline_stations ?? 0)
 const offlineCountColor = computed(() => (offlineCount.value === 0 ? '#10b981' : '#f59e0b'))
 
 const waterGradeTagType = (grade) => WATER_GRADE_TAG_TYPE[grade] || 'info'
-const alertLevelTagType = (level) => ALERT_LEVEL_TAG[level] || 'info'
-const alertLevelLabel = (level) => ALERT_LEVEL_LABEL[level] || '告警'
+const alertLevelTagType = (level) => ALERT_LEVEL_TAG[level] ?? ALERT_LEVEL_TAG[Number(level)] ?? 'info'
+const alertLevelLabel = (level) => ALERT_LEVEL_LABEL[level] ?? ALERT_LEVEL_LABEL[Number(level)] ?? '告警'
 
 const indicatorGridClass = (indicators) => {
   if (!indicators?.length) return 'grid-cols-1'

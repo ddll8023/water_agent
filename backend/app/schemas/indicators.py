@@ -16,11 +16,16 @@ class CreateIndicatorRequest(BaseModel):
     code: str = Field(..., description="指标编码")
     unit: str | None = Field(None, description="单位")
     category: str | None = Field(None, description="分类")
-    standard_limit_i: float | None = Field(None, description="Ⅰ类限值")
-    standard_limit_ii: float | None = Field(None, description="Ⅱ类限值")
-    standard_limit_iii: float | None = Field(None, description="Ⅲ类限值")
-    standard_limit_iv: float | None = Field(None, description="Ⅳ类限值")
-    standard_limit_v: float | None = Field(None, description="Ⅴ类限值")
+    standard_limit_i_lower: float | None = Field(None, description="Ⅰ类下限值")
+    standard_limit_i_upper: float | None = Field(None, description="Ⅰ类上限值")
+    standard_limit_ii_lower: float | None = Field(None, description="Ⅱ类下限值")
+    standard_limit_ii_upper: float | None = Field(None, description="Ⅱ类上限值")
+    standard_limit_iii_lower: float | None = Field(None, description="Ⅲ类下限值")
+    standard_limit_iii_upper: float | None = Field(None, description="Ⅲ类上限值")
+    standard_limit_iv_lower: float | None = Field(None, description="Ⅳ类下限值")
+    standard_limit_iv_upper: float | None = Field(None, description="Ⅳ类上限值")
+    standard_limit_v_lower: float | None = Field(None, description="Ⅴ类下限值")
+    standard_limit_v_upper: float | None = Field(None, description="Ⅴ类上限值")
     is_core: int | None = Field(None, description="是否核心指标")
 
 
@@ -39,42 +44,20 @@ class UpdateIndicatorRequest(BaseModel):
     """更新指标请求"""
 
     name: str | None = Field(None, description="指标名称")
-    code: str | None = Field(
-        None,
-        description="指标编码",
-    )
-    unit: str | None = Field(
-        None,
-        description="单位",
-    )
-    category: str | None = Field(
-        None,
-        description="分类",
-    )
-    standard_limit_i: float | None = Field(
-        None,
-        description="Ⅰ类限值",
-    )
-    standard_limit_ii: float | None = Field(
-        None,
-        description="Ⅱ类限值",
-    )
-    standard_limit_iii: float | None = Field(
-        None,
-        description="Ⅲ类限值",
-    )
-    standard_limit_iv: float | None = Field(
-        None,
-        description="Ⅳ类限值",
-    )
-    standard_limit_v: float | None = Field(
-        None,
-        description="Ⅴ类限值",
-    )
-    is_core: int | None = Field(
-        None,
-        description="是否核心指标",
-    )
+    code: str | None = Field(None, description="指标编码")
+    unit: str | None = Field(None, description="单位")
+    category: str | None = Field(None, description="分类")
+    standard_limit_i_lower: float | None = Field(None, description="Ⅰ类下限值")
+    standard_limit_i_upper: float | None = Field(None, description="Ⅰ类上限值")
+    standard_limit_ii_lower: float | None = Field(None, description="Ⅱ类下限值")
+    standard_limit_ii_upper: float | None = Field(None, description="Ⅱ类上限值")
+    standard_limit_iii_lower: float | None = Field(None, description="Ⅲ类下限值")
+    standard_limit_iii_upper: float | None = Field(None, description="Ⅲ类上限值")
+    standard_limit_iv_lower: float | None = Field(None, description="Ⅳ类下限值")
+    standard_limit_iv_upper: float | None = Field(None, description="Ⅳ类上限值")
+    standard_limit_v_lower: float | None = Field(None, description="Ⅴ类下限值")
+    standard_limit_v_upper: float | None = Field(None, description="Ⅴ类上限值")
+    is_core: int | None = Field(None, description="是否核心指标")
 
 
 # ========== 响应类（Response）==========
@@ -88,11 +71,16 @@ class GetIndicatorListResponse(BaseModel):
     code: str = Field(..., description="指标编码")
     unit: str | None = Field(None, description="单位")
     category: str | None = Field(None, description="分类")
-    standard_limit_i: float | None = Field(None, description="Ⅰ类限值")
-    standard_limit_ii: float | None = Field(None, description="Ⅱ类限值")
-    standard_limit_iii: float | None = Field(None, description="Ⅲ类限值")
-    standard_limit_iv: float | None = Field(None, description="Ⅳ类限值")
-    standard_limit_v: float | None = Field(None, description="Ⅴ类限值")
+    standard_limit_i_lower: float | None = Field(None, description="Ⅰ类下限值")
+    standard_limit_i_upper: float | None = Field(None, description="Ⅰ类上限值")
+    standard_limit_ii_lower: float | None = Field(None, description="Ⅱ类下限值")
+    standard_limit_ii_upper: float | None = Field(None, description="Ⅱ类上限值")
+    standard_limit_iii_lower: float | None = Field(None, description="Ⅲ类下限值")
+    standard_limit_iii_upper: float | None = Field(None, description="Ⅲ类上限值")
+    standard_limit_iv_lower: float | None = Field(None, description="Ⅳ类下限值")
+    standard_limit_iv_upper: float | None = Field(None, description="Ⅳ类上限值")
+    standard_limit_v_lower: float | None = Field(None, description="Ⅴ类下限值")
+    standard_limit_v_upper: float | None = Field(None, description="Ⅴ类上限值")
     is_core: int | None = Field(None, description="是否核心指标")
 
     model_config = ConfigDict(from_attributes=True)
@@ -106,11 +94,16 @@ class GetIndicatorDetailResponse(BaseModel):
     code: str = Field(..., description="指标编码")
     unit: str | None = Field(None, description="单位")
     category: str | None = Field(None, description="分类")
-    standard_limit_i: float | None = Field(None, description="Ⅰ类限值")
-    standard_limit_ii: float | None = Field(None, description="Ⅱ类限值")
-    standard_limit_iii: float | None = Field(None, description="Ⅲ类限值")
-    standard_limit_iv: float | None = Field(None, description="Ⅳ类限值")
-    standard_limit_v: float | None = Field(None, description="Ⅴ类限值")
+    standard_limit_i_lower: float | None = Field(None, description="Ⅰ类下限值")
+    standard_limit_i_upper: float | None = Field(None, description="Ⅰ类上限值")
+    standard_limit_ii_lower: float | None = Field(None, description="Ⅱ类下限值")
+    standard_limit_ii_upper: float | None = Field(None, description="Ⅱ类上限值")
+    standard_limit_iii_lower: float | None = Field(None, description="Ⅲ类下限值")
+    standard_limit_iii_upper: float | None = Field(None, description="Ⅲ类上限值")
+    standard_limit_iv_lower: float | None = Field(None, description="Ⅳ类下限值")
+    standard_limit_iv_upper: float | None = Field(None, description="Ⅳ类上限值")
+    standard_limit_v_lower: float | None = Field(None, description="Ⅴ类下限值")
+    standard_limit_v_upper: float | None = Field(None, description="Ⅴ类上限值")
     is_core: int | None = Field(None, description="是否核心指标")
 
     model_config = ConfigDict(from_attributes=True)

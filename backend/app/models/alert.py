@@ -35,8 +35,8 @@ class AlertEvent(Base):
         comment="处理人ID",
     )
     title = Column[str](String(255), nullable=False, comment="预警标题")
-    alert_level = Column[str](
-        String(50), nullable=False, comment="预警等级_info_warning_critical"
+    alert_level = Column[int](
+        SmallInteger, nullable=False, comment="预警等级：1=info 2=warning 3=critical"
     )
     indicators = Column[list[dict]](JSON, comment="超标指标列表_name_value_limit")
     source_desc = Column[str](Text, comment="溯源描述")
