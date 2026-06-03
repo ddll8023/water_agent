@@ -77,6 +77,10 @@
           重置
         </el-button>
       </div>
+      <el-button type="primary" @click="openManualDialog">
+        <el-icon><EditPen /></el-icon>
+        人工录入
+      </el-button>
     </div>
 
     <el-table
@@ -149,6 +153,102 @@
         @current-change="handlePageChange"
       />
     </div>
+
+    <el-dialog
+      v-model="manualDialogVisible"
+      title="人工采样录入"
+      width="520px"
+      :close-on-click-modal="false"
+      @close="resetManualForm"
+    >
+      <el-form
+        ref="manualFormRef"
+        :model="manualForm"
+        :rules="manualFormRules"
+        label-width="100px"
+        label-position="right"
+      >
+        <el-form-item label="所属水库" prop="reservoir_id">
+          <el-select
+            v-model="manualForm.reservoir_id"
+            placeholder="请选择水库"
+            filterable
+            class="w-full"
+            @change="handleManualReservoirChange"
+          >
+            <el-option
+              v-for="item in reservoirOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="所属站点" prop="station_id">
+          <el-select
+            v-model="manualForm.station_id"
+            placeholder="请选择站点"
+            filterable
+            class="w-full"
+          >
+            <el-option
+              v-for="item in manualStationOptions"
+              :key="item.id"
+              :label="`${item.name}（${item.code}）`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="监测指标" prop="indicator_id">
+          <el-select
+            v-model="manualForm.indicator_id"
+            placeholder="请选择指标"
+            filterable
+            class="w-full"
+          >
+            <el-option
+              v-for="item in indicatorOptions"
+              :key="item.id"
+              :label="`${item.name}（${item.code}）`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="监测值" prop="value">
+          <el-input-number
+            v-model="manualForm.value"
+            :min="-999999"
+            :max="999999"
+            :precision="4"
+            controls-position="right"
+            class="w-full"
+            placeholder="请输入监测值"
+          />
+        </el-form-item>
+        <el-form-item label="监测时间" prop="record_time">
+          <el-date-picker
+            v-model="manualForm.record_time"
+            type="datetime"
+            placeholder="请选择监测时间"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            class="w-full"
+          />
+        </el-form-item>
+        <el-form-item label="数据质量" prop="quality_flag">
+          <el-select v-model="manualForm.quality_flag" class="w-full">
+            <el-option label="正常" :value="1" />
+            <el-option label="可疑" :value="0" />
+            <el-option label="无效" :value="2" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="manualDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="manualSubmitLoading" @click="handleManualSubmit">
+          确 定
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -161,9 +261,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, RefreshLeft } from '@element-plus/icons-vue'
+import { Search, RefreshLeft, EditPen } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getMonitoringRecordsList } from '@/api/monitoring'
+import { getMonitoringRecordsList, submitManualRecord } from '@/api/monitoring'
 import { getReservoirList } from '@/api/reservoir'
 import { getStationList } from '@/api/station'
 import { getIndicatorList } from '@/api/indicator'
@@ -320,4 +420,82 @@ onMounted(async () => {
   ])
   await fetchRecordList()
 })
+
+/* ===== 人工采样录入 ===== */
+
+const manualDialogVisible = ref(false)
+const manualSubmitLoading = ref(false)
+const manualFormRef = ref(null)
+const manualStationOptions = ref([])
+
+const manualForm = reactive({
+  reservoir_id: null,
+  station_id: null,
+  indicator_id: null,
+  value: null,
+  record_time: '',
+  quality_flag: 1
+})
+
+const manualFormRules = {
+  reservoir_id: [{ required: true, message: '请选择水库', trigger: 'change' }],
+  station_id: [{ required: true, message: '请选择站点', trigger: 'change' }],
+  indicator_id: [{ required: true, message: '请选择指标', trigger: 'change' }],
+  value: [{ required: true, message: '请输入监测值', trigger: 'blur' }],
+  record_time: [{ required: true, message: '请选择监测时间', trigger: 'change' }]
+}
+
+const openManualDialog = () => {
+  manualForm.record_time = formatDateTime(new Date())
+  manualDialogVisible.value = true
+}
+
+const handleManualReservoirChange = async (id) => {
+  manualForm.station_id = null
+  manualStationOptions.value = []
+  if (!id) return
+  try {
+    const res = await getStationList({ reservoir_id: id, page: 1, page_size: 9999 })
+    manualStationOptions.value = res.data.lists || []
+  } catch {
+    manualStationOptions.value = []
+  }
+}
+
+const resetManualForm = () => {
+  manualForm.reservoir_id = null
+  manualForm.station_id = null
+  manualForm.indicator_id = null
+  manualForm.value = null
+  manualForm.record_time = ''
+  manualForm.quality_flag = 1
+  manualStationOptions.value = []
+  manualFormRef.value?.clearValidate()
+}
+
+const handleManualSubmit = async () => {
+  if (!manualFormRef.value) return
+  try {
+    await manualFormRef.value.validate()
+  } catch {
+    return
+  }
+  manualSubmitLoading.value = true
+  try {
+    await submitManualRecord({
+      station_id: manualForm.station_id,
+      indicator_id: manualForm.indicator_id,
+      value: manualForm.value,
+      record_time: manualForm.record_time,
+      quality_flag: manualForm.quality_flag
+    })
+    ElMessage.success('录入成功')
+    manualDialogVisible.value = false
+    await fetchRecordList()
+  } catch (e) {
+    ElMessage.error(e.message || '录入失败')
+  } finally {
+    manualSubmitLoading.value = false
+  }
+}
 </script>

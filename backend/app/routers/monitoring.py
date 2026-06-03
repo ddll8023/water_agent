@@ -39,6 +39,27 @@ async def get_monitoring_records_list(
         return error(code=e.code, message=e.message)
 
 
+@router.post(
+    "/manual-input",
+    response_model=ApiResponse[schemas_monitorings.GetMonitoringRecordsListResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="人工采样录入",
+)
+async def create_manual_record(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    request: Annotated[
+        schemas_monitorings.ManualInputRequest,
+        Body(..., description="人工采样录入请求"),
+    ],
+):
+    """人工录入一条监测记录"""
+    try:
+        result = await services_monitoring.create_manual_record(db, request)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
 @router.get(
     "/last",
     response_model=ApiResponse[

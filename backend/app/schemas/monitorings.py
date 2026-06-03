@@ -63,6 +63,16 @@ class GetReservoirLatestIndicatorsRequest(BaseModel):
     reservoir_id: int = Field(description="水库ID")
 
 
+class ManualInputRequest(BaseModel):
+    """人工采样录入请求"""
+
+    station_id: int = Field(..., description="站点ID")
+    indicator_id: int = Field(..., description="指标ID")
+    value: float = Field(..., gt=-999999, lt=999999, description="监测值")
+    record_time: datetime = Field(..., description="监测时间")
+    quality_flag: int | None = Field(1, description="数据质量：0可疑 1正常 2无效")
+
+
 class GetMonitoringRecordsTrendRequest(BaseModel):
     """获取监测记录趋势请求参数"""
 

@@ -67,3 +67,21 @@ export function getMonitoringRecordsTrend(params) {
     params
   })
 }
+
+/**
+ * 人工采样录入
+ * @param {Object} data - 录入数据
+ * @param {number} data.station_id - 站点ID
+ * @param {number} data.indicator_id - 指标ID
+ * @param {number} data.value - 监测值
+ * @param {string} data.record_time - 监测时间
+ * @param {number} [data.quality_flag] - 数据质量：0可疑 1正常 2无效
+ * @returns {Promise} 创建记录
+ */
+export function submitManualRecord(data) {
+  return request({
+    method: 'post',
+    url: '/monitoring/manual-input',
+    data
+  })
+}

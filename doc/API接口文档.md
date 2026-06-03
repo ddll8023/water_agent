@@ -1343,9 +1343,12 @@ Authorization: Bearer <token>
 | category           | string\|null | body   | 否   | 分类：物理 / 化学 / 生物 / 综合       |
 | standard_limit_i_lower | float\|null  | body   | 否   | Ⅰ类下限值
 | standard_limit_i_upper | float\|null  | body   | 否   | Ⅰ类上限值                              |
-| standard_limit_ii  | float\|null  | body   | 否   | Ⅱ类限值                              |
-| standard_limit_iii | float\|null  | body   | 否   | Ⅲ类限值                              |
-| standard_limit_iv  | float\|null  | body   | 否   | Ⅳ类限值                              |
+| standard_limit_ii_lower | float\|null  | body   | 否   | Ⅱ类下限值
+| standard_limit_ii_upper | float\|null  | body   | 否   | Ⅱ类上限值                              |
+| standard_limit_iii_lower | float\|null  | body   | 否   | Ⅲ类下限值
+| standard_limit_iii_upper | float\|null  | body   | 否   | Ⅲ类上限值                              |
+| standard_limit_iv_lower | float\|null  | body   | 否   | Ⅳ类下限值
+| standard_limit_iv_upper | float\|null  | body   | 否   | Ⅳ类上限值                              |
 | standard_limit_v_lower | float\|null  | body   | 否   | Ⅴ类下限值
 | standard_limit_v_upper | float\|null  | body   | 否   | Ⅴ类上限值                              |
 | is_core            | int\|null    | body   | 否   | 是否核心指标：0=否，1=是              |
@@ -1471,9 +1474,12 @@ Authorization: Bearer <token>
 | lists[].category           | string\|null | 分类                     |
 | lists[].standard_limit_i_lower | float\|null  | Ⅰ类下限值
 | lists[].standard_limit_i_upper | float\|null  | Ⅰ类上限值                 |
-| lists[].standard_limit_ii  | float\|null  | Ⅱ类限值                 |
-| lists[].standard_limit_iii | float\|null  | Ⅲ类限值                 |
-| lists[].standard_limit_iv  | float\|null  | Ⅳ类限值                 |
+| lists[].standard_limit_ii_lower | float\|null  | Ⅱ类下限值
+| lists[].standard_limit_ii_upper | float\|null  | Ⅱ类上限值                 |
+| lists[].standard_limit_iii_lower | float\|null  | Ⅲ类下限值
+| lists[].standard_limit_iii_upper | float\|null  | Ⅲ类上限值                 |
+| lists[].standard_limit_iv_lower | float\|null  | Ⅳ类下限值
+| lists[].standard_limit_iv_upper | float\|null  | Ⅳ类上限值                 |
 | lists[].standard_limit_v_lower | float\|null  | Ⅴ类下限值
 | lists[].standard_limit_v_upper | float\|null  | Ⅴ类上限值                 |
 | lists[].is_core            | int\|null    | 是否核心指标：0=否，1=是 |
@@ -1537,11 +1543,16 @@ Authorization: Bearer <token>
 | code               | string       | 指标编码                 |
 | unit               | string\|null | 单位                     |
 | category           | string\|null | 分类                     |
-| standard_limit_i   | float\|null  | Ⅰ类限值                 |
-| standard_limit_ii  | float\|null  | Ⅱ类限值                 |
-| standard_limit_iii | float\|null  | Ⅲ类限值                 |
-| standard_limit_iv  | float\|null  | Ⅳ类限值                 |
-| standard_limit_v   | float\|null  | Ⅴ类限值                 |
+| standard_limit_i_lower | float\|null  | Ⅰ类下限值
+| standard_limit_i_upper | float\|null  | Ⅰ类上限值                 |
+| standard_limit_ii_lower | float\|null  | Ⅱ类下限值
+| standard_limit_ii_upper | float\|null  | Ⅱ类上限值                 |
+| standard_limit_iii_lower | float\|null  | Ⅲ类下限值
+| standard_limit_iii_upper | float\|null  | Ⅲ类上限值                 |
+| standard_limit_iv_lower | float\|null  | Ⅳ类下限值
+| standard_limit_iv_upper | float\|null  | Ⅳ类上限值                 |
+| standard_limit_v_lower | float\|null  | Ⅴ类下限值
+| standard_limit_v_upper | float\|null  | Ⅴ类上限值                 |
 | is_core            | int\|null    | 是否核心指标：0=否，1=是 |
 
 **错误场景**：
@@ -1839,6 +1850,69 @@ Authorization: Bearer <token>
 | lists[].record_time  | datetime | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`       |
 | lists[].value        | float    | 监测值                                        |
 | total                | int      | 总记录数                                      |
+
+---
+
+## 8.4 人工采样录入
+
+- **POST** `/api/monitoring/manual-input`
+- **描述**：监测员/管理员手动录入一条监测记录。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型            | 位置   | 必填 | 说明                                  |
+| ------------- | --------------- | ------ | ---- | ------------------------------------- |
+| Authorization | string          | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| station_id    | int             | body   | 是   | 站点 ID                               |
+| indicator_id  | int             | body   | 是   | 指标 ID                               |
+| value         | float           | body   | 是   | 监测值                                |
+| record_time   | datetime        | body   | 是   | 监测时间，格式 `YYYY-MM-DD HH:MM:SS` |
+| quality_flag  | int\|null      | body   | 否   | 数据质量：0=可疑，1=正常，2=无效，默认1 |
+
+**请求体示例**：
+
+```json
+{
+  "station_id": 1,
+  "indicator_id": 3,
+  "value": 6.82,
+  "record_time": "2026-06-03 10:30:00",
+  "quality_flag": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 19,
+    "reservoir_id": 1,
+    "station_id": 1,
+    "indicator_id": 3,
+    "value": 6.82,
+    "record_time": "2026-06-03 10:30:00"
+  }
+}
+```
+
+| 字段          | 类型     | 说明                                      |
+| ------------- | -------- | ----------------------------------------- |
+| id            | int      | 监测记录 ID                               |
+| reservoir_id  | int      | 水库 ID（从站点关联）                     |
+| station_id    | int      | 站点 ID                                   |
+| indicator_id  | int      | 指标 ID                                   |
+| value         | float    | 监测值                                    |
+| record_time   | datetime | 监测时间，格式 `YYYY-MM-DD HH:MM:SS`  |
+
+**错误场景**：
+
+| 错误码 | 场景                                  |
+| ------ | ------------------------------------- |
+| 1002   | 数据不存在（站点或指标不存在）        |
+| 7001   | 资源已存在（该站点+指标+时间已存在）  |
+| 5001   | 服务器内部错误                        |
 
 ---
 

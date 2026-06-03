@@ -353,6 +353,54 @@ async def get_monitoring_records_trend(
     )
 
 
+async def create_manual_record(
+    db: AsyncSession,
+    request: schemas_monitorings.ManualInputRequest,
+):
+    """人工录入一条监测记录"""
+    station = await db.get(models_station.MonitoringStation, request.station_id)
+    if not station:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "站点不存在")
+
+    indicator = await db.get(models_indicator.Indicator, request.indicator_id)
+    if not indicator:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "指标不存在")
+
+    existing = await db.scalar(
+        select(models_monitoring.MonitoringRecord).where(
+            and_(
+                models_monitoring.MonitoringRecord.station_id == request.station_id,
+                models_monitoring.MonitoringRecord.indicator_id == request.indicator_id,
+                models_monitoring.MonitoringRecord.record_time == request.record_time,
+            )
+        )
+    )
+    if existing:
+        raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该站点+指标+时间已存在记录")
+
+    record = models_monitoring.MonitoringRecord(
+        reservoir_id=station.reservoir_id,
+        station_id=request.station_id,
+        indicator_id=request.indicator_id,
+        value=request.value,
+        data_source="manual",
+        quality_flag=request.quality_flag or 1,
+        record_time=request.record_time,
+    )
+    db.add(record)
+    await commit_or_rollback(db)
+
+    await _cache_to_redis(
+        reservoir_id=station.reservoir_id,
+        indicator_id=request.indicator_id,
+        indicator_name=indicator.name,
+        value=request.value,
+        record_time=request.record_time,
+    )
+
+    return schemas_monitorings.GetMonitoringRecordsListResponse.model_validate(record)
+
+
 """辅助函数"""
 
 
