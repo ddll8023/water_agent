@@ -2751,3 +2751,54 @@ Authorization: Bearer <token>
 | ------ | ------------------------ |
 | 1002   | 数据不存在（规则不存在） |
 | 2003   | 权限不足                 |
+
+---
+
+## 十二、WebSocket 实时预警推送（/ws/alerts）
+
+### 12.1 连接地址
+
+- **WS** `ws://localhost:3443/ws/alerts`
+- **描述**：建立 WebSocket 连接后，后端在检测到新预警时主动推送 JSON 消息。无需认证，客户端保持连接存活即可。
+
+### 消息格式
+
+当预警规则判定触发、创建新预警后，服务端推送以下 JSON：
+
+```json
+{
+  "type": "new_alert",
+  "data": {
+    "id": 6,
+    "reservoir_id": 4,
+    "title": "董铺水库指标告警（氨氮=1.80, 限值=1.0mg/L）",
+    "alert_level": 2,
+    "indicators": [
+      {
+        "name": "氨氮",
+        "value": 1.8,
+        "limit": 1.0,
+        "unit": "mg/L"
+      }
+    ],
+    "status": 0,
+    "detected_at": "2026-06-03T10:30:00"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| type | string | 固定为 `new_alert` |
+| data.id | int | 预警 ID |
+| data.reservoir_id | int | 水库 ID |
+| data.title | string | 预警标题 |
+| data.alert_level | int | 1=info / 2=warning / 3=critical |
+| data.indicators | array | 超标指标列表 |
+| data.status | int | 状态：0=待确认 |
+| data.detected_at | datetime | 检出时间，格式 ISO 8601 |
+
+### 断线重连
+
+- 服务端主动断开：前端 5 秒后自动重连
+- 客户端页面关闭：连接自动断开

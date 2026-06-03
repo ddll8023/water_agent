@@ -115,6 +115,7 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useAlertWebSocket } from '@/composables/useAlertWebSocket'
 import {
   Monitor,
   Setting,
@@ -133,6 +134,8 @@ import {
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+
+useAlertWebSocket()
 
 const isCollapse = ref(false)
 

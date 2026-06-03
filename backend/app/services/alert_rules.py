@@ -13,6 +13,8 @@ from app.schemas import alert_rules as schemas_alert_rules
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
 from app.core.database import commit_or_rollback
+from app.core.ws_manager import manager
+from app.schemas import alerts as schemas_alerts
 
 
 async def create_alert_rule(
@@ -193,6 +195,19 @@ async def evaluate_alert_rules(
         detected_at=record_time,
     )
     db.add(alert)
+    await db.flush()
+    await db.refresh(alert)
+
+    try:
+        alert_data = schemas_alerts.GetAlertDetailResponse.model_validate(alert)
+        await manager.broadcast(
+            {
+                "type": "new_alert",
+                "data": alert_data.model_dump(mode="json"),
+            }
+        )
+    except Exception:
+        pass
     return True
 
 

@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.config import settings
 from app.core.database import engine, Base
+from app.core.ws_manager import manager
 from app.routers import auth as auth_router
 from app.routers import users as users_router
 from app.routers import roles as roles_router
@@ -79,6 +80,17 @@ app.include_router(monitoring_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(alerts_router.router)
 app.include_router(alert_rules_router.router)
+
+
+@app.websocket("/ws/alerts")
+async def alert_websocket(ws: WebSocket):
+    """实时预警推送 WebSocket"""
+    await manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(ws)
 
 
 @app.get("/health")
