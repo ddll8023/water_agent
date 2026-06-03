@@ -16,6 +16,13 @@ class GetAlertListRequest(BaseModel):
     end_time: datetime | None = Field(None, description="检出结束时间")
 
 
+class UpdateAlertRequest(BaseModel):
+    """更新预警请求参数"""
+
+    status: int = Field(description="状态：0=待确认/1=已确认/2=处置中/3=已解决")
+    handler_id: int | None = Field(None, description="处理人ID")
+
+
 class GetAlertListResponse(BaseModel):
     """获取预警列表响应参数"""
 

@@ -7,6 +7,7 @@ from app.schemas import alerts as schemas_alerts
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
 from app.models import user as models_user
+from app.core.database import commit_or_rollback
 
 
 async def get_alert_detail(
@@ -66,3 +67,21 @@ async def get_alert_list(
             total_pages=math.ceil(total / request.page_size),
         ),
     )
+
+
+async def update_alert(
+    db: AsyncSession,
+    alert_id: int,
+    update_alert_request: schemas_alerts.UpdateAlertRequest,
+):
+    """更新预警状态"""
+    alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+
+    if not alert_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
+
+    alert_entity.status = update_alert_request.status
+    alert_entity.handler_id = update_alert_request.handler_id
+
+    await commit_or_rollback(db)
+    return schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)

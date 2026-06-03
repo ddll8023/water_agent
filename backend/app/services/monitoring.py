@@ -46,6 +46,13 @@ async def collect_water_quality_data():
                 return
 
             total_records = 0
+
+            indicator_entity_list = (
+                await db.scalars(select(models_indicator.Indicator))
+            ).all()
+
+            indicator_entity_dict = {item.id: item for item in indicator_entity_list}
+
             for station in station_entity_list:
                 reservoir_id = station.reservoir_id
                 for (
@@ -90,6 +97,8 @@ async def collect_water_quality_data():
                     )
                     db.add(record)
                     total_records += 1
+
+                    # 监测告警
 
                 station.last_data_time = monitor_time
 

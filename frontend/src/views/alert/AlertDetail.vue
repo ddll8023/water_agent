@@ -33,16 +33,19 @@
           <el-button
             :type="alertDetail.status === 0 ? 'warning' : 'default'"
             :disabled="alertDetail.status !== 0"
+            :loading="confirmLoading"
             @click="handleConfirm"
           >确认预警</el-button>
           <el-button
             :type="alertDetail.status === 1 ? 'primary' : 'default'"
             :disabled="alertDetail.status !== 1"
+            :loading="processLoading"
             @click="handleStartProcess"
           >开始处置</el-button>
           <el-button
             :type="alertDetail.status === 2 ? 'success' : 'default'"
             :disabled="alertDetail.status !== 2"
+            :loading="resolveLoading"
             @click="handleResolve"
           >标记解决</el-button>
         </el-button-group>
@@ -218,8 +221,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Place, Clock } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertDetail, updateAlertStatus, submitAlertNote } from '@/api/alert'
+import { getAlertDetail, updateAlert, submitAlertNote } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
+import { useAuthStore } from '@/stores/auth'
 import * as echarts from 'echarts/core'
 import { LineChart, GraphChart } from 'echarts/charts'
 import {
@@ -233,6 +237,7 @@ echarts.use([LineChart, GraphChart, GridComponent, TooltipComponent, TitleCompon
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const alertDetail = reactive({
   id: null,
@@ -266,6 +271,10 @@ const suggestionAdopting = ref(false)
 
 const similarLoading = ref(true)
 const similarEvents = ref([])
+
+const confirmLoading = ref(false)
+const processLoading = ref(false)
+const resolveLoading = ref(false)
 
 const pollutionSources = ref([])
 const noteContent = ref('')
@@ -453,34 +462,61 @@ const loadSimilarData = async () => {
   }
 }
 
+const callUpdateAlert = async (status) => {
+  const id = alertDetail.id
+  if (!id) {
+    ElMessage.error('预警ID无效')
+    return
+  }
+  const data = { status, handler_id: authStore.userInfo?.user_id || null }
+  const res = await updateAlert(id, data)
+  if (res && res.data) {
+    Object.assign(alertDetail, res.data)
+  }
+}
+
 const handleConfirm = async () => {
   try {
     await ElMessageBox.confirm('确认该预警信息无误？', '确认预警', { type: 'warning' })
-    alertDetail.status = 1
+    confirmLoading.value = true
+    await callUpdateAlert(1)
     ElMessage.success('预警已确认')
-  } catch {
-    // cancelled
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '确认预警失败')
+    }
+  } finally {
+    confirmLoading.value = false
   }
 }
 
 const handleStartProcess = async () => {
   try {
     await ElMessageBox.confirm('开始处置该预警？', '开始处置', { type: 'info' })
-    alertDetail.status = 2
+    processLoading.value = true
+    await callUpdateAlert(2)
     ElMessage.success('已开始处置')
-  } catch {
-    // cancelled
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '开始处置失败')
+    }
+  } finally {
+    processLoading.value = false
   }
 }
 
 const handleResolve = async () => {
   try {
     await ElMessageBox.confirm('确认该预警已解决？', '标记解决', { type: 'success' })
-    alertDetail.status = 3
-    alertDetail.resolved_at = new Date().toISOString()
+    resolveLoading.value = true
+    await callUpdateAlert(3)
     ElMessage.success('预警已标记为已解决')
-  } catch {
-    // cancelled
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '标记解决失败')
+    }
+  } finally {
+    resolveLoading.value = false
   }
 }
 

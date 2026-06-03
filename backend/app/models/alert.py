@@ -1,3 +1,4 @@
+from calendar import c
 from typing import Any
 
 
@@ -28,7 +29,10 @@ class AlertEvent(Base):
         comment="水库ID",
     )
     handler_id = Column[int](
-        Integer, ForeignKey("user.id"), index=True, comment="处理人ID"
+        Integer,
+        ForeignKey("user.id"),
+        index=True,
+        comment="处理人ID",
     )
     title = Column[str](String(255), nullable=False, comment="预警标题")
     alert_level = Column[str](
@@ -46,6 +50,12 @@ class AlertEvent(Base):
     )
     detected_at = Column[datetime](DateTime, nullable=False, comment="检出时间")
     resolved_at = Column[datetime](DateTime, comment="解决时间")
+    updated_at = Column[datetime](
+        DateTime,
+        default=datetime.now,
+        onupdate=datetime.now,
+        comment="更新时间",
+    )
 
     __table_args__ = (
         Index("idx_alert_reservoir_status", reservoir_id, status),

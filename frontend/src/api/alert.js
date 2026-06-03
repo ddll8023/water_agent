@@ -35,14 +35,16 @@ export function getAlertDetail(id) {
 /**
  * 更新预警状态
  * @param {number} id - 预警 ID
- * @param {number} status - 目标状态：1=已确认 / 2=处置中 / 3=已解决
+ * @param {Object} data - 更新数据
+ * @param {number} data.status - 目标状态：1=已确认 / 2=处置中 / 3=已解决
+ * @param {number} [data.handler_id] - 处理人 ID
  * @returns {Promise}
  */
-export function updateAlertStatus(id, status) {
+export function updateAlert(id, data) {
   return request({
     method: 'put',
-    url: `/v1/alerts/${id}/status`,
-    data: { status }
+    url: `/v1/alerts/${id}`,
+    data
   })
 }
 

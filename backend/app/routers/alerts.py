@@ -1,5 +1,5 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Path, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -44,6 +44,27 @@ async def get_alert_list(
     """分页查询预警列表，支持按水库、等级、状态、检出时间范围筛选"""
     try:
         result = await services_alerts.get_alert_list(db, request)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
+@router.put(
+    "/{id}",
+    response_model=ApiResponse[schemas_alerts.GetAlertDetailResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="更新预警状态",
+)
+async def update_alert(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(description="预警ID")],
+    request: Annotated[
+        schemas_alerts.UpdateAlertRequest, Body(description="更新预警请求参数")
+    ],
+):
+    """更新预警状态"""
+    try:
+        result = await services_alerts.update_alert(db, id, request)
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)

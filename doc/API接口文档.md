@@ -2166,3 +2166,73 @@ Authorization: Bearer <token>
 | 错误码 | 场景                         |
 | ------ | ---------------------------- |
 | 1002   | 数据不存在（预警记录不存在） |
+
+### 10.3 更新预警状态
+
+- **PUT** `/api/v1/alerts/{id}`
+- **描述**：更新预警状态，可同时指定处理人。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型      | 位置   | 必填 | 说明                                              |
+| ------------- | --------- | ------ | ---- | ------------------------------------------------- |
+| Authorization | string    | header | 是   | Bearer Token，格式 `Bearer <token>`             |
+| id            | int       | path   | 是   | 预警 ID                                           |
+| status        | int       | body   | 是   | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决 |
+| handler_id    | int\|null | body   | 否   | 处理人 ID                                         |
+
+**请求体示例**：
+
+```json
+{
+  "status": 1,
+  "handler_id": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "reservoir_id": 1,
+    "handler_id": 1,
+    "title": "梅山水库总磷超标预警",
+    "alert_level": "critical",
+    "indicators": [
+      {
+        "name": "总磷",
+        "value": 0.35,
+        "limit": 0.2
+      }
+    ],
+    "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
+    "suggestion": "立即排查上游污染源，启动应急监测方案",
+    "status": "1",
+    "detected_at": "2026-06-02 08:30:00",
+    "resolved_at": null
+  }
+}
+```
+
+| 字段          | 类型            | 说明                                              |
+| ------------- | --------------- | ------------------------------------------------- |
+| id            | int             | 预警 ID                                           |
+| reservoir_id  | int             | 水库 ID                                           |
+| handler_id    | int\|null       | 处理人 ID                                         |
+| title         | string          | 预警标题                                          |
+| alert_level   | string          | 预警等级：info / warning / critical               |
+| indicators    | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
+| source_desc   | string\|null    | 溯源描述                                          |
+| suggestion    | string\|null    | 处置建议                                          |
+| status        | int             | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决 |
+| detected_at   | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+| resolved_at   | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（预警记录不存在） |
