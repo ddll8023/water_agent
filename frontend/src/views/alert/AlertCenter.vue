@@ -88,6 +88,13 @@
       <span class="text-sm text-gray-500">
         共 <strong class="text-gray-700">{{ pagination.total }}</strong> 条告警记录
       </span>
+      <el-button
+        type="primary"
+        size="small"
+        :disabled="selectedIds.length === 0"
+        :loading="batchLoading"
+        @click="handleBatchRead"
+      >批量标记已读</el-button>
     </div>
 
     <el-card shadow="never">
@@ -98,7 +105,9 @@
         stripe
         highlight-current-row
         class="w-full"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column label="告警标题" min-width="200">
           <template #default="{ row }">
             <el-link type="primary" :underline="false" @click="handleViewDetail(row)">
@@ -186,10 +195,10 @@
  */
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, RefreshLeft } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertList } from '@/api/alert'
+import { getAlertList, getUnreadAlertCount, batchReadAlerts } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
 
 const loading = ref(false)
@@ -206,6 +215,8 @@ const alertList = ref([])
 const reservoirOptions = ref([])
 
 const unreadCount = ref(0)
+const selectedIds = ref([])
+const batchLoading = ref(false)
 
 const pagination = reactive({
   page: 1,
@@ -257,12 +268,14 @@ const fetchReservoirOptions = async () => {
   }
 }
 
+const toUndefined = (val) => (val === null || val === undefined || val === '') ? undefined : val
+
 const buildParams = () => ({
   page: pagination.page,
   page_size: pagination.page_size,
-  reservoir_id: filter.reservoir_id || undefined,
-  alert_level: filter.alert_level || undefined,
-  status: filter.status || undefined,
+  reservoir_id: toUndefined(filter.reservoir_id),
+  alert_level: toUndefined(filter.alert_level),
+  status: toUndefined(filter.status),
   start_time: timeRange.value?.[0] || undefined,
   end_time: timeRange.value?.[1] || undefined
 })
@@ -322,8 +335,45 @@ const handleViewDetail = (row) => {
   router.push(`/alerts/${row.id}`)
 }
 
+const handleSelectionChange = (rows) => {
+  selectedIds.value = rows.map((r) => r.id)
+}
+
+const handleBatchRead = async () => {
+  if (!selectedIds.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      `确认将选中的 ${selectedIds.value.length} 条预警标记为已读？`,
+      '批量已读',
+      { type: 'info' }
+    )
+    batchLoading.value = true
+    await batchReadAlerts(selectedIds.value)
+    ElMessage.success(`已成功将 ${selectedIds.value.length} 条预警标记为已读`)
+    selectedIds.value = []
+    await fetchAlertList()
+    await fetchUnreadCount()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '操作失败')
+    }
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const fetchUnreadCount = async () => {
+  try {
+    const res = await getUnreadAlertCount()
+    unreadCount.value = res.data.count
+  } catch {
+    // 静默失败
+  }
+}
+
 onMounted(async () => {
   await fetchReservoirOptions()
   await fetchAlertList()
+  await fetchUnreadCount()
 })
 </script>

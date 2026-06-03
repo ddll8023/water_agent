@@ -172,7 +172,28 @@
     <el-card shadow="never" class="mb-4">
       <template #header>
         <span class="font-semibold text-gray-800">处置备注</span>
+        <el-tag v-if="sortedNotes.length" size="small" type="info" class="ml-2">{{ sortedNotes.length }}条</el-tag>
       </template>
+
+      <div v-if="sortedNotes.length" class="space-y-4 mb-4">
+        <div
+          v-for="note in sortedNotes"
+          :key="note.id"
+          class="flex gap-3 p-3 bg-gray-50 rounded-lg"
+        >
+          <el-avatar :size="32" class="!bg-blue-100 !text-blue-600 flex-shrink-0">
+            <el-icon><User /></el-icon>
+          </el-avatar>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-medium text-gray-700">用户 {{ note.user_id || '-' }}</span>
+              <span class="text-xs text-gray-400">{{ formatDateTime(note.created_at) }}</span>
+            </div>
+            <div class="text-sm text-gray-600 whitespace-pre-wrap">{{ note.content }}</div>
+          </div>
+        </div>
+      </div>
+
       <el-input
         v-model="noteContent"
         type="textarea"
@@ -219,7 +240,7 @@
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Place, Clock } from '@element-plus/icons-vue'
+import { Place, Clock, User } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
 import { getAlertDetail, updateAlert, submitAlertNote } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
@@ -251,7 +272,8 @@ const alertDetail = reactive({
   status: null,
   detected_at: null,
   resolved_at: null,
-  created_at: null
+  created_at: null,
+  notes: []
 })
 
 const reservoirName = ref('')
@@ -315,6 +337,11 @@ const durationText = computed(() => {
   const minutes = Math.floor((diff % 3600000) / 60000)
   if (hours > 0) return `${hours}小时${minutes}分钟`
   return `${minutes}分钟`
+})
+
+const sortedNotes = computed(() => {
+  const list = alertDetail.notes || []
+  return [...list].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
 })
 
 const indicators = computed(() => {
@@ -538,11 +565,15 @@ const handleSubmitNote = async () => {
   }
   noteSubmitting.value = true
   try {
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const res = await submitAlertNote(alertDetail.id, noteContent.value.trim())
+    if (res?.data) {
+      if (!alertDetail.notes) alertDetail.notes = []
+      alertDetail.notes.push(res.data)
+    }
     ElMessage.success('备注已提交')
     noteContent.value = ''
-  } catch {
-    ElMessage.error('提交失败')
+  } catch (e) {
+    ElMessage.error(e.message || '提交备注失败')
   } finally {
     noteSubmitting.value = false
   }

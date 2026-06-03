@@ -41,6 +41,7 @@ class AlertEvent(Base):
     indicators = Column[list[dict]](JSON, comment="超标指标列表_name_value_limit")
     source_desc = Column[str](Text, comment="溯源描述")
     suggestion = Column[str](Text, comment="处置建议")
+    notes = Column[list](JSON, default=list, comment="处置备注列表_id_user_id_content_created_at")
     status = Column[int](
         SmallInteger,
         nullable=False,

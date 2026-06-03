@@ -61,3 +61,27 @@ export function submitAlertNote(id, content) {
     data: { content }
   })
 }
+
+/**
+ * 获取未读预警数
+ * @returns {Promise} { count }
+ */
+export function getUnreadAlertCount() {
+  return request({
+    method: 'get',
+    url: '/v1/alerts/unread-count'
+  })
+}
+
+/**
+ * 批量标记已读
+ * @param {number[]} ids - 预警 ID 列表
+ * @returns {Promise}
+ */
+export function batchReadAlerts(ids) {
+  return request({
+    method: 'put',
+    url: '/v1/alerts/batch-read',
+    data: { ids }
+  })
+}

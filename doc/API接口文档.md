@@ -2029,14 +2029,14 @@ Authorization: Bearer <token>
 | page_size     | int             | query  | 否   | 每页记录数，默认 20，最大 100                     |
 | reservoir_id  | int\|null       | query  | 否   | 水库 ID 筛选                                      |
 | alert_level   | string\|null    | query  | 否   | 预警等级：info / warning / critical               |
-| status        | string\|null    | query  | 否   | 状态：new / confirmed / processing / resolved     |
+| status        | int\|null       | query  | 否   | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决     |
 | start_time    | datetime\|null  | query  | 否   | 检出开始时间，格式 `YYYY-MM-DD HH:MM:SS`      |
 | end_time      | datetime\|null  | query  | 否   | 检出结束时间，格式 `YYYY-MM-DD HH:MM:SS`      |
 
 **请求示例**：
 
 ```
-GET /api/v1/alerts?page=1&page_size=20&alert_level=critical&status=new
+GET /api/v1/alerts?page=1&page_size=20&alert_level=critical&status=0
 Authorization: Bearer <token>
 ```
 
@@ -2061,7 +2061,7 @@ Authorization: Bearer <token>
             "limit": 0.2
           }
         ],
-        "status": "new",
+        "status": 0,
         "detected_at": "2026-06-02 08:30:00",
         "resolved_at": null
       }
@@ -2084,7 +2084,7 @@ Authorization: Bearer <token>
 | lists[].title          | string          | 预警标题                                          |
 | lists[].alert_level    | string          | 预警等级：info / warning / critical               |
 | lists[].indicators     | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
-| lists[].status         | string          | 状态：new / confirmed / processing / resolved     |
+| lists[].status         | int             | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决     |
 | lists[].detected_at    | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | lists[].resolved_at    | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | pagination.page        | int             | 当前页码                                          |
@@ -2138,7 +2138,7 @@ Authorization: Bearer <token>
     ],
     "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
     "suggestion": "立即排查上游污染源，启动应急监测方案",
-    "status": "new",
+    "status": 0,
     "detected_at": "2026-06-02 08:30:00",
     "resolved_at": null,
     "created_at": "2026-06-02 08:30:00"
@@ -2156,7 +2156,7 @@ Authorization: Bearer <token>
 | indicators    | array\|null     | 超标指标列表 `[{name, value, limit}]`           |
 | source_desc   | string\|null    | 溯源描述                                          |
 | suggestion    | string\|null    | 处置建议                                          |
-| status        | string          | 状态：new / confirmed / processing / resolved     |
+| status        | int             | 状态：0=待确认 / 1=已确认 / 2=处置中 / 3=已解决 |
 | detected_at   | datetime        | 检出时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | resolved_at   | datetime\|null  | 解决时间，格式 `YYYY-MM-DD HH:MM:SS`          |
 | created_at    | datetime        | 创建时间，格式 `YYYY-MM-DD HH:MM:SS`          |
@@ -2210,7 +2210,7 @@ Authorization: Bearer <token>
     ],
     "source_desc": "三峡大坝上游自动监测站连续 3 次监测数据超标",
     "suggestion": "立即排查上游污染源，启动应急监测方案",
-    "status": "1",
+    "status": 1,
     "detected_at": "2026-06-02 08:30:00",
     "resolved_at": null
   }
@@ -2236,3 +2236,131 @@ Authorization: Bearer <token>
 | 错误码 | 场景                         |
 | ------ | ---------------------------- |
 | 1002   | 数据不存在（预警记录不存在） |
+
+### 10.4 添加处置备注
+
+- **POST** `/api/v1/alerts/{id}/notes`
+- **描述**：为指定预警添加处置备注。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 预警 ID                               |
+| content       | string | body   | 是   | 备注内容                              |
+
+**请求体示例**：
+
+```json
+{
+  "content": "已通知现场人员复核采样点"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "user_id": 1,
+    "content": "已通知现场人员复核采样点",
+    "created_at": "2026-06-03 10:30:00"
+  }
+}
+```
+
+| 字段       | 类型            | 说明     |
+| ---------- | --------------- | -------- |
+| id         | int             | 备注 ID  |
+| user_id    | int\|null       | 创建人 ID |
+| content    | string          | 备注内容 |
+| created_at | datetime        | 创建时间 |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（预警记录不存在） |
+
+### 10.5 获取未读预警数
+
+- **GET** `/api/v1/alerts/unread-count`
+- **描述**：获取当前状态为待确认（status=0）的预警总数。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+
+**请求示例**：
+
+```
+GET /api/v1/alerts/unread-count
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "count": 3
+  }
+}
+```
+
+| 字段  | 类型 | 说明                 |
+| ----- | ---- | -------------------- |
+| count | int  | 未读预警数（status=0） |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 5001   | 服务器内部错误         |
+
+### 10.6 批量标记已读
+
+- **PUT** `/api/v1/alerts/batch-read`
+- **描述**：批量将指定预警的状态更新为已确认（status=1）。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型        | 位置   | 必填 | 说明                                  |
+| ------------- | ----------- | ------ | ---- | ------------------------------------- |
+| Authorization | string      | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| ids           | array[int]  | body   | 是   | 预警 ID 列表                          |
+| handler_id    | int\|null   | body   | 否   | 处理人 ID                             |
+
+**请求体示例**：
+
+```json
+{
+  "ids": [1, 2, 3],
+  "handler_id": 1
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                   |
+| ------ | ---------------------- |
+| 5001   | 服务器内部错误         |

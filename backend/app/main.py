@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
     # ---- startup ----
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await init_db(conn)
+        # await init_db(conn)
     logger.info("数据库表创建完成")
 
     # 启动后立即执行一次采集

@@ -1,4 +1,5 @@
 import math
+from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -85,3 +86,59 @@ async def update_alert(
 
     await commit_or_rollback(db)
     return schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)
+
+
+async def add_alert_note(
+    db: AsyncSession,
+    alert_id: int,
+    user_id: int,
+    request: schemas_alerts.AddAlertNoteRequest,
+):
+    """添加处置备注"""
+    alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+    if not alert_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
+
+    current_notes = list(alert_entity.notes or [])
+    new_id = max((n.get("id", 0) for n in current_notes), default=0) + 1
+    now = datetime.now()
+
+    new_note = {
+        "id": new_id,
+        "user_id": user_id,
+        "content": request.content,
+        "created_at": now.isoformat(),
+    }
+    current_notes.append(new_note)
+    alert_entity.notes = current_notes
+
+    await commit_or_rollback(db)
+    return schemas_alerts.AlertNoteResponse(**new_note)
+
+
+async def get_unread_alert_count(db: AsyncSession):
+    """获取未读预警数"""
+    count = await db.scalar(
+        select(func.count(models_alert.AlertEvent.id)).where(
+            models_alert.AlertEvent.status == 0
+        )
+    )
+    return schemas_alerts.GetUnreadCountResponse(count=count or 0)
+
+
+async def batch_read_alerts(
+    db: AsyncSession, request: schemas_alerts.BatchReadAlertsRequest
+):
+    """批量标记已读"""
+    stmt = select(models_alert.AlertEvent).where(
+        models_alert.AlertEvent.id.in_(request.ids)
+    )
+    alert_entities = (await db.execute(stmt)).scalars().all()
+
+    for entity in alert_entities:
+        entity.status = 1
+        if request.handler_id is not None:
+            entity.handler_id = request.handler_id
+
+    await commit_or_rollback(db)
+    return True
