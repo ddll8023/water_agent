@@ -1,28 +1,31 @@
-"""监测数据定时采集服务"""
+"""监测数据定时采集与查询服务"""
 
+import json
+import math
 import random
 import httpx
-from datetime import datetime
+from datetime import datetime, timedelta
+
 from sqlalchemy import select, and_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import commit_or_rollback, get_background_db_session
+from app.core.redis import redis_client
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
 from app.models import indicator as models_indicator
 from app.constants import monitoring as constants_monitoring
 from app.utils.logger_config import setup_logger
 from app.schemas import monitorings as schemas_monitorings
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.common import PaginationInfo, PaginatedResponse
-import math
+from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
-from app.schemas.common import ErrorCode
 from app.services.alert_rules import evaluate_alert_rules
 
 logger = setup_logger(__name__)
 
 
 async def collect_water_quality_data():
-    """定时采集水质数据：遍历所有在线站点，调用 API 采集并入库"""
+    """定时采集水质数据：遍历所有在线站点，调用 API 采集并入库，同时写入 Redis 缓存"""
     logger.info("开始执行定时采集任务")
     real_record = await _fetch_real_data()
     if not real_record:
@@ -47,6 +50,7 @@ async def collect_water_quality_data():
                 return
 
             total_records = 0
+            cached_records: list[dict] = []
 
             indicator_entity_list = (
                 await db.scalars(select(models_indicator.Indicator))
@@ -99,6 +103,19 @@ async def collect_water_quality_data():
                     db.add(record)
                     total_records += 1
 
+                    indicator_entity = indicator_entity_dict.get(indicator_id)
+                    cached_records.append(
+                        dict(
+                            reservoir_id=reservoir_id,
+                            indicator_id=indicator_id,
+                            indicator_name=(
+                                indicator_entity.name if indicator_entity else ""
+                            ),
+                            value=value,
+                            record_time=monitor_time,
+                        )
+                    )
+
                     await evaluate_alert_rules(
                         db,
                         indicator_id=indicator_id,
@@ -111,58 +128,53 @@ async def collect_water_quality_data():
                 station.last_data_time = monitor_time
 
             await commit_or_rollback(db)
-            logger.info(f"成功采集 {total_records} 条记录")
+            logger.info(f"成功采集 {total_records} 条记录，开始写入 Redis 缓存")
+
+            for rec in cached_records:
+                await _cache_to_redis(**rec)
+
+            logger.info(f"Redis 缓存写入完成，共 {len(cached_records)} 条")
         except Exception as e:
             logger.error(f"定时采集失败: {e}")
 
 
 async def get_monitoring_records_list(
     db: AsyncSession,
-    get_monitoring_records_list_request: schemas_monitorings.GetMonitoringRecordsListRequest,
+    request: schemas_monitorings.GetMonitoringRecordsListRequest,
 ):
     """获取监测记录列表"""
-
     stmt = select(models_monitoring.MonitoringRecord)
-    if get_monitoring_records_list_request.reservoir_id is not None:
+    if request.reservoir_id is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.reservoir_id
-            == get_monitoring_records_list_request.reservoir_id
+            models_monitoring.MonitoringRecord.reservoir_id == request.reservoir_id
         )
-    if get_monitoring_records_list_request.station_id is not None:
+    if request.station_id is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.station_id
-            == get_monitoring_records_list_request.station_id
+            models_monitoring.MonitoringRecord.station_id == request.station_id
         )
-    if get_monitoring_records_list_request.indicator_id is not None:
+    if request.indicator_id is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.indicator_id
-            == get_monitoring_records_list_request.indicator_id
+            models_monitoring.MonitoringRecord.indicator_id == request.indicator_id
         )
-    if get_monitoring_records_list_request.start_time is not None:
+    if request.start_time is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.record_time
-            >= get_monitoring_records_list_request.start_time
+            models_monitoring.MonitoringRecord.record_time >= request.start_time
         )
-    if get_monitoring_records_list_request.end_time is not None:
+    if request.end_time is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.record_time
-            <= get_monitoring_records_list_request.end_time
+            models_monitoring.MonitoringRecord.record_time <= request.end_time
         )
-    if get_monitoring_records_list_request.quality_flag is not None:
+    if request.quality_flag is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.quality_flag
-            == get_monitoring_records_list_request.quality_flag
+            models_monitoring.MonitoringRecord.quality_flag == request.quality_flag
         )
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
     monitoring_records_entity_list = (
         await db.scalars(
             stmt.order_by(models_monitoring.MonitoringRecord.record_time.desc())
-            .offset(
-                (get_monitoring_records_list_request.page - 1)
-                * get_monitoring_records_list_request.page_size
-            )
-            .limit(get_monitoring_records_list_request.page_size)
+            .offset((request.page - 1) * request.page_size)
+            .limit(request.page_size)
         )
     ).all()
 
@@ -172,12 +184,10 @@ async def get_monitoring_records_list(
             for entity in monitoring_records_entity_list
         ],
         pagination=PaginationInfo(
-            page=get_monitoring_records_list_request.page,
-            page_size=get_monitoring_records_list_request.page_size,
+            page=request.page,
+            page_size=request.page_size,
             total=total,
-            total_pages=math.ceil(
-                total / get_monitoring_records_list_request.page_size
-            ),
+            total_pages=math.ceil(total / request.page_size) if total else 0,
         ),
     )
 
@@ -186,62 +196,108 @@ async def get_reservoir_latest_indicators(
     db: AsyncSession,
     request: schemas_monitorings.GetReservoirLatestIndicatorsRequest,
 ):
-    """获取水库各指标最新监测值"""
+    """获取水库各指标最新监测值（优先 Redis，回退 MySQL）"""
     reservoir_id = request.reservoir_id
 
-    latest_time_subq = (
-        select(
-            models_monitoring.MonitoringRecord.indicator_id,
-            func.max(models_monitoring.MonitoringRecord.record_time).label("max_time"),
+    core_rows = (
+        await db.execute(
+            select(
+                models_indicator.Indicator.id,
+                models_indicator.Indicator.name,
+            ).where(models_indicator.Indicator.is_core == 1)
         )
-        .where(
-            models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
-        )
-        .group_by(models_monitoring.MonitoringRecord.indicator_id)
-        .subquery()
-    )
-
-    stmt = (
-        select(
-            models_monitoring.MonitoringRecord,
-            models_indicator.Indicator.name,
-        )
-        .join(
-            latest_time_subq,
-            and_(
-                models_monitoring.MonitoringRecord.indicator_id
-                == latest_time_subq.c.indicator_id,
-                models_monitoring.MonitoringRecord.record_time
-                == latest_time_subq.c.max_time,
-            ),
-        )
-        .join(
-            models_indicator.Indicator,
-            models_monitoring.MonitoringRecord.indicator_id
-            == models_indicator.Indicator.id,
-        )
-        .where(
-            models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
-        )
-    )
-
-    rows = (await db.execute(stmt)).all()
-
-    if not rows:
-        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "该水库暂无监测数据")
+    ).all()
 
     records = []
-    for record_entity, indicator_name in rows:
-        records.append(
-            schemas_monitorings.IndicatorLatestValueItem(
-                indicator_id=record_entity.indicator_id,
-                indicator_name=indicator_name,
-                value=record_entity.value,
-                quality_flag=record_entity.quality_flag,
-                record_time=record_entity.record_time,
+    fallback_indicator_ids = []
+
+    for indicator_id, indicator_name in core_rows:
+        key = f"monitoring:last:{reservoir_id}:{indicator_id}"
+        try:
+            raw = await redis_client.get(key)
+        except Exception:
+            raw = None
+
+        if raw:
+            try:
+                data = (
+                    json.loads(raw)
+                    if isinstance(raw, str)
+                    else json.loads(raw.decode())
+                )
+                records.append(
+                    schemas_monitorings.IndicatorLatestValueItem(
+                        indicator_id=data["indicator_id"],
+                        indicator_name=data["indicator_name"],
+                        value=data["value"],
+                        quality_flag=data.get("quality_flag", 1),
+                        record_time=datetime.fromisoformat(data["record_time"]),
+                    )
+                )
+                continue
+            except Exception:
+                pass
+
+        fallback_indicator_ids.append(indicator_id)
+
+    if fallback_indicator_ids:
+        latest_time_subq = (
+            select(
+                models_monitoring.MonitoringRecord.indicator_id,
+                func.max(models_monitoring.MonitoringRecord.record_time).label(
+                    "max_time"
+                ),
+            )
+            .where(
+                models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
+                models_monitoring.MonitoringRecord.indicator_id.in_(
+                    fallback_indicator_ids
+                ),
+            )
+            .group_by(models_monitoring.MonitoringRecord.indicator_id)
+            .subquery()
+        )
+
+        stmt = (
+            select(
+                models_monitoring.MonitoringRecord,
+                models_indicator.Indicator.name,
+            )
+            .join(
+                latest_time_subq,
+                and_(
+                    models_monitoring.MonitoringRecord.indicator_id
+                    == latest_time_subq.c.indicator_id,
+                    models_monitoring.MonitoringRecord.record_time
+                    == latest_time_subq.c.max_time,
+                ),
+            )
+            .join(
+                models_indicator.Indicator,
+                models_monitoring.MonitoringRecord.indicator_id
+                == models_indicator.Indicator.id,
+            )
+            .where(
+                models_monitoring.MonitoringRecord.reservoir_id == reservoir_id,
             )
         )
 
+        rows = (await db.execute(stmt)).all()
+        for record_entity, indicator_name in rows:
+            records.append(
+                schemas_monitorings.IndicatorLatestValueItem(
+                    indicator_id=record_entity.indicator_id,
+                    indicator_name=indicator_name,
+                    value=record_entity.value,
+                    quality_flag=record_entity.quality_flag,
+                    record_time=record_entity.record_time,
+                )
+            )
+
+    if not records:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "该水库暂无监测数据")
+
+    records.sort(key=lambda x: x.indicator_id)
     return schemas_monitorings.GetReservoirLatestIndicatorsResponse(
         reservoir_id=reservoir_id,
         records=records,
@@ -250,26 +306,36 @@ async def get_reservoir_latest_indicators(
 
 async def get_monitoring_records_trend(
     db: AsyncSession,
-    get_monitoring_records_trend_request: schemas_monitorings.GetMonitoringRecordsTrendRequest,
+    request: schemas_monitorings.GetMonitoringRecordsTrendRequest,
 ):
-    """获取监测记录趋势"""
+    """获取监测记录趋势：24h 内走 Redis，超范围走 MySQL"""
+    now = datetime.now()
+    start = request.start_time or (now - timedelta(hours=24))
+    end = request.end_time or now
+    cutoff_24h = now - timedelta(hours=24)
+
+    if start >= cutoff_24h:
+        items = await _query_trend_from_redis(
+            request.reservoir_id, request.indicator_id, start, end
+        )
+        if items is not None:
+            return schemas_monitorings.GetMonitoringRecordsTrendResponse(
+                lists=items, total=len(items)
+            )
+
     stmt = select(models_monitoring.MonitoringRecord).where(
         and_(
-            models_monitoring.MonitoringRecord.reservoir_id
-            == get_monitoring_records_trend_request.reservoir_id,
-            models_monitoring.MonitoringRecord.indicator_id
-            == get_monitoring_records_trend_request.indicator_id,
+            models_monitoring.MonitoringRecord.reservoir_id == request.reservoir_id,
+            models_monitoring.MonitoringRecord.indicator_id == request.indicator_id,
         )
     )
-    if get_monitoring_records_trend_request.start_time is not None:
+    if request.start_time is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.record_time
-            >= get_monitoring_records_trend_request.start_time
+            models_monitoring.MonitoringRecord.record_time >= request.start_time
         )
-    if get_monitoring_records_trend_request.end_time is not None:
+    if request.end_time is not None:
         stmt = stmt.where(
-            models_monitoring.MonitoringRecord.record_time
-            <= get_monitoring_records_trend_request.end_time
+            models_monitoring.MonitoringRecord.record_time <= request.end_time
         )
     monitoring_records_entity_list = (
         await db.scalars(
@@ -285,6 +351,91 @@ async def get_monitoring_records_trend(
         ],
         total=len(monitoring_records_entity_list),
     )
+
+
+"""辅助函数"""
+
+
+async def _cache_to_redis(
+    reservoir_id: int,
+    indicator_id: int,
+    indicator_name: str,
+    value: float,
+    record_time: datetime,
+):
+    """采集一条数据后同步写入 Redis 趋势 ZSET 和最新值 KEY"""
+    now = datetime.now()
+    ts = record_time.timestamp()
+    member = json.dumps(
+        {"value": value, "record_time": record_time.isoformat(), "quality_flag": 1},
+        ensure_ascii=False,
+    )
+
+    key_trend = f"monitoring:trend:{reservoir_id}:{indicator_id}"
+    key_last = f"monitoring:last:{reservoir_id}:{indicator_id}"
+
+    try:
+        await redis_client.zadd(key_trend, {member: ts})
+        await redis_client.zremrangebyscore(
+            key_trend, "-inf", (now - timedelta(hours=24)).timestamp()
+        )
+        await redis_client.expire(key_trend, 86400)
+
+        last_member = json.dumps(
+            {
+                "value": value,
+                "record_time": record_time.isoformat(),
+                "quality_flag": 1,
+                "indicator_id": indicator_id,
+                "indicator_name": indicator_name,
+            },
+            ensure_ascii=False,
+        )
+        await redis_client.set(key_last, last_member, ex=86400)
+    except Exception as e:
+        logger.error(f"Redis 缓存写入失败: {e}")
+
+
+async def _query_trend_from_redis(
+    reservoir_id: int,
+    indicator_id: int,
+    start: datetime,
+    end: datetime,
+):
+    """从 Redis 查询时间段内的趋势数据，失败返回 None"""
+    key = f"monitoring:trend:{reservoir_id}:{indicator_id}"
+    try:
+        data = await redis_client.zrangebyscore(
+            key, start.timestamp(), end.timestamp(), withscores=True
+        )
+    except Exception:
+        logger.error("Redis 趋势查询失败，回退 MySQL")
+        return None
+
+    if not data:
+        return None
+
+    items = []
+    for member, _ in data:
+        try:
+            parsed = (
+                json.loads(member)
+                if isinstance(member, str)
+                else json.loads(member.decode())
+            )
+            items.append(
+                schemas_monitorings.GetMonitoringRecordsTrendResponseItem(
+                    reservoir_id=reservoir_id,
+                    indicator_id=indicator_id,
+                    record_time=datetime.fromisoformat(parsed["record_time"]),
+                    value=parsed["value"],
+                )
+            )
+        except Exception:
+            continue
+
+    items.sort(key=lambda x: x.record_time, reverse=True)
+    return items
 
 
 async def _fetch_real_data():
