@@ -8,18 +8,26 @@
     <!-- 筛选栏 -->
     <section class="bg-white rounded-lg shadow-sm p-4 mb-4 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <el-select disabled placeholder="文档类型" class="w-32">
+        <el-select v-model="filters.docType" placeholder="文档类型" clearable class="w-32">
           <el-option label="全部" value="" />
+          <el-option label="标准规范" :value="0" />
+          <el-option label="历史案例" :value="1" />
+          <el-option label="处置预案" :value="2" />
+          <el-option label="其他" :value="3" />
         </el-select>
-        <el-select disabled placeholder="处理状态" class="w-28">
+        <el-select v-model="filters.status" placeholder="处理状态" clearable class="w-28">
           <el-option label="全部" value="" />
+          <el-option label="已入库" :value="0" />
+          <el-option label="解析中" :value="1" />
+          <el-option label="已完成" :value="2" />
+          <el-option label="失败" :value="3" />
         </el-select>
-        <el-input disabled placeholder="搜索文件名" clearable class="w-56">
+        <el-input v-model="filters.keyword" placeholder="搜索文件名" clearable class="w-56" @clear="handleSearch" @keyup.enter="handleSearch">
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-button disabled type="primary">
+        <el-button type="primary" @click="handleSearch">
           <el-icon><Search /></el-icon>
           搜索
         </el-button>
@@ -33,14 +41,14 @@
     <!-- 文档列表 -->
     <section class="bg-white rounded-lg shadow-sm">
       <el-table
-        v-loading="false"
-        :data="uploadedItems"
+        v-loading="loading"
+        :data="documentList"
         border
         stripe
         class="w-full"
         empty-text="知识库为空，请上传文档"
       >
-        <el-table-column label="文档标题" min-width="200">
+        <el-table-column label="文档标题" min-width="150">
           <template #default="{ row }">
             <span class="text-blue-600 cursor-pointer hover:underline">{{ row.file_name }}</span>
           </template>
@@ -60,14 +68,9 @@
         <el-table-column prop="chunk_count" label="切片数" width="80" />
         <el-table-column label="处理状态" width="120">
           <template #default="{ row }">
-            <el-tag v-if="row.status === 1" type="warning" size="small">处理中</el-tag>
+            <el-tag v-if="row.status === 1" type="warning" size="small">解析中</el-tag>
             <el-tag v-else-if="row.status === 2" type="success" size="small">已完成</el-tag>
-            <el-tag v-else-if="row.status === 3" type="danger" size="small">
-              <el-tooltip v-if="row.error" :content="row.error" placement="top">
-                <span>失败</span>
-              </el-tooltip>
-              <span v-else>失败</span>
-            </el-tag>
+            <el-tag v-else-if="row.status === 3" type="danger" size="small">失败</el-tag>
             <el-tag v-else type="info" size="small">已入库</el-tag>
           </template>
         </el-table-column>
@@ -93,10 +96,11 @@
 
       <div class="flex justify-end p-4 border-t border-gray-200">
         <el-pagination
-          disabled
-          :total="0"
-          :page-size="15"
+          :current-page="pagination.page"
+          :page-size="pagination.pageSize"
+          :total="pagination.total"
           layout="total, sizes, prev, pager, next"
+          @update:current-page="handlePageChange"
         />
       </div>
     </section>
@@ -159,10 +163,15 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+/**
+ * 知识库管理页面
+ * 功能描述：知识库文档的列表展示、筛选、上传
+ * 依赖接口：GET /api/v1/documents, POST /api/v1/documents/upload
+ */
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Search, Upload, UploadFilled } from '@element-plus/icons-vue'
-import { uploadDocuments } from '@/api/knowledge'
+import { uploadDocuments, getDocumentList } from '@/api/knowledge'
 
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
@@ -173,11 +182,20 @@ const uploadForm = reactive({
 })
 
 const selectedFiles = ref([])
-const uploadedItems = ref([])
 
-function handleFileChange(uploadFile, uploadFiles) {
-  selectedFiles.value = uploadFiles
-}
+const loading = ref(false)
+const documentList = ref([])
+const pagination = reactive({
+  page: 1,
+  pageSize: 15,
+  total: 0,
+  totalPages: 0
+})
+const filters = reactive({
+  keyword: '',
+  docType: null,
+  status: null
+})
 
 const DOC_TYPE_MAP = {
   0: { label: '标准规范', tag: 'primary' },
@@ -205,11 +223,47 @@ function handleExceed() {
   ElMessage.warning('单次最多上传 10 个文件')
 }
 
+function handleFileChange(uploadFile, uploadFiles) {
+  selectedFiles.value = uploadFiles
+}
+
 function handleDialogClosed() {
   uploadForm.docType = null
   selectedFiles.value = []
   if (uploadRef.value) {
     uploadRef.value.clearFiles()
+  }
+}
+
+function handleSearch() {
+  pagination.page = 1
+  fetchDocumentList()
+}
+
+function handlePageChange(page) {
+  pagination.page = page
+  fetchDocumentList()
+}
+
+async function fetchDocumentList() {
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.page,
+      page_size: pagination.pageSize
+    }
+    if (filters.keyword) params.keyword = filters.keyword
+    if (filters.docType !== '') params.doc_type = filters.docType
+    if (filters.status !== '') params.status = filters.status
+
+    const res = await getDocumentList(params)
+    documentList.value = res.data.lists
+    pagination.total = res.data.pagination.total
+    pagination.totalPages = res.data.pagination.total_pages
+  } catch (e) {
+    ElMessage.error(e.message || '加载失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -235,25 +289,17 @@ async function handleUpload() {
     const res = await uploadDocuments(formData)
     const uploadData = res.data
 
-    const newItems = uploadData.lists.map((item) => ({
-      document_id: item.document_id,
-      file_name: item.file_name,
-      file_size: item.file_size,
-      doc_type: uploadForm.docType,
-      status: item.status === 1 ? 1 : 3,
-      chunk_count: item.chunk_count || 0,
-      error: item.error || null,
-      created_at: new Date().toLocaleString()
-    }))
-
-    uploadedItems.value = [...newItems, ...uploadedItems.value]
-
     uploadDialogVisible.value = false
     ElMessage.success(`上传完成：成功 ${uploadData.success_count} 个` + (uploadData.failed_count > 0 ? `，失败 ${uploadData.failed_count} 个` : ''))
+    fetchDocumentList()
   } catch (e) {
     ElMessage.error(e.message || '上传失败')
   } finally {
     uploading.value = false
   }
 }
+
+onMounted(() => {
+  fetchDocumentList()
+})
 </script>

@@ -1,19 +1,35 @@
 from fastapi import APIRouter, Depends, Query, Form, UploadFile, File
 from typing import Annotated
 
-from sqlalchemy.sql.schema import Identity
 from app.core.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.response import success, error
 from app.schemas.common import ApiResponse, ErrorCode, PaginatedResponse
 from app.utils.exception import ServiceException
 
-from app.core.security import get_current_user, require_role
+from app.core.security import require_role
 from app.schemas import documents as schemas_documents
 from app.services import documents as service_documents
-import math
 
 router = APIRouter(prefix="/api/v1/documents", tags=["知识库模块"])
+
+
+@router.get(
+    "",
+    response_model=ApiResponse[PaginatedResponse[schemas_documents.KnowledgeDocumentItem]],
+    dependencies=[Depends(require_role("admin"))],
+    description="获取知识库文档列表",
+)
+async def get_document_list(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    request: Annotated[schemas_documents.GetDocumentListRequest, Depends()],
+):
+    """获取知识库文档列表"""
+    try:
+        result = await service_documents.get_document_list(db, request)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
 
 
 @router.post(
@@ -34,5 +50,5 @@ async def upload_document(
     try:
         result = await service_documents.upload_document(db, files, category)
         return success(result)
-    except Exception as e:
-        return error(e.code, e.message)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)

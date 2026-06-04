@@ -2883,3 +2883,76 @@ category: 0
 | 1001   | 参数错误（单次文件数超限）     |
 | 2003   | 权限不足                     |
 | 5001   | 服务器内部错误               |
+
+### 13.2 获取文档列表
+
+- **GET** `/api/v1/documents`
+- **描述**：分页获取知识库文档列表，支持按文件名、文档类型、处理状态筛选。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| keyword       | string\|null | query  | 否   | 文件名关键字（模糊搜索）              |
+| doc_type      | int\|null    | query  | 否   | 文档类型：0=标准 1=案例 2=预案 3=其他 |
+| status        | int\|null    | query  | 否   | 处理状态：0=已入库 1=解析中 2=已完成 3=失败 |
+| page          | int          | query  | 否   | 页码，默认 1                          |
+| page_size     | int          | query  | 否   | 每页数量，默认 15                     |
+
+**请求示例**：
+
+```
+GET /api/v1/documents?keyword=水质&doc_type=0&status=2&page=1&page_size=15
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "title": "水质标准",
+        "file_name": "水质标准.pdf",
+        "file_size": 2048576,
+        "doc_type": 0,
+        "status": 2,
+        "chunk_count": 24,
+        "created_at": "2026-06-04T10:30:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 15,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段                   | 类型         | 说明                                   |
+| ---------------------- | ------------ | -------------------------------------- |
+| lists[].id             | int          | 文档 ID                               |
+| lists[].title          | string\|null | 文档标题                               |
+| lists[].file_name      | string       | 原始文件名                             |
+| lists[].file_size      | int          | 文件大小（字节）                       |
+| lists[].doc_type       | int          | 文档类型：0=标准 1=案例 2=预案 3=其他 |
+| lists[].status         | int          | 处理状态：0=已入库 1=解析中 2=已完成 3=失败 |
+| lists[].chunk_count    | int          | 切片数量                               |
+| lists[].created_at     | datetime     | 上传时间                               |
+| pagination.page        | int          | 当前页码                               |
+| pagination.page_size   | int          | 每页数量                               |
+| pagination.total       | int          | 总记录数                               |
+| pagination.total_pages | int          | 总页数                                 |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 2003   | 权限不足                     |
+| 5001   | 服务器内部错误               |

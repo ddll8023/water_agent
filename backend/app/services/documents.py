@@ -99,6 +99,50 @@ async def upload_document(
     )
 
 
+async def get_document_list(
+    db: AsyncSession,
+    request: schemas_documents.GetDocumentListRequest,
+):
+    """获取知识库文档列表"""
+    base_stmt = select(models_document.KnowledgeDocument)
+
+    if request.keyword:
+        base_stmt = base_stmt.where(
+            models_document.KnowledgeDocument.file_name.like(f"%{request.keyword}%")
+        )
+    if request.doc_type is not None:
+        base_stmt = base_stmt.where(
+            models_document.KnowledgeDocument.doc_type == request.doc_type
+        )
+    if request.status is not None:
+        base_stmt = base_stmt.where(
+            models_document.KnowledgeDocument.status == request.status
+        )
+
+    total = await db.scalar(select(func.count()).select_from(base_stmt.subquery()))
+
+    items = (
+        await db.scalars(
+            base_stmt.order_by(models_document.KnowledgeDocument.created_at.desc())
+            .offset((request.page - 1) * request.page_size)
+            .limit(request.page_size)
+        )
+    ).all()
+
+    return PaginatedResponse(
+        lists=[
+            schemas_documents.KnowledgeDocumentItem.model_validate(item)
+            for item in items
+        ],
+        pagination=PaginationInfo(
+            page=request.page,
+            page_size=request.page_size,
+            total=total or 0,
+            total_pages=math.ceil((total or 0) / request.page_size),
+        ),
+    )
+
+
 async def _validate_file(file: UploadFile):
     """校验文件"""
     filename = file.filename
