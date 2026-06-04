@@ -92,7 +92,7 @@ class KnowledgeDocumentDetail(BaseModel):
     file_name: str = Field(description="原始文件名")
     file_size: int = Field(description="文件大小（字节）")
     doc_type: int = Field(description="文档类型：0=标准 1=案例 2=预案 3=其他")
-    status: int = Field(description="处理状态：0=处理中 1=就绪 2=失败")
+    status: int = Field(description="处理状态：0=已入库，1=解析中，2=已完成，3=失败")
     chunk_count: int = Field(description="切片数量")
     content: str | None = Field(None, description="解析后的文本内容")
     created_at: datetime = Field(description="创建时间")

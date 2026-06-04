@@ -143,6 +143,14 @@ async def get_document_list(
     )
 
 
+async def get_document_detail(db: AsyncSession, document_id: int):
+    """获取文档详情"""
+    entity = await db.get(models_document.KnowledgeDocument, document_id)
+    if not entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
+    return schemas_documents.KnowledgeDocumentDetail.model_validate(entity)
+
+
 async def _validate_file(file: UploadFile):
     """校验文件"""
     filename = file.filename

@@ -31,3 +31,15 @@ export function getDocumentList(params) {
     params
   })
 }
+
+/**
+ * 获取知识库文档详情
+ * @param {number} id - 文档 ID
+ * @returns {Promise} 文档详情数据
+ */
+export function getDocumentDetail(id) {
+  return request({
+    method: 'get',
+    url: `/v1/documents/${id}`
+  })
+}

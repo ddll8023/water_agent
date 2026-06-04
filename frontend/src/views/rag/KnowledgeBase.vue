@@ -81,7 +81,7 @@
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" size="small" disabled>
+            <el-button text type="primary" size="small" @click="handleViewDetail(row.id)">
               查看
             </el-button>
             <el-button text type="warning" size="small" disabled>
@@ -159,6 +159,55 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 文档详情预览弹窗 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      :title="detailData?.file_name || '文档详情'"
+      width="800px"
+      top="5vh"
+      @closed="detailData = null"
+    >
+      <div v-if="detailLoading" class="flex justify-center py-12">
+        <el-icon class="is-loading text-2xl"><Loading /></el-icon>
+      </div>
+      <template v-else-if="detailData">
+        <section class="grid grid-cols-3 gap-4 mb-4 p-4 bg-gray-50 rounded-lg">
+          <div>
+            <span class="text-gray-500 text-sm">文档类型</span>
+            <p>{{ getDocTypeLabel(detailData.doc_type) }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500 text-sm">文件大小</span>
+            <p>{{ formatSize(detailData.file_size) }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500 text-sm">切片数量</span>
+            <p>{{ detailData.chunk_count }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500 text-sm">处理状态</span>
+            <p>{{ getStatusLabel(detailData.status) }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500 text-sm">上传时间</span>
+            <p>{{ detailData.created_at }}</p>
+          </div>
+          <div>
+            <span class="text-gray-500 text-sm">更新时间</span>
+            <p>{{ detailData.updated_at }}</p>
+          </div>
+        </section>
+        <section>
+          <h3 class="text-sm font-medium text-gray-700 mb-2">文档内容</h3>
+          <el-scrollbar max-height="400px">
+            <div class="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+              {{ detailData.content || '暂无内容' }}
+            </div>
+          </el-scrollbar>
+        </section>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -170,8 +219,8 @@
  */
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, Upload, UploadFilled } from '@element-plus/icons-vue'
-import { uploadDocuments, getDocumentList } from '@/api/knowledge'
+import { Search, Upload, UploadFilled, Loading } from '@element-plus/icons-vue'
+import { uploadDocuments, getDocumentList, getDocumentDetail } from '@/api/knowledge'
 
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
@@ -197,6 +246,10 @@ const filters = reactive({
   status: null
 })
 
+const detailDialogVisible = ref(false)
+const detailLoading = ref(false)
+const detailData = ref(null)
+
 const DOC_TYPE_MAP = {
   0: { label: '标准规范', tag: 'primary' },
   1: { label: '历史案例', tag: 'warning' },
@@ -217,6 +270,25 @@ function formatSize(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+function getStatusLabel(status) {
+  const map = { 0: '已入库', 1: '解析中', 2: '已完成', 3: '失败' }
+  return map[status] || '未知'
+}
+
+async function handleViewDetail(id) {
+  detailLoading.value = true
+  detailDialogVisible.value = true
+  try {
+    const res = await getDocumentDetail(id)
+    detailData.value = res.data
+  } catch (e) {
+    ElMessage.error(e.message || '加载详情失败')
+    detailDialogVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 function handleExceed() {

@@ -2884,6 +2884,66 @@ category: 0
 | 2003   | 权限不足                     |
 | 5001   | 服务器内部错误               |
 
+### 13.3 获取文档详情
+
+- **GET** `/api/v1/documents/{id}`
+- **描述**：根据文档 ID 获取知识库文档的完整详情（含元数据和解析文本）。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 文档 ID                               |
+
+**请求示例**：
+
+```
+GET /api/v1/documents/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "title": "水质标准",
+    "file_name": "水质标准.pdf",
+    "file_size": 2048576,
+    "doc_type": 0,
+    "status": 2,
+    "chunk_count": 24,
+    "content": "文档解析后的纯文本内容...",
+    "created_at": "2026-06-04T10:30:00",
+    "updated_at": "2026-06-04T10:35:00"
+  }
+}
+```
+
+| 字段          | 类型         | 说明                                   |
+| ------------- | ------------ | -------------------------------------- |
+| id            | int          | 文档 ID                               |
+| title         | string\|null | 文档标题                               |
+| file_name     | string       | 原始文件名                             |
+| file_size     | int          | 文件大小（字节）                       |
+| doc_type      | int          | 文档类型：0=标准 1=案例 2=预案 3=其他 |
+| status        | int          | 处理状态：0=已入库 1=解析中 2=已完成 3=失败 |
+| chunk_count   | int          | 切片数量                               |
+| content       | string\|null | 解析后的文本内容                       |
+| created_at    | datetime     | 上传时间                               |
+| updated_at    | datetime     | 更新时间                               |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（文档不存在）     |
+| 2003   | 权限不足                     |
+| 5001   | 服务器内部错误               |
+
 ### 13.2 获取文档列表
 
 - **GET** `/api/v1/documents`

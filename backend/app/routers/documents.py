@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Form, UploadFile, File
+from fastapi import APIRouter, Depends, Query, Path, Form, UploadFile, File
 from typing import Annotated
 
 from app.core.database import get_db
@@ -27,6 +27,24 @@ async def get_document_list(
     """获取知识库文档列表"""
     try:
         result = await service_documents.get_document_list(db, request)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/{id}",
+    response_model=ApiResponse[schemas_documents.KnowledgeDocumentDetail],
+    dependencies=[Depends(require_role("admin"))],
+    description="获取知识库文档详情",
+)
+async def get_document_detail(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(..., description="文档ID")],
+):
+    """获取知识库文档详情"""
+    try:
+        result = await service_documents.get_document_detail(db, id)
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
