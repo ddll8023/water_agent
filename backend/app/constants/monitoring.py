@@ -15,13 +15,4 @@ API_PARAMS = {
     "position": "水厂",
 }
 
-FIELD_TO_INDICATOR: dict[str, int] = {
-    "ph": 1,  # pH → PH
-    "rjy": 2,  # 溶解氧 → RJY
-    "cod": 3,  # 化学需氧量 → COD
-    "ad": 4,  # 氨氮 → AD
-    "swt": 5,  # 水温 → SWT
-    "zd": 6,  # 浊度 → ZD
-    "ddl": 7,  # 电导率 → DDL
-    "yl": 8,  # 余氯 → YL
-}
+

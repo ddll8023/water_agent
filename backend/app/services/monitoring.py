@@ -33,7 +33,7 @@ async def collect_water_quality_data():
 
     monitor_time_str = real_record.get("monitorTime")
     monitor_time = datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
-    now = datetime.now()
+
 
     async with get_background_db_session() as db:
         try:
@@ -50,28 +50,27 @@ async def collect_water_quality_data():
                 return
 
             total_records = 0
-            cached_records: list[dict] = []
+            cached_records: list[schemas_monitorings.CachedRecordItem] = []
 
             indicator_entity_list = (
                 await db.scalars(select(models_indicator.Indicator))
             ).all()
 
-            indicator_entity_dict = {item.id: item for item in indicator_entity_list}
+            indicator_code_dict = {item.code: item for item in indicator_entity_list}
 
+            # 遍历所有站点，采集并入库水质数据
             for station in station_entity_list:
                 reservoir_id = station.reservoir_id
-                for (
-                    api_field,
-                    indicator_id,
-                ) in constants_monitoring.FIELD_TO_INDICATOR.items():
-                    raw_value = real_record.get(api_field)
-                    if raw_value is None:
-                        logger.warning(
-                            f"API记录缺少字段 {api_field}，站点ID={station.id}"
-                        )
-                        continue
 
-                    existing = await db.scalar(
+                # 根据 API 响应字段与数据库指标编码匹配，逐条入库监测记录
+                for api_field in real_record:
+                    indicator_entity = indicator_code_dict.get(api_field)
+                    if indicator_entity is None:
+                        continue
+                    indicator_id = indicator_entity.id
+                    raw_value = real_record[api_field]
+
+                    monitoring_record_entity = await db.scalar(
                         select(models_monitoring.MonitoringRecord).where(
                             and_(
                                 models_monitoring.MonitoringRecord.station_id
@@ -83,14 +82,15 @@ async def collect_water_quality_data():
                             )
                         )
                     )
-                    if existing is not None:
+                    if monitoring_record_entity is not None:
+                        logger.info(f"站点 {station.id} 指标 {indicator_id} 时间 {monitor_time} 已存在记录，跳过")
                         continue
 
                     offset_range = (-0.05, 0.05)
                     offset = random.uniform(*offset_range)
                     value = round(raw_value * (1 + offset), 4)
 
-                    record = models_monitoring.MonitoringRecord(
+                    db.add(models_monitoring.MonitoringRecord(
                         reservoir_id=reservoir_id,
                         station_id=station.id,
                         indicator_id=indicator_id,
@@ -98,19 +98,15 @@ async def collect_water_quality_data():
                         data_source="auto",
                         quality_flag=1,
                         record_time=monitor_time,
-                        created_at=now,
-                    )
-                    db.add(record)
+                        created_at=datetime.now(),
+                    ))
                     total_records += 1
 
-                    indicator_entity = indicator_entity_dict.get(indicator_id)
                     cached_records.append(
-                        dict(
+                        schemas_monitorings.CachedRecordItem(
                             reservoir_id=reservoir_id,
                             indicator_id=indicator_id,
-                            indicator_name=(
-                                indicator_entity.name if indicator_entity else ""
-                            ),
+                            indicator_name=indicator_entity.name,
                             value=value,
                             record_time=monitor_time,
                         )
@@ -120,7 +116,7 @@ async def collect_water_quality_data():
                         db,
                         indicator_id=indicator_id,
                         reservoir_id=reservoir_id,
-                        indicator_entity=indicator_entity_dict.get(indicator_id),
+                        indicator_entity=indicator_entity,
                         current_value=value,
                         record_time=monitor_time,
                     )
@@ -131,7 +127,7 @@ async def collect_water_quality_data():
             logger.info(f"成功采集 {total_records} 条记录，开始写入 Redis 缓存")
 
             for rec in cached_records:
-                await _cache_to_redis(**rec)
+                await _cache_to_redis(**rec.model_dump())
 
             logger.info(f"Redis 缓存写入完成，共 {len(cached_records)} 条")
         except Exception as e:

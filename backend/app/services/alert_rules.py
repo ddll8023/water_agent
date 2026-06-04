@@ -15,8 +15,9 @@ from app.utils.exception import ServiceException
 from app.core.database import commit_or_rollback
 from app.core.ws_manager import manager
 from app.schemas import alerts as schemas_alerts
+from app.utils.logger_config import setup_logger
 
-
+logger = setup_logger(__name__)
 async def create_alert_rule(
     db: AsyncSession,
     create_alert_rule_request: schemas_alert_rules.CreateAlertRuleRequest,
@@ -137,28 +138,39 @@ async def evaluate_alert_rules(
     """对单条监测记录执行预警规则判定"""
     rules = await _get_matched_rules(db, indicator_id, reservoir_id)
     if not rules:
+        logger.info(f"没有匹配的预警规则，指标ID={indicator_id}，水库ID={reservoir_id}")
         return False
 
-    has_unresolved = await _has_unresolved_alert(db, reservoir_id)
+    has_unresolved = await db.scalar(select(models_alert.AlertEvent).where(
+        and_(
+            models_alert.AlertEvent.reservoir_id == reservoir_id,
+            models_alert.AlertEvent.status < 3,
+        )
+    ))
+
     if has_unresolved:
+        logger.info(f"该水库存在未关闭预警，指标ID={indicator_id}，水库ID={reservoir_id}")
         return False
 
     triggered_items = []
     for rule in rules:
-        limit = _resolve_limit(
-            indicator_entity, rule.trigger_class, rule.compare_direction
-        )
+        cls = rule.trigger_class.lower()
+        if rule.compare_direction == "gt":
+            limit = getattr(indicator_entity, f"standard_limit_{cls}_upper", None)
+        else:
+            limit = getattr(indicator_entity, f"standard_limit_{cls}_lower", None)
+
         if limit is None:
             continue
 
-        if rule.compare_direction == "gt" and current_value > limit:
+        if current_value > limit:
             triggered_items.append(
                 {
                     "rule": rule,
                     "limit": float(limit),
                 }
             )
-        elif rule.compare_direction == "lt" and current_value < limit:
+        elif current_value < limit:
             triggered_items.append(
                 {
                     "rule": rule,
@@ -170,13 +182,13 @@ async def evaluate_alert_rules(
         return False
 
     reservoir = await db.get(models_reservoir.Reservoir, reservoir_id)
-    reservoir_name = reservoir.name if reservoir else f"水库{reservoir_id}"
+
 
     max_level_item = max(triggered_items, key=lambda x: x["rule"].alert_level)
     rule = max_level_item["rule"]
     limit = max_level_item["limit"]
 
-    title = f"{reservoir_name}指标告警（{indicator_entity.name}={current_value}, 限值={limit}{indicator_entity.unit or ''}）"
+    title = f"{reservoir.name}指标告警（{indicator_entity.name}={current_value}, 限值={limit}{indicator_entity.unit or ''}）"
     alert_indicators = [
         {
             "name": indicator_entity.name,
@@ -218,7 +230,7 @@ def _resolve_limit(
     indicator: models_indicator.Indicator,
     trigger_class: str,
     direction: str,
-) -> float | None:
+):
     """从指标实体中按等级+方向读取限值"""
     cls = trigger_class.lower()
     if direction == "gt":
@@ -227,8 +239,8 @@ def _resolve_limit(
 
 
 async def _get_matched_rules(db: AsyncSession, indicator_id: int, reservoir_id: int):
-    """查询匹配的预警规则（水库级优先，回退全局规则）"""
-    stmt = select(models_alert_rule.AlertRule).where(
+    """查询匹配的预警规则"""
+    rules = (await db.scalars(select(models_alert_rule.AlertRule).where(
         and_(
             models_alert_rule.AlertRule.indicator_id == indicator_id,
             models_alert_rule.AlertRule.is_active == 1,
@@ -237,8 +249,7 @@ async def _get_matched_rules(db: AsyncSession, indicator_id: int, reservoir_id: 
                 models_alert_rule.AlertRule.reservoir_id.is_(None),
             ),
         )
-    )
-    rules = (await db.scalars(stmt)).all()
+    ))).all()
 
     reservoir_rules = [r for r in rules if r.reservoir_id == reservoir_id]
     matched_ids = {r.indicator_id for r in reservoir_rules}
@@ -249,13 +260,3 @@ async def _get_matched_rules(db: AsyncSession, indicator_id: int, reservoir_id: 
     return reservoir_rules
 
 
-async def _has_unresolved_alert(db: AsyncSession, reservoir_id: int) -> bool:
-    """检查该水库是否存在未关闭预警"""
-    stmt = select(models_alert.AlertEvent).where(
-        and_(
-            models_alert.AlertEvent.reservoir_id == reservoir_id,
-            models_alert.AlertEvent.status < 3,
-        )
-    )
-    entity = await db.scalar(stmt)
-    return entity is not None

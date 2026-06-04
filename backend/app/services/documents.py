@@ -1,0 +1,172 @@
+import json
+import math
+import random
+import httpx
+from datetime import datetime, timedelta
+
+from sqlalchemy import select, and_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import UploadFile, BackgroundTasks
+from app.core.database import commit_or_rollback, get_background_db_session
+from app.core.redis import redis_client
+from app.models import monitoring as models_monitoring
+from app.models import station as models_station
+from app.models import indicator as models_indicator
+from app.constants import monitoring as constants_monitoring
+from app.utils.logger_config import setup_logger
+from app.schemas import monitorings as schemas_monitorings
+from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
+from app.utils.exception import ServiceException
+from app.schemas import documents as schemas_documents
+from app.models import knowledge_document as models_document
+from app.constants import documents as constants_documents
+import os
+import uuid
+from app.utils.file import save_file, ROOT_DIR
+from app.core.config import settings
+import asyncio
+import aiofiles
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.core.chroma import get_vector_store
+
+logger = setup_logger(__name__)
+
+
+async def upload_document(
+    db: AsyncSession,
+    files: list[UploadFile],
+    category: int,
+):
+    """上传文档请求"""
+    logger.info(f"收到上传请求: {len(files)} 个文件, category={category}")
+    result_list: list[schemas_documents.UploadDocumentItem] = []
+    fail_count = 0
+    for file in files:
+        try:
+            # 检验
+            is_valid, message = await _validate_file(file)
+            if not is_valid:
+                logger.warning(f"文件校验失败: {file.filename}, {message}")
+                raise ServiceException(ErrorCode.INVALID_FILE, message)
+            # 保存文件，数据库记录
+            filename_list = os.path.splitext(file.filename)
+            new_filename = f"{filename_list[0]}_{uuid.uuid4().hex}{filename_list[1]}"
+            file_bytes = await file.read()
+            await save_file(
+                file_bytes,
+                os.path.join(ROOT_DIR, settings.UPDATE_PATH_NAME, new_filename),
+            )
+            document_entity = models_document.KnowledgeDocument(
+                title=filename_list[0],
+                doc_type=category,
+                file_name=filename_list[0],
+                file_path=new_filename,
+                file_size=file.size,
+            )
+            db.add(document_entity)
+            await db.flush()
+            asyncio.create_task(_process_document(document_id=document_entity.id))
+            result_list.append(
+                schemas_documents.UploadDocumentItem(
+                    document_id=document_entity.id,
+                    file_name=file.filename,
+                    file_size=file.size,
+                    status=1,
+                )
+            )
+
+        except Exception as e:
+            logger.error(f"文件上传异常: {file.filename}, {e}", exc_info=True)
+            result_list.append(
+                schemas_documents.UploadDocumentItem(
+                    document_id=0,
+                    file_name=file.filename,
+                    file_size=file.size,
+                    status=0,
+                    error=str(e),
+                )
+            )
+            fail_count += 1
+
+    await commit_or_rollback(db)
+
+    return schemas_documents.UploadDocumentResponse(
+        total=len(files),
+        success_count=len(files) - fail_count,
+        failed_count=fail_count,
+        lists=result_list,
+    )
+
+
+async def _validate_file(file: UploadFile):
+    """校验文件"""
+    filename = file.filename
+    if not filename.endswith(constants_documents.FILE_EXTENSION):
+        return False, "仅支持PDF格式的文件"
+    if file.size > constants_documents.MAX_FILE_SIZE:
+        return False, "文件大小不能超过10MB"
+    return True, "文件校验通过"
+
+
+async def _process_document(document_id: int):
+    """处理文档"""
+    logger.info(f"开始处理文档: doc_id={document_id}")
+    db = get_background_db_session()
+    document_entity = await db.get(models_document.KnowledgeDocument, document_id)
+    if not document_entity:
+        logger.warning(f"文档不存在: doc_id={document_id}")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
+    try:
+        file_text = await _extract_text(document_entity.file_path)
+        logger.info(f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}")
+        document_entity.content = file_text
+        # 切块
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=settings.CHUNK_SIZE,
+            chunk_overlap=settings.CHUNK_OVERLAP,
+            separators=settings.SEPARATORS,
+            length_function=len,
+        )
+        splited_text_list = splitter.split_text(file_text)
+        logger.info(f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}")
+        # 向量化
+        vector_store = get_vector_store()
+        metadatas = []
+        for i in range(len(splited_text_list)):
+            metadatas.append({"doc_id": document_id, "chunk_index": i})
+        chunk_ids_list = await asyncio.to_thread(
+            vector_store.add_texts,
+            texts=splited_text_list,
+            metadatas=metadatas,
+        )
+        logger.info(f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}")
+        document_entity.chunk_count = len(chunk_ids_list)
+        document_entity.status = 2
+        await commit_or_rollback(db)
+        logger.info(f"文档处理完成: doc_id={document_id}")
+    except Exception as e:
+        logger.error(f"文档处理失败: doc_id={document_id}, {e}", exc_info=True)
+        db.rollback()
+        document_entity.status = 3
+        document_entity.error = str(e)
+        await commit_or_rollback(db)
+    finally:
+        await db.close()
+
+
+async def _extract_text(filename: str):
+    """从文档中提取文本"""
+    path = os.path.join(ROOT_DIR, settings.UPDATE_PATH_NAME, filename)
+    if not os.path.exists(path):
+        logger.error(f"文件不存在: {path}")
+        raise ServiceException(message="文件不存在")
+
+    def _read_pdf():
+        loader = PyPDFLoader(path)
+        content = ""
+        for document in loader.load():
+            content += document.page_content
+        return content
+
+    return await asyncio.to_thread(_read_pdf)

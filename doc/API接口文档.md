@@ -2802,3 +2802,84 @@ Authorization: Bearer <token>
 
 - 服务端主动断开：前端 5 秒后自动重连
 - 客户端页面关闭：连接自动断开
+
+---
+
+## 十三、知识库文档管理（/api/v1/documents）
+
+知识库文档上传接口。需要 Bearer Token 认证，且要求 admin 角色。
+
+### 13.1 上传文档
+
+- **POST** `/api/v1/documents/upload`
+- **描述**：批量上传知识库文档（PDF），自动进行文本解析、切片、向量化并存入 Chroma。需 admin 角色。
+- **Content-Type**：multipart/form-data
+
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| files         | list[file]   | body   | 是   | PDF 文件列表，单次最多 10 个，每个最大 50MB |
+| category      | int          | body   | 是   | 文档类型：0=标准 1=案例 2=预案 3=其他 |
+
+**请求示例**：
+
+```
+POST /api/v1/documents/upload
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+files: 水质标准.pdf
+files: 处置预案.pdf
+category: 0
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "total": 2,
+    "success_count": 2,
+    "failed_count": 0,
+    "lists": [
+      {
+        "document_id": 1,
+        "file_name": "水质标准.pdf",
+        "file_size": 2048576,
+        "status": 1,
+        "error": null
+      },
+      {
+        "document_id": 2,
+        "file_name": "处置预案.pdf",
+        "file_size": 1048576,
+        "status": 1,
+        "error": null
+      }
+    ]
+  }
+}
+```
+
+| 字段                   | 类型         | 说明                                   |
+| ---------------------- | ------------ | -------------------------------------- |
+| total                  | int          | 总文件数                               |
+| success_count          | int          | 成功数                                 |
+| failed_count           | int          | 失败数                                 |
+| lists[].document_id    | int          | 文档 ID（校验失败为 0）               |
+| lists[].file_name      | string       | 原始文件名                             |
+| lists[].file_size      | int          | 文件大小（字节）                       |
+| lists[].status         | int          | 处理状态：0=校验失败 1=处理中          |
+| lists[].error          | string\|null | 校验失败原因                           |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 3001   | 文件格式不支持               |
+| 3002   | 文件大小超过限制             |
+| 1001   | 参数错误（单次文件数超限）     |
+| 2003   | 权限不足                     |
+| 5001   | 服务器内部错误               |

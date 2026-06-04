@@ -5,6 +5,18 @@ from datetime import datetime
 
 # ========== 辅助类（Support）==========
 
+
+class CachedRecordItem(BaseModel):
+    """采集缓存记录项（待写入 Redis）"""
+
+    reservoir_id: int = Field(description="水库ID")
+    indicator_id: int = Field(description="指标ID")
+    indicator_name: str = Field(description="指标名称")
+    value: float = Field(description="监测值")
+    record_time: datetime = Field(description="监测时间")
+
+    model_config = ConfigDict(from_attributes=True)
+
 class GetMonitoringRecordsTrendResponseItem(BaseModel):
     """获取监测记录趋势响应参数项"""
 

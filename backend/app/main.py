@@ -20,6 +20,7 @@ from app.services.monitoring import collect_water_quality_data
 from app.models import alert_rule as models_alert_rule
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_db
+from app.routers import documents as documents_router
 
 logger = setup_logger(__name__)
 
@@ -80,6 +81,7 @@ app.include_router(monitoring_router.router)
 app.include_router(dashboard_router.router)
 app.include_router(alerts_router.router)
 app.include_router(alert_rules_router.router)
+app.include_router(documents_router.router)
 
 
 @app.websocket("/ws/alerts")

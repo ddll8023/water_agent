@@ -55,6 +55,12 @@ const routes = [
         name: 'ReservoirMonitoringDetail',
         component: () => import('@/views/monitoring/ReservoirMonitoringDetail.vue'),
         meta: { title: '实时监测' }
+      },
+      {
+        path: 'rag/knowledge',
+        name: 'KnowledgeBase',
+        component: () => import('@/views/rag/KnowledgeBase.vue'),
+        meta: { title: '知识库管理' }
       }
     ]
   },

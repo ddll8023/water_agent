@@ -35,6 +35,16 @@
               <span>监测数据记录</span>
             </el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="rag">
+            <template #title>
+              <el-icon><ChatLineSquare /></el-icon>
+              <span>智能问答</span>
+            </template>
+            <el-menu-item index="/rag/knowledge">
+              <el-icon><Document /></el-icon>
+              <span>知识库管理</span>
+            </el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="system">
             <template #title>
               <el-icon><Setting /></el-icon>
@@ -128,7 +138,8 @@ import {
   ArrowDown,
   SwitchButton,
   House,
-  WarningFilled
+  WarningFilled,
+  ChatLineSquare
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Chroma 配置
     CHROMA_PERSIST_DIR: str = "chroma_data"
+    COLLECTION_NAME: str = "water_knowledge"
 
     # JWT 配置
     JWT_SECRET_KEY: str = "change-me"
@@ -47,6 +48,11 @@ class Settings(BaseSettings):
     CHAT_TWO_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     CHAT_TWO_MODEL: str = "Qwen-Max"
 
+    # 嵌入模型配置
+    EMBEDDING_API_KEY: str = ""
+    EMBEDDING_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    EMBEDDING_MODEL: str = "text-embedding-v4"
+
     @property
     def DATABASE_URL(self) -> str:
         return (
@@ -62,6 +68,12 @@ class Settings(BaseSettings):
             f"@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}"
             f"?charset=utf8mb4"
         )
+
+    UPDATE_PATH_NAME: str = "update"
+
+    CHUNK_SIZE: int = 2000
+    CHUNK_OVERLAP: int = 240
+    SEPARATORS: list[str] = ["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""]
 
     class Config:
         env_file = ".env"
