@@ -43,3 +43,27 @@ export function getDocumentDetail(id) {
     url: `/v1/documents/${id}`
   })
 }
+
+/**
+ * 删除知识库文档
+ * @param {number} id - 文档 ID
+ * @returns {Promise} 删除结果
+ */
+export function deleteDocument(id) {
+  return request({
+    method: 'delete',
+    url: `/v1/documents/${id}`
+  })
+}
+
+/**
+ * 重新处理知识库文档
+ * @param {number} id - 文档 ID
+ * @returns {Promise} 处理结果
+ */
+export function reprocessDocument(id) {
+  return request({
+    method: 'post',
+    url: `/v1/documents/${id}/reprocess`
+  })
+}

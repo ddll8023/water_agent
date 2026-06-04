@@ -151,6 +151,50 @@ async def get_document_detail(db: AsyncSession, document_id: int):
     return schemas_documents.KnowledgeDocumentDetail.model_validate(entity)
 
 
+async def delete_document(db: AsyncSession, document_id: int):
+    """删除文档"""
+    entity = await db.get(models_document.KnowledgeDocument, document_id)
+    if not entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
+
+    file_path = os.path.join(ROOT_DIR, settings.UPDATE_PATH_NAME, entity.file_path)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+    vector_store = get_vector_store()
+    try:
+        await asyncio.to_thread(
+            vector_store._collection.delete, where={"doc_id": document_id}
+        )
+    except Exception as e:
+        raise ServiceException(message="chroma删除错误")
+
+    await db.delete(entity)
+    await commit_or_rollback(db)
+    logger.info(f"文档已删除: doc_id={document_id}")
+    return True
+
+
+async def reprocess_document(db: AsyncSession, document_id: int):
+    """重新处理文档"""
+    document_entity = await db.get(models_document.KnowledgeDocument, document_id)
+    if not document_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
+    document_entity.status = 1
+    document_entity.content = None
+    document_entity.chunk_count = 0
+    document_entity.error = None
+    vector_store = get_vector_store()
+    try:
+        await asyncio.to_thread(
+            vector_store._collection.delete, where={"doc_id": document_id}
+        )
+    except Exception as e:
+        raise ServiceException(message="chroma删除错误")
+    await commit_or_rollback(db)
+    asyncio.create_task(_process_document(document_entity.id))
+    return True
+
+
 async def _validate_file(file: UploadFile):
     """校验文件"""
     filename = file.filename
@@ -181,7 +225,9 @@ async def _process_document(document_id: int):
             length_function=len,
         )
         splited_text_list = splitter.split_text(file_text)
-        logger.info(f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}")
+        logger.info(
+            f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}"
+        )
         # 向量化
         vector_store = get_vector_store()
         metadatas = []
@@ -192,7 +238,9 @@ async def _process_document(document_id: int):
             texts=splited_text_list,
             metadatas=metadatas,
         )
-        logger.info(f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}")
+        logger.info(
+            f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}"
+        )
         document_entity.chunk_count = len(chunk_ids_list)
         document_entity.status = 2
         await commit_or_rollback(db)

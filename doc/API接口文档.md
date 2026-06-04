@@ -2884,6 +2884,86 @@ category: 0
 | 2003   | 权限不足                     |
 | 5001   | 服务器内部错误               |
 
+### 13.5 重新处理文档
+
+- **POST** `/api/v1/documents/{id}/reprocess`
+- **描述**：重新处理指定知识库文档，清除旧内容后重新执行解析、切片和向量化。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 文档 ID                               |
+
+**请求示例**：
+
+```
+POST /api/v1/documents/1/reprocess
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（文档不存在）     |
+| 2003   | 权限不足                     |
+| 5001   | 服务器内部错误               |
+
+### 13.4 删除文档
+
+- **DELETE** `/api/v1/documents/{id}`
+- **描述**：删除知识库文档，同时清理物理文件和 Chroma 向量。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 文档 ID                               |
+
+**请求示例**：
+
+```
+DELETE /api/v1/documents/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": true
+}
+```
+
+| 字段 | 类型 | 说明                      |
+| ---- | ---- | ------------------------- |
+| data | bool | 操作结果，成功为 `true` |
+
+**错误场景**：
+
+| 错误码 | 场景                         |
+| ------ | ---------------------------- |
+| 1002   | 数据不存在（文档不存在）     |
+| 2003   | 权限不足                     |
+| 5001   | 服务器内部错误               |
+
 ### 13.3 获取文档详情
 
 - **GET** `/api/v1/documents/{id}`

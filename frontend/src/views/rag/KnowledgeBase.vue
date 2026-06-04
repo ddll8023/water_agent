@@ -76,7 +76,7 @@
         </el-table-column>
         <el-table-column label="上传时间" width="170">
           <template #default="{ row }">
-            {{ row.created_at || '-' }}
+            {{ formatDateTime(row.created_at) || '-' }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
@@ -84,10 +84,10 @@
             <el-button text type="primary" size="small" @click="handleViewDetail(row.id)">
               查看
             </el-button>
-            <el-button text type="warning" size="small" disabled>
+            <el-button text type="warning" size="small" @click="handleReprocessDocument(row.id, row.file_name)">
               重新处理
             </el-button>
-            <el-button text type="danger" size="small" disabled>
+            <el-button text type="danger" size="small" @click="handleDeleteDocument(row.id, row.file_name)">
               删除
             </el-button>
           </template>
@@ -191,11 +191,11 @@
           </div>
           <div>
             <span class="text-gray-500 text-sm">上传时间</span>
-            <p>{{ detailData.created_at }}</p>
+            <p>{{ formatDateTime(detailData.created_at) }}</p>
           </div>
           <div>
             <span class="text-gray-500 text-sm">更新时间</span>
-            <p>{{ detailData.updated_at }}</p>
+            <p>{{ formatDateTime(detailData.updated_at) }}</p>
           </div>
         </section>
         <section>
@@ -218,9 +218,10 @@
  * 依赖接口：GET /api/v1/documents, POST /api/v1/documents/upload
  */
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Upload, UploadFilled, Loading } from '@element-plus/icons-vue'
-import { uploadDocuments, getDocumentList, getDocumentDetail } from '@/api/knowledge'
+import { formatDateTime } from '@/utils/format'
+import { uploadDocuments, getDocumentList, getDocumentDetail, deleteDocument, reprocessDocument } from '@/api/knowledge'
 
 const uploadDialogVisible = ref(false)
 const uploading = ref(false)
@@ -288,6 +289,40 @@ async function handleViewDetail(id) {
     detailDialogVisible.value = false
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function handleDeleteDocument(id, fileName) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除「${fileName}」吗？删除后无法恢复。`,
+      '确认删除',
+      { confirmButtonText: '确定删除', cancelButtonText: '取消', type: 'warning' }
+    )
+    await deleteDocument(id)
+    ElMessage.success('删除成功')
+    fetchDocumentList()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '删除失败')
+    }
+  }
+}
+
+async function handleReprocessDocument(id, fileName) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要重新处理「${fileName}」吗？将重新执行解析、切片和向量化。`,
+      '确认重新处理',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'info' }
+    )
+    await reprocessDocument(id)
+    ElMessage.success('已提交重新处理')
+    fetchDocumentList()
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e.message || '操作失败')
+    }
   }
 }
 
