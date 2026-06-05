@@ -2928,6 +2928,41 @@ data: {"type":"chunk","content":"水的溶解氧标准为"}
 data: {"type":"done","session_id":1,"message_id":2}
 ```
 
+### 14.2 获取对话列表
+
+- **GET** `/api/v1/chat`
+- **描述**：分页获取当前用户的对话会话列表。
+
+| 参数      | 类型 | 位置  | 必填 | 说明                    |
+| --------- | ---- | ----- | ---- | ----------------------- |
+| page      | int  | query | 否   | 页码，默认 1            |
+| page_size | int  | query | 否   | 每页数量，默认 20       |
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "title": "Ⅰ类水的溶解氧标准是多少？",
+        "created_at": "2026-06-05T10:30:00",
+        "updated_at": "2026-06-05T10:35:00"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
 ### 13.5 重新处理文档
 
 - **POST** `/api/v1/documents/{id}/reprocess`

@@ -1,7 +1,13 @@
 /**
  * 智能问答 API
- * SSE 流式对话请求
+ * SSE 流式对话 + 会话列表
  */
+
+import request from '@/utils/request'
+
+export function getChatList(params = {}) {
+  return request.get('/v1/chat', { params })
+}
 
 export function fetchChatStream({ query, session_id, onChunk, onDone, onError }) {
   const controller = new AbortController()

@@ -1,6 +1,6 @@
 """聊天对话路由（SSE 流式）"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query, Path, Form, UploadFile, File
 from typing import Annotated
 from fastapi.responses import StreamingResponse
 from app.core.security import require_role
@@ -8,6 +8,12 @@ from app.core.security import get_current_user
 from app.schemas import auth as schemas_auth
 from app.schemas import chat as schemas_chat
 from app.services import chat as service_chat
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_db
+
+from app.schemas.response import success, error
+from app.schemas.common import ApiResponse, ErrorCode, PaginatedResponse
+from app.utils.exception import ServiceException
 
 router = APIRouter(prefix="/api/v1/chat", tags=["智能问答"])
 
@@ -31,3 +37,21 @@ async def chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get(
+    "",
+    response_model=ApiResponse[PaginatedResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取对话列表请求",
+)
+async def get_chat_list(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    get_chat_list_request: Annotated[schemas_chat.GetChatListRequest, Query()],
+):
+    """获取对话列表请求"""
+    try:
+        result = await service_chat.get_chat_list(db, get_chat_list_request)
+        return success(result)
+    except ServiceException as e:
+        return error(e.code, e.message)

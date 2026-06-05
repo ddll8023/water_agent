@@ -10,7 +10,7 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import commit_or_rollback, get_background_db_session
-from app.core.redis import redis_client
+from app.core.redis import redis_client, is_redis_available
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
 from app.models import indicator as models_indicator
@@ -33,7 +33,6 @@ async def collect_water_quality_data():
 
     monitor_time_str = real_record.get("monitorTime")
     monitor_time = datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
-
 
     async with get_background_db_session() as db:
         try:
@@ -83,23 +82,27 @@ async def collect_water_quality_data():
                         )
                     )
                     if monitoring_record_entity is not None:
-                        logger.info(f"站点 {station.id} 指标 {indicator_id} 时间 {monitor_time} 已存在记录，跳过")
+                        logger.info(
+                            f"站点 {station.id} 指标 {indicator_id} 时间 {monitor_time} 已存在记录，跳过"
+                        )
                         continue
 
                     offset_range = (-0.05, 0.05)
                     offset = random.uniform(*offset_range)
                     value = round(raw_value * (1 + offset), 4)
 
-                    db.add(models_monitoring.MonitoringRecord(
-                        reservoir_id=reservoir_id,
-                        station_id=station.id,
-                        indicator_id=indicator_id,
-                        value=value,
-                        data_source="auto",
-                        quality_flag=1,
-                        record_time=monitor_time,
-                        created_at=datetime.now(),
-                    ))
+                    db.add(
+                        models_monitoring.MonitoringRecord(
+                            reservoir_id=reservoir_id,
+                            station_id=station.id,
+                            indicator_id=indicator_id,
+                            value=value,
+                            data_source="auto",
+                            quality_flag=1,
+                            record_time=monitor_time,
+                            created_at=datetime.now(),
+                        )
+                    )
                     total_records += 1
 
                     cached_records.append(
@@ -372,7 +375,9 @@ async def create_manual_record(
         )
     )
     if existing:
-        raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "该站点+指标+时间已存在记录")
+        raise ServiceException(
+            ErrorCode.RESOURCE_ALREADY_EXISTS, "该站点+指标+时间已存在记录"
+        )
 
     record = models_monitoring.MonitoringRecord(
         reservoir_id=station.reservoir_id,
@@ -408,6 +413,9 @@ async def _cache_to_redis(
     record_time: datetime,
 ):
     """采集一条数据后同步写入 Redis 趋势 ZSET 和最新值 KEY"""
+    if not await is_redis_available():
+        logger.warning("Redis 不可用，跳过缓存")
+        return
     now = datetime.now()
     ts = record_time.timestamp()
     member = json.dumps(

@@ -16,3 +16,11 @@ async def get_redis():
 
 async def close_redis():
     await redis_client.aclose()
+
+
+async def is_redis_available() -> bool:
+    try:
+        await redis_client.ping()
+        return True
+    except Exception:
+        return False

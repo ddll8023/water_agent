@@ -149,8 +149,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
 
         await commit_or_rollback(db)
         logger.info(
-            f"对话完成: session_id={session_entity.id} "
-            f"message_count={len(new_ids)}"
+            f"对话完成: session_id={session_entity.id} " f"message_count={len(new_ids)}"
         )
         yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_message_entity.id}, ensure_ascii=False)}\n\n"
     except Exception as e:
@@ -163,3 +162,30 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         raise ServiceException(ErrorCode.INTERNAL_ERROR, str(e))
     finally:
         await db.close()
+
+
+async def get_chat_list(
+    db: AsyncSession, get_chat_list_request: schemas_chat.GetChatListRequest
+):
+    """获取对话列表请求"""
+    total = await db.scalar(select(func.count(models_chat_session.ChatSession.id)))
+    chat_entity_list = (
+        await db.scalars(
+            select(models_chat_session.ChatSession)
+            .order_by(models_chat_session.ChatSession.updated_at.desc())
+            .offset(get_chat_list_request.page_size * (get_chat_list_request.page - 1))
+            .limit(get_chat_list_request.page_size)
+        )
+    ).all()
+    return PaginatedResponse(
+        lists=[
+            schemas_chat.GetChatListResponse.model_validate(chat_entity)
+            for chat_entity in chat_entity_list
+        ],
+        pagination=PaginationInfo(
+            page=get_chat_list_request.page,
+            page_size=get_chat_list_request.page_size,
+            total=total,
+            total_pages=math.ceil(total / get_chat_list_request.page_size),
+        ),
+    )

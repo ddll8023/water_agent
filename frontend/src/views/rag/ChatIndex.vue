@@ -13,9 +13,9 @@
           </el-button>
         </div>
 
-        <el-scrollbar class="flex-1">
+        <el-scrollbar class="flex-1" v-loading="sessionsLoading">
           <el-empty
-            v-if="sessions.length === 0"
+            v-if="!sessionsLoading && sessions.length === 0"
             description="暂无对话记录，点击上方按钮开始提问"
             :image-size="80"
           />
@@ -184,14 +184,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
-import { fetchChatStream } from '@/api/chat'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { fetchChatStream, getChatList } from '@/api/chat'
 import {
   Plus, ChatLineSquare, Promotion, Refresh,
   DArrowLeft, DArrowRight, Document,
 } from '@element-plus/icons-vue'
-
-const STORAGE_KEY = 'rag_sessions'
 
 /* ========== 状态 ========== */
 
@@ -199,9 +197,10 @@ const sidebarCollapsed = ref(false)
 const scrollbarRef = ref(null)
 const inputText = ref('')
 const isStreaming = ref(false)
+const sessionsLoading = ref(false)
 
-// 本地会话列表
-const sessions = ref(loadSessions())
+// 会话列表（从 API 加载）
+const sessions = ref([])
 // 消息缓存：Map<sessionId, Message[]>
 const messageCache = ref(new Map())
 // 当前对话消息
@@ -222,16 +221,16 @@ const recommendedQuestions = [
 
 /* ========== 方法 ========== */
 
-function loadSessions() {
+async function fetchSessions() {
+  sessionsLoading.value = true
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []
+    const res = await getChatList({ page: 1, page_size: 50 })
+    sessions.value = res.data.lists
   } catch {
-    return []
+    sessions.value = []
+  } finally {
+    sessionsLoading.value = false
   }
-}
-
-function saveSessions() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions.value))
 }
 
 function formatTime(dateStr) {
@@ -313,8 +312,8 @@ async function sendMessage() {
           id: data.session_id,
           title: text.length > 20 ? text.slice(0, 20) + '...' : text,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
-        saveSessions()
         messageCache.value.set(data.session_id, [...messages.value])
       } else {
         messageCache.value.set(currentSessionId.value, [...messages.value])
@@ -394,6 +393,10 @@ function scrollToBottom() {
     }
   })
 }
+
+onMounted(() => {
+  fetchSessions()
+})
 
 watch(
   () => messages.value.length,
