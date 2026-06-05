@@ -22,7 +22,7 @@ class ChatMessage(Base):
     id = Column[int](BigInteger, primary_key=True, autoincrement=True, comment="消息ID")
     session_id = Column[int](
         BigInteger,
-        ForeignKey("chat_session.id"),
+        ForeignKey("chat_session.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
         comment="对话ID",

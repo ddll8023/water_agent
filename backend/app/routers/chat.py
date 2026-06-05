@@ -55,3 +55,20 @@ async def get_chat_list(
         return success(result)
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.get(
+    "/{id}",
+    response_model=ApiResponse[schemas_chat.GetChatDetailResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取对话详情请求",
+)
+async def get_chat_detail(
+    db: Annotated[AsyncSession, Depends(get_db)], id: Annotated[int, Path()]
+):
+    """获取对话详情请求"""
+    try:
+        result = await service_chat.get_chat_detail(db, id)
+        return success(result)
+    except ServiceException as e:
+        return error(e.code, e.message)

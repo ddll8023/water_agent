@@ -2963,6 +2963,71 @@ data: {"type":"done","session_id":1,"message_id":2}
 }
 ```
 
+### 14.3 获取对话详情
+
+- **GET** `/api/v1/chat/{id}`
+- **描述**：获取指定对话的完整信息，包含消息列表。
+
+| 参数 | 类型 | 位置 | 必填 | 说明   |
+|------|------|------|------|--------|
+| id   | int  | path | 是   | 对话ID |
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "title": "Ⅰ类水的溶解氧标准是多少？",
+    "created_at": "2026-06-05T10:30:00",
+    "updated_at": "2026-06-05T10:35:00",
+    "messages": [
+      {
+        "id": 1,
+        "session_id": 1,
+        "role": "user",
+        "content": "Ⅰ类水的溶解氧标准是多少？",
+        "reference": null,
+        "status": 0,
+        "created_at": "2026-06-05T10:30:00"
+      },
+      {
+        "id": 2,
+        "session_id": 1,
+        "role": "assistant",
+        "content": "Ⅰ类水的溶解氧标准为...",
+        "reference": [{"doc_id": 1, "chunk_index": 3}],
+        "status": 0,
+        "created_at": "2026-06-05T10:30:05"
+      }
+    ]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | int | 对话ID |
+| title | string\|null | 对话标题 |
+| created_at | datetime | 创建时间 |
+| updated_at | datetime | 更新时间 |
+| messages[].id | int | 消息ID |
+| messages[].session_id | int | 对话ID |
+| messages[].role | string | user / assistant |
+| messages[].content | string | 消息内容 |
+| messages[].reference | array\|null | 参考来源 [{doc_id, chunk_index}] |
+| messages[].status | int | 0=活跃 1=废弃 |
+| messages[].created_at | datetime | 创建时间 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+|--------|------|
+| 1002 | 会话不存在 |
+| 2003 | 权限不足 |
+
 ### 13.5 重新处理文档
 
 - **POST** `/api/v1/documents/{id}/reprocess`

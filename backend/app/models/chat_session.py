@@ -23,12 +23,12 @@ class ChatSession(Base):
     id = Column[int](BigInteger, primary_key=True, autoincrement=True, comment="对话ID")
     user_id = Column[int](
         Integer,
-        ForeignKey("user.id"),
+        ForeignKey("user.id", ondelete="CASCADE"),
         index=True,
         comment="用户ID（为空表示匿名对话）",
     )
     title = Column[str](String(255), comment="对话标题（首次query前30字）")
-    message_list = Column[list](
+    message_list = Column[list[int]](
         JSON, default=list, comment="消息滑动窗口，包含最近的message_id列表"
     )
     status = Column[int](

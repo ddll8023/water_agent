@@ -9,6 +9,10 @@ export function getChatList(params = {}) {
   return request.get('/v1/chat', { params })
 }
 
+export function getChatDetail(id) {
+  return request.get(`/v1/chat/${id}`)
+}
+
 export function fetchChatStream({ query, session_id, onChunk, onDone, onError }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')

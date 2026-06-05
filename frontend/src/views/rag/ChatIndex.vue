@@ -19,24 +19,17 @@
             description="暂无对话记录，点击上方按钮开始提问"
             :image-size="80"
           />
-          <el-menu
-            v-else
-            :default-active="String(currentSessionId)"
-            @select="switchSession"
-            class="border-r-0"
-          >
-            <el-menu-item
-              v-for="s in sessions"
-              :key="s.id"
-              :index="String(s.id)"
-              class="!h-auto !py-3 !px-4 !whitespace-normal !leading-tight"
+          <div v-else class="flex flex-col">
+            <div
+              v-for="s in sessions" :key="s.id"
+              class="flex flex-col gap-1 w-full overflow-hidden cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
+              :class="{ 'bg-teal-50 !border-teal-100': currentSessionId === s.id }"
+              @click="switchSession(s.id)"
             >
-              <div class="flex flex-col gap-1 w-full overflow-hidden">
-                <span class="text-sm truncate">{{ s.title }}</span>
-                <span class="text-xs text-gray-400">{{ formatTime(s.created_at) }}</span>
-              </div>
-            </el-menu-item>
-          </el-menu>
+              <span class="text-sm truncate" :class="{ 'text-teal-700 font-medium': currentSessionId === s.id }">{{ s.title }}</span>
+              <span class="text-xs text-gray-400">{{ formatTime(s.created_at) }}</span>
+            </div>
+          </div>
         </el-scrollbar>
       </div>
 
@@ -185,7 +178,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { fetchChatStream, getChatList } from '@/api/chat'
+import { fetchChatStream, getChatList, getChatDetail } from '@/api/chat'
 import {
   Plus, ChatLineSquare, Promotion, Refresh,
   DArrowLeft, DArrowRight, Document,
@@ -198,6 +191,7 @@ const scrollbarRef = ref(null)
 const inputText = ref('')
 const isStreaming = ref(false)
 const sessionsLoading = ref(false)
+const sessionLoading = ref(false)
 
 // 会话列表（从 API 加载）
 const sessions = ref([])
@@ -268,7 +262,43 @@ function switchSession(index) {
   }
 
   currentSessionId.value = id
-  messages.value = messageCache.value.get(id) || []
+
+  // 优先使用缓存
+  const cached = messageCache.value.get(id)
+  if (cached) {
+    messages.value = cached
+    return
+  }
+
+  // 缓存未命中则从 API 加载
+  loadSessionMessages(id)
+}
+
+async function loadSessionMessages(id) {
+  sessionLoading.value = true
+  try {
+    const res = await getChatDetail(id)
+    const msgs = (res.data.messages || []).map(toMessage)
+    messageCache.value.set(id, msgs)
+    messages.value = msgs
+  } catch (e) {
+    messages.value = [
+      { id: genId(), role: 'assistant', content: '', references: [], streaming: false, error: e.message || '加载对话失败' },
+    ]
+  } finally {
+    sessionLoading.value = false
+  }
+}
+
+function toMessage(item) {
+  return {
+    id: item.id,
+    role: item.role,
+    content: item.content,
+    references: item.reference || [],
+    streaming: false,
+    error: null,
+  }
 }
 
 async function sendMessage() {

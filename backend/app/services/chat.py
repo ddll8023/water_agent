@@ -66,7 +66,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             session_id=session_entity.id, role="user", content=chat_request.query
         )
         db.add(message_entity)
-
+        await db.flush()
         vector_store = get_vector_store()
         rag_result_list = await asyncio.to_thread(
             vector_store.similarity_search, query=chat_request.query, k=settings.TOP_K
@@ -142,8 +142,8 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             reference=reference,
         )
         db.add(new_message_entity)
-
-        new_ids = session_entity.message_list or []
+        await db.flush()
+        new_ids = session_entity.message_list.copy() or []
         new_ids.extend([message_entity.id, new_message_entity.id])
         session_entity.message_list = new_ids[-20:]
 
@@ -188,4 +188,28 @@ async def get_chat_list(
             total=total,
             total_pages=math.ceil(total / get_chat_list_request.page_size),
         ),
+    )
+
+
+async def get_chat_detail(db: AsyncSession, session_id: int):
+    """获取对话详情请求"""
+    session_entity = await db.get(models_chat_session.ChatSession, session_id)
+    if session_entity is None:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "会话不存在")
+    message_id_list = session_entity.message_list
+    message_entity_list = await db.scalars(
+        select(models_chat_message.ChatMessage).where(
+            models_chat_message.ChatMessage.id.in_(message_id_list)
+        )
+    )
+
+    return schemas_chat.GetChatDetailResponse(
+        id=session_id,
+        title=session_entity.title,
+        created_at=session_entity.created_at,
+        updated_at=session_entity.updated_at,
+        messages=[
+            schemas_chat.ChatItem.model_validate(message_entity)
+            for message_entity in message_entity_list
+        ],
     )
