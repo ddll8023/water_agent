@@ -2884,6 +2884,50 @@ category: 0
 | 2003   | 权限不足                     |
 | 5001   | 服务器内部错误               |
 
+---
+
+## 十四、智能问答（/api/v1/chat）
+
+SSE 流式对话接口。需要 Bearer Token 认证，admin 与 user 角色均可访问。
+
+### 14.1 流式对话
+
+- **POST** `/api/v1/chat`
+- **描述**：发送用户问题，服务端以 SSE（Server-Sent Events）流式返回回答。
+
+| 参数       | 类型       | 位置 | 必填 | 说明                    |
+| ---------- | ---------- | ---- | ---- | ----------------------- |
+| query      | string     | body | 是   | 用户问题（1-2000 字）   |
+| session_id | int\|null  | body | 否   | 对话 ID，空则新建会话   |
+
+**请求体示例**：
+
+```json
+{
+  "query": "Ⅰ类水的溶解氧标准是多少？",
+  "session_id": null
+}
+```
+
+**响应（SSE 事件流）**：
+
+Content-Type: `text/event-stream`
+
+| 事件类型 | 字段               | 说明                       |
+| -------- | ------------------ | -------------------------- |
+| chunk    | content (string)   | 逐 token 流式回答内容      |
+| done     | session_id, message_id | 回答完成，包含会话和消息 ID |
+
+**事件示例**：
+
+```
+data: {"type":"chunk","content":"Ⅰ类"}
+
+data: {"type":"chunk","content":"水的溶解氧标准为"}
+
+data: {"type":"done","session_id":1,"message_id":2}
+```
+
 ### 13.5 重新处理文档
 
 - **POST** `/api/v1/documents/{id}/reprocess`

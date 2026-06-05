@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     CHUNK_OVERLAP: int = 240
     SEPARATORS: list[str] = ["\n\n", "\n", "。", "！", "？", ".", "!", "?", " ", ""]
 
+    TOP_K: int = 5
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

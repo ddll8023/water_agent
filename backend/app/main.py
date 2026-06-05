@@ -21,6 +21,7 @@ from app.models import alert_rule as models_alert_rule
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_db
 from app.routers import documents as documents_router
+from app.routers import chat as chat_router
 
 logger = setup_logger(__name__)
 
@@ -82,6 +83,7 @@ app.include_router(dashboard_router.router)
 app.include_router(alerts_router.router)
 app.include_router(alert_rules_router.router)
 app.include_router(documents_router.router)
+app.include_router(chat_router.router)
 
 
 @app.websocket("/ws/alerts")

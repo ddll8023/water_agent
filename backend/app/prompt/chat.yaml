@@ -1,0 +1,10 @@
+CHAT:
+  SYSTEM: |
+    根据知识库中的信息回答问题
+
+  USER: |
+    知识库:
+    {rag_content}
+
+    用户问题:
+    {query}

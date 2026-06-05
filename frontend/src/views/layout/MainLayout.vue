@@ -40,6 +40,10 @@
               <el-icon><ChatLineSquare /></el-icon>
               <span>智能问答</span>
             </template>
+            <el-menu-item index="/rag/chat">
+              <el-icon><ChatLineSquare /></el-icon>
+              <span>智能问答</span>
+            </el-menu-item>
             <el-menu-item index="/rag/knowledge">
               <el-icon><Document /></el-icon>
               <span>知识库管理</span>

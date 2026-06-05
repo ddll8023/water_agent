@@ -5,6 +5,8 @@ redis_client = aioredis.from_url(
     f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
     encoding="utf-8",
     decode_responses=True,
+    socket_connect_timeout=0.5,  # 500ms 连接超时，不要无限等
+    socket_timeout=1.0,  # 读写超时
 )
 
 

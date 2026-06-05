@@ -61,6 +61,12 @@ const routes = [
         name: 'KnowledgeBase',
         component: () => import('@/views/rag/KnowledgeBase.vue'),
         meta: { title: '知识库管理' }
+      },
+      {
+        path: 'rag/chat',
+        name: 'ChatIndex',
+        component: () => import('@/views/rag/ChatIndex.vue'),
+        meta: { title: '智能问答' }
       }
     ]
   },
