@@ -48,6 +48,10 @@
               <el-icon><Document /></el-icon>
               <span>知识库管理</span>
             </el-menu-item>
+            <el-menu-item index="/rag/graph">
+              <el-icon><Connection /></el-icon>
+              <span>知识图谱</span>
+            </el-menu-item>
           </el-sub-menu>
           <el-sub-menu index="system">
             <template #title>

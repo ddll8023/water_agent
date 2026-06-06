@@ -1,0 +1,34 @@
+{
+  "rivers": [
+    { "name": "史河", "length_km": 220, "watershed": "淮河流域" },
+    { "name": "淠河", "length_km": 253, "watershed": "淮河流域" },
+    { "name": "杭埠河", "length_km": 145, "watershed": "长江流域" },
+    { "name": "南淝河", "length_km": 60, "watershed": "淮河流域" }
+  ],
+  "pollution_sources": [
+    { "name": "青龙山养猪场", "type": "养殖场", "longitude": 118.518, "latitude": 32.158, "risk_level": "中", "violation_count": 2 },
+    { "name": "梅山化工厂", "type": "工业企业", "longitude": 118.328, "latitude": 32.095, "risk_level": "高", "violation_count": 5 },
+    { "name": "董铺农田径流区", "type": "农业面源", "longitude": 117.160, "latitude": 31.910, "risk_level": "中", "violation_count": null },
+    { "name": "龙河口采砂场", "type": "其他", "longitude": 117.950, "latitude": 31.755, "risk_level": "低", "violation_count": 0 }
+  ],
+  "relationships": {
+    "FLOWS_INTO": [
+      { "from": { "type": "River", "match": { "name": "淠河" } }, "to": { "type": "Reservoir", "match": { "code": "QLS-001" } } },
+      { "from": { "type": "River", "match": { "name": "史河" } }, "to": { "type": "Reservoir", "match": { "code": "MSH-002" } }, "props": { "distance_km": 0 } },
+      { "from": { "type": "River", "match": { "name": "杭埠河" } }, "to": { "type": "Reservoir", "match": { "code": "LHK-003" } } },
+      { "from": { "type": "River", "match": { "name": "南淝河" } }, "to": { "type": "Reservoir", "match": { "code": "DPS-004" } } }
+    ],
+    "DISCHARGES_INTO": [
+      { "from": { "type": "PollutionSource", "match": { "name": "青龙山养猪场" } }, "to": { "type": "River", "match": { "name": "史河" } }, "props": { "distance_km": 0.8 } },
+      { "from": { "type": "PollutionSource", "match": { "name": "梅山化工厂" } }, "to": { "type": "River", "match": { "name": "史河" } }, "props": { "distance_km": 0.3 } },
+      { "from": { "type": "PollutionSource", "match": { "name": "董铺农田径流区" } }, "to": { "type": "River", "match": { "name": "南淝河" } }, "props": { "distance_km": 1.2 } },
+      { "from": { "type": "PollutionSource", "match": { "name": "龙河口采砂场" } }, "to": { "type": "River", "match": { "name": "杭埠河" } }, "props": { "distance_km": 0.2 } }
+    ],
+    "CORRELATED_WITH": [
+      { "from": { "type": "Indicator", "match": { "code": "ad" } }, "to": { "type": "Indicator", "match": { "code": "rjy" } }, "props": { "type": "negative", "strength": 0.65, "description": "氨氮升高消耗溶解氧" } },
+      { "from": { "type": "Indicator", "match": { "code": "swt" } }, "to": { "type": "Indicator", "match": { "code": "ad" } }, "props": { "type": "positive", "strength": 0.55, "description": "水温升高促进底泥氮释放" } },
+      { "from": { "type": "Indicator", "match": { "code": "ad" } }, "to": { "type": "Indicator", "match": { "code": "cod" } }, "props": { "type": "positive", "strength": 0.6, "description": "氨氮与化学需氧量同源（有机物污染）" } },
+      { "from": { "type": "Indicator", "match": { "code": "zd" } }, "to": { "type": "Indicator", "match": { "code": "cod" } }, "props": { "type": "positive", "strength": 0.5, "description": "浊度升高常伴随有机物增加" } }
+    ]
+  }
+}

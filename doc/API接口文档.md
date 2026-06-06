@@ -3300,3 +3300,114 @@ Authorization: Bearer <token>
 | ------ | ---------------------------- |
 | 2003   | 权限不足                     |
 | 5001   | 服务器内部错误               |
+
+---
+
+## 十四、知识图谱（/api/v1/graph）
+
+基于 Neo4j 图数据库的图谱数据查询接口。需要 Bearer Token 认证，admin 与已授权角色均可访问。
+
+### 14.1 获取图谱全局概览
+
+- **GET** `/api/v1/graph/overview`
+- **描述**：获取图谱全局数据，返回所有节点和边供前端 ECharts 力导向图渲染。可选 `reservoir_code` 参数过滤。
+
+| 参数          | 类型         | 位置   | 必填 | 说明                                  |
+| ------------- | ------------ | ------ | ---- | ------------------------------------- |
+| Authorization | string       | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| reservoir_code | string\|null | query  | 否   | 水库编号，传入后只返回该水库关联子图 |
+
+**请求示例**：
+
+```
+GET /api/v1/graph/overview
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "nodes": [
+      {
+        "id": "reservoir:QLS-001",
+        "name": "青龙山水库",
+        "type": "Reservoir",
+        "code": "QLS-001",
+        "watershed": "淮河流域",
+        "water_grade": "Ⅱ类"
+      },
+      {
+        "id": "station:QLS-AUTO-001",
+        "name": "青龙山大坝上游自动站",
+        "type": "MonitoringStation",
+        "code": "QLS-AUTO-001",
+        "subtype": "auto"
+      },
+      {
+        "id": "indicator:ad",
+        "name": "氨氮",
+        "type": "Indicator",
+        "code": "ad"
+      },
+      {
+        "id": "river:史河",
+        "name": "史河",
+        "type": "River",
+        "watershed": "淮河流域"
+      },
+      {
+        "id": "pollution:梅山化工厂",
+        "name": "梅山化工厂",
+        "type": "PollutionSource",
+        "risk_level": "高",
+        "subtype": "工业企业"
+      }
+    ],
+    "edges": [
+      { "source": "station:QLS-AUTO-001", "target": "reservoir:QLS-001", "relation": "BELONGS_TO" },
+      { "source": "station:QLS-AUTO-001", "target": "indicator:ph", "relation": "MEASURES" },
+      { "source": "river:史河", "target": "reservoir:MSH-002", "relation": "FLOWS_INTO" },
+      { "source": "pollution:梅山化工厂", "target": "river:史河", "relation": "DISCHARGES_INTO" },
+      { "source": "indicator:ad", "target": "indicator:rjy", "relation": "CORRELATED_WITH" }
+    ]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| nodes[].id | string | 节点唯一标识，格式 `{类型}:{code或name}` |
+| nodes[].name | string | 节点名称 |
+| nodes[].type | string | 节点类型：Reservoir/MonitoringStation/Indicator/River/PollutionSource |
+| nodes[].code | string\|null | 编码（仅水库/站点/指标有） |
+| nodes[].watershed | string\|null | 所属流域（仅水库/河流有） |
+| nodes[].water_grade | string\|null | 水质等级（仅水库有） |
+| nodes[].risk_level | string\|null | 风险等级（仅污染源有） |
+| nodes[].subtype | string\|null | 子类型（站点/污染源） |
+| edges[].source | string | 起点节点 id |
+| edges[].target | string | 终点节点 id |
+| edges[].relation | string | 关系类型 |
+
+### 14.2 节点搜索（待补）
+
+- **GET** `/api/v1/graph/search`
+- **描述**：按关键词搜索图谱节点，返回匹配的节点列表。**暂未实现**。
+
+### 14.3 节点详情（待补）
+
+- **GET** `/api/v1/graph/node/{type}/{id}`
+- **描述**：获取指定节点的完整属性。**暂未实现**。
+
+### 14.4 节点一跳扩展（待补）
+
+- **GET** `/api/v1/graph/expand/{type}/{id}`
+- **描述**：扩展指定节点的相邻子图。**暂未实现**。
+
+### 14.5 污染溯源路径（待补）
+
+- **GET** `/api/v1/graph/trace`
+- **描述**：从超标水库出发向上游追溯污染源路径。**暂未实现**。

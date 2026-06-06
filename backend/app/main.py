@@ -19,9 +19,10 @@ from app.routers import alert_rules as alert_rules_router
 from app.services.monitoring import collect_water_quality_data
 from app.models import alert_rule as models_alert_rule
 from app.utils.logger_config import setup_logger
-from app.utils.db_init import init_db
+from app.utils.db_init import init_mysql, init_neo4j
 from app.routers import documents as documents_router
 from app.routers import chat as chat_router
+from app.routers import graph as graph_router
 
 logger = setup_logger(__name__)
 
@@ -35,8 +36,13 @@ async def lifespan(app: FastAPI):
     # ---- startup ----
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # await init_db(conn)
+        # await init_mysql(conn)
     logger.info("数据库表创建完成")
+
+    try:
+        await init_neo4j()
+    except Exception as e:
+        logger.warning("Neo4j 图谱初始化异常（不影响服务启动）: %s", e)
 
     # 启动后立即执行一次采集
     # await collect_water_quality_data()
@@ -84,6 +90,7 @@ app.include_router(alerts_router.router)
 app.include_router(alert_rules_router.router)
 app.include_router(documents_router.router)
 app.include_router(chat_router.router)
+app.include_router(graph_router.router)
 
 
 @app.websocket("/ws/alerts")

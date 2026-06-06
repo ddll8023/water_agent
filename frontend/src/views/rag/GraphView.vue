@@ -1,0 +1,472 @@
+<template>
+  <div class="h-full flex flex-col bg-slate-900 relative">
+    <el-skeleton :loading="loading" animated class="absolute inset-0 z-50">
+      <template #template>
+        <div class="h-full flex items-center justify-center bg-slate-900">
+          <el-skeleton-item variant="rect" class="w-3/4 h-3/4 rounded-lg opacity-20" />
+        </div>
+      </template>
+    </el-skeleton>
+
+    <header class="h-14 flex items-center gap-4 px-4 bg-slate-800/80 border-b border-slate-700 shrink-0">
+      <h1 class="text-white font-semibold text-base whitespace-nowrap">水质知识图谱</h1>
+      <el-autocomplete
+        v-model="searchKeyword"
+        :fetch-suggestions="handleSearch"
+        placeholder="搜索水库/河流/污染源/指标..."
+        :trigger-on-focus="false"
+        clearable
+        class="w-72"
+        popper-class="graph-search-popper"
+        @select="handleSelectNode"
+      >
+        <template #prefix>
+          <el-icon class="text-slate-400"><Search /></el-icon>
+        </template>
+        <template #default="{ item }">
+          <div class="flex items-center justify-between">
+            <span>{{ item.name }}</span>
+            <el-tag :type="tagType(item.type)" size="small">{{ item.type }}</el-tag>
+          </div>
+        </template>
+      </el-autocomplete>
+      <el-select
+        v-model="watershedFilter"
+        placeholder="流域筛选"
+        clearable
+        class="w-40"
+        @change="handleWatershedChange"
+      >
+        <el-option
+          v-for="ws in watershedOptions"
+          :key="ws"
+          :label="ws"
+          :value="ws"
+        />
+      </el-select>
+      <div class="ml-auto flex items-center gap-3 text-sm text-slate-400">
+        <span>节点 <strong class="text-white">{{ nodeCount }}</strong></span>
+        <span>关系 <strong class="text-white">{{ edgeCount }}</strong></span>
+      </div>
+    </header>
+
+    <main ref="chartRef" class="flex-1 relative">
+      <div
+        v-if="!loading && !nodeCount"
+        class="absolute inset-0 flex items-center justify-center text-slate-500"
+      >
+        <el-empty description="暂无图谱数据，请先导入基础数据" />
+      </div>
+    </main>
+
+    <div class="absolute top-20 right-4 z-10 space-y-1">
+      <div
+        v-for="item in legendItems"
+        :key="item.name"
+        class="flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors"
+        :class="legendVisible[item.name] ? 'bg-slate-700/60 text-slate-200' : 'bg-slate-800/40 text-slate-500 line-through'"
+        @click="toggleLegend(item.name)"
+      >
+        <span
+          class="inline-block w-3 h-3 rounded-full shrink-0"
+          :style="{ backgroundColor: item.color }"
+        />
+        <span class="text-xs">{{ item.name }}</span>
+      </div>
+    </div>
+
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
+      <el-button-group class="backdrop-blur-sm bg-slate-800/60 rounded-lg">
+        <el-button size="small" @click="handleSnapshot">快照</el-button>
+        <el-button size="small" @click="handleExport">导出</el-button>
+        <el-button size="small" @click="handleReset">重置</el-button>
+        <el-button size="small" @click="handleFit">适配</el-button>
+      </el-button-group>
+    </div>
+
+    <el-drawer
+      v-model="drawerVisible"
+      direction="rtl"
+      size="360px"
+      :with-header="false"
+      class="graph-drawer"
+    >
+      <template v-if="selectedNode">
+        <div class="p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">{{ selectedNode.name }}</h3>
+            <el-tag :type="tagType(selectedNode.type)" size="small">{{ selectedNode.type }}</el-tag>
+          </div>
+          <el-descriptions :column="2" border size="small" class="mb-4">
+            <el-descriptions-item
+              v-for="(val, key) in nodeProperties"
+              :key="key"
+              :label="key"
+            >
+              {{ val ?? '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+          <div class="flex flex-col gap-2">
+            <el-button
+              v-if="selectedNode.type === 'Reservoir'"
+              type="primary"
+              size="small"
+              plain
+              disabled
+            >查看溯源路径</el-button>
+            <el-button
+              v-if="selectedNode.type === 'MonitoringStation'"
+              type="primary"
+              size="small"
+              plain
+              disabled
+            >查看关联指标</el-button>
+            <el-button
+              type="primary"
+              size="small"
+              plain
+              @click="handleExpandNode"
+            >展开上下游</el-button>
+          </div>
+        </div>
+      </template>
+    </el-drawer>
+  </div>
+</template>
+
+<script setup>
+/**
+ * 知识图谱可视化（07g）
+ * 功能描述：ECharts 力导向图展示水库/站点/河流/污染源/指标关联关系，支持搜索、筛选、详情查看
+ * 依赖组件：ECharts GraphChart
+ */
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
+import * as echarts from 'echarts/core'
+import { GraphChart } from 'echarts/charts'
+import {
+  TooltipComponent,
+  TitleComponent,
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+import { getGraphOverview, searchNodes, expandNode } from '@/api/graph'
+import { NODE_STYLE, EDGE_STYLE, LEGEND_CONFIG } from './graphConfig'
+
+echarts.use([GraphChart, TooltipComponent, TitleComponent, CanvasRenderer])
+
+const chartRef = ref(null)
+const loading = ref(true)
+const searchKeyword = ref('')
+const watershedFilter = ref('')
+const drawerVisible = ref(false)
+const selectedNode = ref(null)
+
+const allNodes = ref([])
+const allEdges = ref([])
+const chartInstance = ref(null)
+const legendVisible = reactive(
+  Object.fromEntries(LEGEND_CONFIG.map((item) => [item.name, true]))
+)
+
+const nodeCount = computed(() => allNodes.value.length)
+const edgeCount = computed(() => allEdges.value.length)
+
+const watershedOptions = computed(() => {
+  const set = new Set()
+  allNodes.value.forEach((n) => {
+    if (n.watershed) set.add(n.watershed)
+  })
+  return [...set]
+})
+
+const nodeProperties = computed(() => {
+  const n = selectedNode.value
+  if (!n) return {}
+  const props = { 名称: n.name, 类型: n.type }
+  if (n.code) props.编号 = n.code
+  if (n.watershed) props.流域 = n.watershed
+  if (n.water_grade) props.水质等级 = n.water_grade
+  if (n.risk_level) props.风险等级 = n.risk_level
+  if (n.subtype) props.子类型 = n.subtype
+  return props
+})
+
+const tagType = (type) => {
+  const map = {
+    Reservoir: '',
+    MonitoringStation: 'success',
+    River: 'info',
+    PollutionSource: 'danger',
+    Indicator: 'warning',
+  }
+  return map[type] || 'info'
+}
+
+function getNodeStyle(node) {
+  const config = NODE_STYLE[node.type]
+  if (!config) return { symbol: 'circle', color: '#94a3b8', size: 20 }
+  if (node.type === 'PollutionSource') {
+    const risk = node.risk_level
+    return {
+      symbol: config.symbol,
+      color: config.colorByRisk[risk] || config.defaultColor,
+      size: config.sizeByRisk[risk] || config.defaultSize,
+    }
+  }
+  return { symbol: config.symbol, color: config.color, size: config.size }
+}
+
+function buildEChartsOption() {
+  const showNodeTypes = new Set(
+    LEGEND_CONFIG.filter((item) => legendVisible[item.name]).map((item) => {
+      const map = { 水库: 'Reservoir', 监测站点: 'MonitoringStation', 河流: 'River', 污染源: 'PollutionSource', 监测指标: 'Indicator' }
+      return map[item.name]
+    })
+  )
+
+  const nodes = allNodes.value
+    .filter((n) => showNodeTypes.has(n.type))
+    .map((n) => {
+      const style = getNodeStyle(n)
+      return {
+        id: n.id,
+        name: n.name,
+        value: n.type,
+        category: n.type,
+        symbol: style.symbol,
+        itemStyle: { color: style.color },
+        symbolSize: style.size,
+        watershed: n.watershed,
+      }
+    })
+
+  const edges = allEdges.value
+    .filter((e) => {
+      const fromNode = allNodes.value.find((n) => n.id === e.source)
+      const toNode = allNodes.value.find((n) => n.id === e.target)
+      return fromNode && toNode && showNodeTypes.has(fromNode.type) && showNodeTypes.has(toNode.type)
+    })
+    .filter((e) => {
+      if (!watershedFilter.value) return true
+      const fromNode = allNodes.value.find((n) => n.id === e.source)
+      return fromNode && fromNode.watershed === watershedFilter.value
+    })
+    .map((e) => {
+      const style = EDGE_STYLE[e.relation] || { type: 'solid', label: e.relation }
+      return {
+        source: e.source,
+        target: e.target,
+        label: { show: true, formatter: style.label, fontSize: 10, color: '#94a3b8' },
+        lineStyle: { type: style.type, color: '#475569', width: 1.5 },
+      }
+    })
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      formatter: (params) => {
+        if (params.dataType === 'node') {
+          return `<strong>${params.name}</strong><br/>类型: ${params.value}`
+        }
+        return ''
+      },
+    },
+    series: [
+      {
+        type: 'graph',
+        layout: 'force',
+        force: {
+          repulsion: 300,
+          edgeLength: 120,
+          gravity: 0.1,
+          friction: 0.1,
+        },
+        roam: true,
+        draggable: true,
+        data: nodes,
+        edges: edges,
+        categories: LEGEND_CONFIG.map((item) => ({
+          name: item.name,
+          itemStyle: { color: item.color },
+        })),
+        label: {
+          show: true,
+          position: 'bottom',
+          fontSize: 10,
+          color: '#cbd5e1',
+          formatter: (params) => params.name,
+        },
+        edgeLabel: { show: false },
+        lineStyle: { color: '#475569', width: 1.5, curveness: 0.2 },
+        emphasis: {
+          focus: 'adjacency',
+          lineStyle: { width: 2.5, color: '#94a3b8' },
+        },
+        blur: {
+          opacity: 0.15,
+          lineStyle: { opacity: 0.15 },
+        },
+        zoom: 1,
+      },
+    ],
+  }
+}
+
+async function renderGraph() {
+  await nextTick()
+  if (!chartRef.value) return
+  if (!chartInstance.value) {
+    chartInstance.value = echarts.init(chartRef.value)
+  }
+  const option = buildEChartsOption()
+  chartInstance.value.setOption(option, true)
+  chartInstance.value.on('click', (params) => {
+    if (params.dataType === 'node') {
+      const node = allNodes.value.find((n) => n.id === params.data.id)
+      if (node) {
+        selectedNode.value = node
+        drawerVisible.value = true
+      }
+    }
+  })
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const res = await getGraphOverview()
+    allNodes.value = res.data?.nodes || []
+    allEdges.value = res.data?.edges || []
+  } catch {
+    ElMessage.error('加载图谱数据失败')
+  } finally {
+    loading.value = false
+    await nextTick()
+    renderGraph()
+  }
+}
+
+async function handleSearch(query, cb) {
+  if (!query || query.length < 1) {
+    cb([])
+    return
+  }
+  try {
+    const res = await searchNodes(query)
+    const items = (res.data || []).map((item) => ({
+      ...item,
+      value: item.name,
+    }))
+    cb(items)
+  } catch {
+    cb([])
+  }
+}
+
+function handleSelectNode(item) {
+  const node = allNodes.value.find((n) => n.id === item.id)
+  if (node && chartInstance.value) {
+    selectedNode.value = node
+    drawerVisible.value = true
+    chartInstance.value.dispatchAction({
+      type: 'highlight',
+      seriesIndex: 0,
+      dataIndex: allNodes.value.indexOf(node),
+    })
+  }
+}
+
+function handleWatershedChange() {
+  renderGraph()
+}
+
+function toggleLegend(name) {
+  legendVisible[name] = !legendVisible[name]
+  renderGraph()
+}
+
+async function handleExpandNode() {
+  if (!selectedNode.value) return
+  const parts = selectedNode.value.id.split(':')
+  if (parts.length < 2) return
+  const type = parts[0]
+  const id = parts.slice(1).join(':')
+  try {
+    const res = await expandNode(type, id)
+    const newNodes = res.data?.nodes || []
+    const newEdges = res.data?.edges || []
+    const existingIds = new Set(allNodes.value.map((n) => n.id))
+    const newIds = newNodes.filter((n) => !existingIds.has(n.id))
+    allNodes.value = [...allNodes.value, ...newIds]
+    allEdges.value = [...allEdges.value, ...newEdges]
+    renderGraph()
+    if (!newIds.length) {
+      ElMessage.info('该节点已无更多关联')
+    }
+  } catch {
+    ElMessage.error('扩展节点失败')
+  }
+}
+
+function handleSnapshot() {
+  if (!chartInstance.value) return
+  try {
+    const option = chartInstance.value.getOption()
+    localStorage.setItem('graphSnapshot', JSON.stringify(option))
+    ElMessage.success('快照已保存')
+  } catch {
+    ElMessage.warning('保存快照失败')
+  }
+}
+
+function handleExport() {
+  if (!chartInstance.value) return
+  try {
+    const url = chartInstance.value.getDataURL({ type: 'png' })
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `知识图谱_${new Date().toISOString().slice(0, 10)}.png`
+    a.click()
+    ElMessage.success('导出成功')
+  } catch {
+    ElMessage.warning('导出失败')
+  }
+}
+
+function handleReset() {
+  localStorage.removeItem('graphSnapshot')
+  renderGraph()
+  ElMessage.success('已重置视图')
+}
+
+function handleFit() {
+  if (chartInstance.value) {
+    chartInstance.value.dispatchAction({ type: 'restore' })
+  }
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  if (chartInstance.value) {
+    chartInstance.value.dispose()
+    chartInstance.value = null
+  }
+  window.removeEventListener('resize', handleResize)
+})
+
+function handleResize() {
+  chartInstance.value?.resize()
+}
+</script>
+
+<style scoped>
+.graph-drawer :deep(.el-drawer__body) {
+  padding: 0;
+}
+</style>

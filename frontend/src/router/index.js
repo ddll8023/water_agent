@@ -67,6 +67,12 @@ const routes = [
         name: 'ChatIndex',
         component: () => import('@/views/rag/ChatIndex.vue'),
         meta: { title: '智能问答' }
+      },
+      {
+        path: 'rag/graph',
+        name: 'GraphView',
+        component: () => import('@/views/rag/GraphView.vue'),
+        meta: { title: '知识图谱' }
       }
     ]
   },

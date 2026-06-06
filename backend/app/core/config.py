@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # Neo4j 配置
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: str = ""
+    NEO4J_PASSWORD: str = "admin123"
 
     # Chroma 配置
     CHROMA_PERSIST_DIR: str = "chroma_data"
