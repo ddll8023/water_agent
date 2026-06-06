@@ -29,12 +29,6 @@ class GetChatListRequest(BaseModel):
     page_size: int = Field(20, ge=10)
 
 
-class GetChatDetailRequest(BaseModel):
-    """获取对话详情请求"""
-
-    session_id: int = Field(..., description="session Id")
-
-
 class GetChatListResponse(BaseModel):
     """获取对话列表响应"""
 

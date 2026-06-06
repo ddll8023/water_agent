@@ -72,3 +72,21 @@ async def get_chat_detail(
         return success(result)
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.delete(
+    "/{id}",
+    response_model=ApiResponse[bool],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="删除对话请求",
+)
+async def delete_chat(
+    db: Annotated[AsyncSession, Depends(get_db)], id: Annotated[int, Path()]
+):
+    """删除对话请求"""
+
+    try:
+        result = await service_chat.delete_chat(db, id)
+        return success(result)
+    except ServiceException as e:
+        return error(e.code, e.message)

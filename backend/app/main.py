@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     logger.info("数据库表创建完成")
 
     # 启动后立即执行一次采集
-    await collect_water_quality_data()
+    # await collect_water_quality_data()
 
     # 每10分钟定时采集（从第二次开始计时）
     scheduler.add_job(

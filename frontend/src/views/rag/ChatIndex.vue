@@ -22,12 +22,23 @@
           <div v-else class="flex flex-col">
             <div
               v-for="s in sessions" :key="s.id"
-              class="flex flex-col gap-1 w-full overflow-hidden cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
+              class="group relative flex items-center justify-between w-full overflow-hidden cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
               :class="{ 'bg-teal-50 !border-teal-100': currentSessionId === s.id }"
               @click="switchSession(s.id)"
             >
-              <span class="text-sm truncate" :class="{ 'text-teal-700 font-medium': currentSessionId === s.id }">{{ s.title }}</span>
-              <span class="text-xs text-gray-400">{{ formatTime(s.created_at) }}</span>
+              <div class="flex flex-col gap-1 min-w-0 flex-1">
+                <span class="text-sm truncate" :class="{ 'text-teal-700 font-medium': currentSessionId === s.id }">{{ s.title }}</span>
+                <span class="text-xs text-gray-400">{{ formatTime(s.created_at) }}</span>
+              </div>
+              <el-button
+                size="small"
+                text
+                type="danger"
+                class="!opacity-0 group-hover:!opacity-100 transition-opacity shrink-0 ml-2"
+                @click.stop="handleDelete(s.id, $event)"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
             </div>
           </div>
         </el-scrollbar>
@@ -178,11 +189,12 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { fetchChatStream, getChatList, getChatDetail } from '@/api/chat'
+import { fetchChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
 import {
-  Plus, ChatLineSquare, Promotion, Refresh,
+  Plus, ChatLineSquare, Promotion, Refresh, Delete,
   DArrowLeft, DArrowRight, Document,
 } from '@element-plus/icons-vue'
+import { ElMessageBox, ElMessage } from 'element-plus'
 
 /* ========== 状态 ========== */
 
@@ -400,6 +412,30 @@ function clearMessages() {
   messages.value = []
   if (currentSessionId.value) {
     messageCache.value.set(currentSessionId.value, [])
+  }
+}
+
+async function handleDelete(sessionId, event) {
+  event.stopPropagation()
+  if (isStreaming.value) return
+
+  try {
+    await ElMessageBox.confirm('删除后将无法恢复，确认删除该对话？', '确认删除', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await deleteChat(sessionId)
+    sessions.value = sessions.value.filter(s => s.id !== sessionId)
+    messageCache.value.delete(sessionId)
+    if (currentSessionId.value === sessionId) {
+      currentSessionId.value = null
+      messages.value = []
+    }
+    ElMessage.success('对话已删除')
+  } catch (e) {
+    if (e === 'cancel') return
+    ElMessage.error(e.message || '删除失败')
   }
 }
 

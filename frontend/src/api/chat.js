@@ -13,6 +13,10 @@ export function getChatDetail(id) {
   return request.get(`/v1/chat/${id}`)
 }
 
+export function deleteChat(id) {
+  return request.delete(`/v1/chat/${id}`)
+}
+
 export function fetchChatStream({ query, session_id, onChunk, onDone, onError }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')

@@ -213,3 +213,13 @@ async def get_chat_detail(db: AsyncSession, session_id: int):
             for message_entity in message_entity_list
         ],
     )
+
+
+async def delete_chat(db: AsyncSession, session_id: int):
+    """删除对话"""
+    session_entity = await db.get(models_chat_session.ChatSession, session_id)
+    if not session_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "对话不存在")
+    await db.delete(session_entity)
+    await commit_or_rollback(db)
+    return True
