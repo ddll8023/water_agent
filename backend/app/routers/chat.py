@@ -1,6 +1,6 @@
 """聊天对话路由（SSE 流式）"""
 
-from fastapi import APIRouter, Depends, Query, Path, Form, UploadFile, File
+from fastapi import APIRouter, Depends, Query, Path, Form, UploadFile, File, Body
 from typing import Annotated
 from fastapi.responses import StreamingResponse
 from app.core.security import require_role
@@ -90,3 +90,25 @@ async def delete_chat(
         return success(result)
     except ServiceException as e:
         return error(e.code, e.message)
+
+
+@router.post(
+    "/update", dependencies=[Depends(require_role("admin", "user"))], summary="流式对话"
+)
+async def re_chat(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    re_chat_request: Annotated[schemas_chat.ReChatRequest, Body()],
+    current_user: Annotated[
+        schemas_auth.ValidateTokenUserItem, Depends(get_current_user)
+    ],
+):
+    """SSE 流式对话"""
+    return StreamingResponse(
+        service_chat.re_chat(db, current_user.user_id, re_chat_request),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

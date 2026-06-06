@@ -29,6 +29,14 @@ class GetChatListRequest(BaseModel):
     page_size: int = Field(20, ge=10)
 
 
+class ReChatRequest(BaseModel):
+    """重试/修改对话请求"""
+
+    session_id: int = Field(..., description="session Id")
+    message_id: int = Field(..., description="修改的消息Id")
+    query: str = Field(..., description="用户消息")
+
+
 class GetChatListResponse(BaseModel):
     """获取对话列表响应"""
 

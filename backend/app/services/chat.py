@@ -4,7 +4,7 @@ import random
 import httpx
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import UploadFile, BackgroundTasks
 from app.core.database import commit_or_rollback, get_background_db_session
@@ -151,7 +151,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         logger.info(
             f"对话完成: session_id={session_entity.id} " f"message_count={len(new_ids)}"
         )
-        yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_message_entity.id}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_message_entity.id, 'user_message_id': message_entity.id}, ensure_ascii=False)}\n\n"
     except Exception as e:
         await db.rollback()
         logger.error(
@@ -223,3 +223,33 @@ async def delete_chat(db: AsyncSession, session_id: int):
     await db.delete(session_entity)
     await commit_or_rollback(db)
     return True
+
+
+async def re_chat(
+    db: AsyncSession, user_id, re_chat_request: schemas_chat.ReChatRequest
+):
+    """重试/修改对话"""
+    session_entity = await db.get(
+        models_chat_session.ChatSession, re_chat_request.session_id
+    )
+    if not session_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "对话不存在")
+    old_message_list: list[int] = session_entity.message_list.copy() or []
+    re_message_index = old_message_list.index(re_chat_request.message_id)
+    new_message_list = old_message_list[:re_message_index]
+    delete_message_list = old_message_list[re_message_index:]
+    await db.execute(
+        update(models_chat_message.ChatMessage)
+        .where(models_chat_message.ChatMessage.id.in_(delete_message_list))
+        .values(status=1)
+    )
+    session_entity.message_list = new_message_list
+
+    await commit_or_rollback(db)
+    async for chunk in chat(
+        user_id,
+        schemas_chat.ChatRequest(
+            query=re_chat_request.query, session_id=re_chat_request.session_id
+        ),
+    ):
+        yield chunk

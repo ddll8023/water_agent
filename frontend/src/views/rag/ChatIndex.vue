@@ -3,7 +3,8 @@
     <!-- 左侧：对话历史侧边栏 -->
     <el-aside
       :width="sidebarCollapsed ? '0' : '260px'"
-      class="bg-white border-r border-gray-200 flex flex-col transition-all duration-300 overflow-hidden"
+      class="bg-white border-r border-gray-200 flex flex-col overflow-hidden"
+      :style="{ transition: 'width 0.3s' }"
     >
       <div v-if="!sidebarCollapsed" class="flex flex-col h-full">
         <div class="p-3 border-b border-gray-100">
@@ -23,7 +24,7 @@
             <div
               v-for="s in sessions" :key="s.id"
               class="group relative flex items-center justify-between w-full overflow-hidden cursor-pointer px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors"
-              :class="{ 'bg-teal-50 !border-teal-100': currentSessionId === s.id }"
+              :class="{ 'session-active': currentSessionId === s.id }"
               @click="switchSession(s.id)"
             >
               <div class="flex flex-col gap-1 min-w-0 flex-1">
@@ -57,7 +58,7 @@
     </el-aside>
 
     <!-- 右侧：主对话区 -->
-    <el-container class="flex-1 flex flex-col min-w-0">
+    <el-container class="flex-1 flex flex-col min-w-0 min-h-0">
       <!-- 顶部标题栏 -->
       <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0">
         <div>
@@ -77,7 +78,7 @@
       </header>
 
       <!-- 消息列表 -->
-      <el-scrollbar ref="scrollbarRef" class="flex-1 px-6 py-4" max-height="100%">
+      <el-scrollbar ref="scrollbarRef" class="flex-1 h-full min-h-0 px-6 py-4">
         <!-- 初始状态：推荐问题 -->
         <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
           <el-icon class="text-5xl text-gray-300 mb-4"><ChatLineSquare /></el-icon>
@@ -95,57 +96,106 @@
         </div>
 
         <!-- 消息气泡 -->
-        <div v-for="(msg, index) in messages" :key="msg.id || index" class="mb-6">
+        <div v-for="(msg, index) in messages" :key="msg.id || index" class="mb-5 msg-enter">
           <!-- 用户消息 -->
           <div v-if="msg.role === 'user'" class="flex justify-end">
-            <div class="max-w-[70%] bg-teal-500 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap">
-              {{ msg.content }}
+            <div class="max-w-[70%] group relative">
+              <!-- 查看模式 -->
+              <template v-if="editingMsgId !== msg.id">
+                <div class="user-bubble text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm">
+                  {{ msg.content }}
+                </div>
+                <el-tooltip content="修改问题" placement="left">
+                  <el-button
+                    text
+                    size="small"
+                    class="absolute -left-10 top-1/2 -translate-y-1/2 !opacity-0 group-hover:!opacity-100 transition-all duration-200 hover:!scale-110 !text-gray-300 hover:!text-teal-500"
+                    @click.stop="startEdit(msg)"
+                  >
+                    <el-icon><EditPen /></el-icon>
+                  </el-button>
+                </el-tooltip>
+              </template>
+              <!-- 编辑模式 -->
+              <template v-else>
+                <div class="bg-white border border-gray-300 rounded-2xl rounded-tr-sm p-2 shadow-sm transition-all duration-200">
+                  <el-input
+                    v-model="editText"
+                    type="textarea"
+                    :rows="3"
+                    resize="none"
+                    ref="editInputRef"
+                    @keydown="handleEditKeydown"
+                  />
+                  <div class="flex items-center justify-between mt-2">
+                    <span class="text-xs text-gray-400">Ctrl+Enter 确认 · Esc 取消</span>
+                    <div class="flex gap-2">
+                      <el-button size="small" @click="cancelEdit">取消</el-button>
+                      <el-button size="small" type="primary" @click="confirmEdit">确认修改</el-button>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
           <!-- AI 消息 -->
-          <div v-else class="flex justify-start">
-            <div class="max-w-[70%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm">
-              <!-- 正文 -->
-              <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
+          <div v-else class="flex justify-start items-start gap-3">
+            <div class="w-8 h-8 rounded-full ai-avatar flex items-center justify-center shrink-0 mt-0.5">
+              <el-icon class="text-white text-sm"><ChatLineSquare /></el-icon>
+            </div>
+            <div class="max-w-[65%]">
+              <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm">
+                <!-- 正文 -->
+                <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
 
-              <!-- 流式光标 -->
-              <span
-                v-if="msg.streaming"
-                class="inline-block w-2 h-4 bg-teal-500 ml-0.5 animate-pulse"
-              />
+                <!-- 流式光标 - 跳动圆点 -->
+                <span v-if="msg.streaming && !msg.content" class="typing-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </span>
 
-              <!-- 错误状态 -->
-              <div
-                v-if="msg.error"
-                class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg"
-              >
-                <p class="text-xs text-red-600">{{ msg.error }}</p>
-                <el-button
-                  size="small"
-                  type="danger"
-                  text
-                  class="mt-1 !text-xs"
-                  @click="retry(msg)"
+                <!-- 错误状态 -->
+                <div
+                  v-if="msg.error"
+                  class="mt-2 p-2 bg-red-50 border border-red-200 rounded-lg"
                 >
-                  <el-icon><Refresh /></el-icon>
-                  重新生成
-                </el-button>
-              </div>
+                  <p class="text-xs text-red-600">{{ msg.error }}</p>
+                  <el-button
+                    size="small"
+                    type="danger"
+                    text
+                    class="mt-1 !text-xs"
+                    @click="retry(msg)"
+                  >
+                    <el-icon><Refresh /></el-icon>
+                    重新生成
+                  </el-button>
+                </div>
 
-              <!-- 参考来源 -->
-              <div v-if="!msg.streaming && msg.references && msg.references.length > 0" class="mt-3 border-t border-gray-100 pt-2">
-                <el-collapse accordion>
-                  <el-collapse-item title="参考来源" name="references">
-                    <div v-for="(ref, i) in msg.references" :key="i" class="text-xs text-gray-500 py-1">
-                      <el-icon class="mr-1"><Document /></el-icon>
-                      文档 #{{ ref.doc_id }} · 第{{ ref.chunk_index }}段
-                    </div>
-                    <div v-if="msg.references.length === 0" class="text-xs text-gray-400 py-1">
-                      暂无参考来源，回答基于通用知识生成
-                    </div>
-                  </el-collapse-item>
-                </el-collapse>
+                <!-- 操作栏 -->
+                <div v-if="!msg.streaming && !msg.error" class="flex items-center gap-1 mt-2 pt-2 border-t border-gray-100">
+                  <el-button text size="small" class="!text-gray-400 hover:!text-teal-600 !p-1 !h-auto" @click="retry(msg)">
+                    <el-icon :class="{ 'is-loading': retryingMsgId === msg.id }" class="text-sm"><Refresh /></el-icon>
+                    <span class="text-xs ml-1">重新生成</span>
+                  </el-button>
+                </div>
+
+                <!-- 参考来源 -->
+                <div v-if="!msg.streaming && msg.references && msg.references.length > 0" class="mt-3 border-t border-gray-100 pt-2">
+                  <el-collapse accordion>
+                    <el-collapse-item title="参考来源" name="references">
+                      <div v-for="(ref, i) in msg.references" :key="i" class="text-xs text-gray-500 py-1">
+                        <el-icon class="mr-1"><Document /></el-icon>
+                        文档 #{{ ref.doc_id }} · 第{{ ref.chunk_index }}段
+                      </div>
+                      <div v-if="msg.references.length === 0" class="text-xs text-gray-400 py-1">
+                        暂无参考来源，回答基于通用知识生成
+                      </div>
+                    </el-collapse-item>
+                  </el-collapse>
+                </div>
               </div>
             </div>
           </div>
@@ -154,34 +204,39 @@
 
       <!-- 底部输入区 -->
       <footer class="shrink-0 bg-white border-t border-gray-200 px-6 py-4">
-        <div class="flex gap-3">
+        <div class="relative">
           <el-input
             v-model="inputText"
             type="textarea"
-            :rows="3"
+            :autosize="{ minRows: 1, maxRows: 6 }"
             placeholder="输入水质相关问题..."
-            resize="none"
             :disabled="isStreaming"
             @keydown="handleKeydown"
+            class="input-area"
           />
-          <div class="flex flex-col gap-2 shrink-0">
-            <el-button
-              type="primary"
-              :disabled="!inputText.trim() || isStreaming"
-              @click="sendMessage"
-            >
-              <el-icon><Promotion /></el-icon>
-              发送
-            </el-button>
-            <el-button
-              :disabled="messages.length === 0 || isStreaming"
-              @click="clearMessages"
-            >
-              清空对话
-            </el-button>
-          </div>
+          <el-button
+            type="primary"
+            circle
+            :disabled="!inputText.trim() || isStreaming"
+            @click="sendMessage"
+            class="absolute right-2 bottom-2 !h-9 !w-9 transition-all duration-200 hover:scale-110"
+          >
+            <el-icon><Promotion /></el-icon>
+          </el-button>
         </div>
-        <p class="text-xs text-gray-400 mt-2">Enter 发送 · Shift+Enter 换行</p>
+        <div class="flex items-center justify-between mt-2">
+          <p class="text-xs text-gray-400">Enter 发送 · Shift+Enter 换行</p>
+          <el-button
+            text
+            size="small"
+            :disabled="messages.length === 0 || isStreaming"
+            @click="clearMessages"
+            class="!text-gray-400 hover:!text-red-500 transition-colors"
+          >
+            <el-icon><Delete /></el-icon>
+            清空对话
+          </el-button>
+        </div>
       </footer>
     </el-container>
   </el-container>
@@ -189,9 +244,9 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { fetchChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
+import { fetchChatStream, fetchReChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
 import {
-  Plus, ChatLineSquare, Promotion, Refresh, Delete,
+  Plus, ChatLineSquare, Promotion, Refresh, Delete, EditPen,
   DArrowLeft, DArrowRight, Document,
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
@@ -213,6 +268,13 @@ const messageCache = ref(new Map())
 const messages = ref([])
 // 当前对话 ID
 const currentSessionId = ref(null)
+// 编辑状态
+const editingMsgId = ref(null)
+const editText = ref('')
+const editInputRef = ref(null)
+// 重试旋转状态
+const retryingMsgId = ref(null)
+
 // SSE 控制器（用于取消）
 let abortController = null
 
@@ -346,6 +408,16 @@ async function sendMessage() {
     },
     onDone(data) {
       aiMsg.streaming = false
+      if (data.message_id) {
+        aiMsg.id = data.message_id
+      }
+      if (data.user_message_id) {
+        const idx = messages.value.indexOf(aiMsg)
+        const userMsg = idx > 0 ? messages.value[idx - 1] : null
+        if (userMsg && userMsg.role === 'user') {
+          userMsg.id = data.user_message_id
+        }
+      }
 
       // 首次对话：记录 session
       if (!currentSessionId.value) {
@@ -374,6 +446,7 @@ async function sendMessage() {
 }
 
 function retry(msg) {
+  if (isStreaming.value) return
   // 找到对应的 user 消息
   const idx = messages.value.indexOf(msg)
   if (idx < 1) return
@@ -383,23 +456,30 @@ function retry(msg) {
   msg.error = null
   msg.content = ''
   msg.streaming = true
+  retryingMsgId.value = msg.id
 
   isStreaming.value = true
 
-  abortController = fetchChatStream({
+  abortController = fetchReChatStream({
     query: userMsg.content,
     session_id: currentSessionId.value,
+    message_id: userMsg.id,
     onChunk(content) {
       msg.content += content
       scrollToBottom()
     },
     onDone(data) {
       msg.streaming = false
+      retryingMsgId.value = null
+      if (data.message_id) {
+        msg.id = data.message_id
+      }
       isStreaming.value = false
       scrollToBottom()
     },
     onError(err) {
       msg.streaming = false
+      retryingMsgId.value = null
       msg.error = err.message || '生成失败，请重试'
       isStreaming.value = false
       scrollToBottom()
@@ -436,6 +516,85 @@ async function handleDelete(sessionId, event) {
   } catch (e) {
     if (e === 'cancel') return
     ElMessage.error(e.message || '删除失败')
+  }
+}
+
+/* ========== 编辑消息 ========== */
+
+function startEdit(msg) {
+  if (isStreaming.value) return
+  editingMsgId.value = msg.id
+  editText.value = msg.content
+  nextTick(() => {
+    editInputRef.value?.focus()
+  })
+}
+
+function cancelEdit() {
+  editingMsgId.value = null
+  editText.value = ''
+}
+
+function confirmEdit() {
+  const text = editText.value.trim()
+  if (!text || isStreaming.value) return
+
+  const msgId = editingMsgId.value
+  editingMsgId.value = null
+  editText.value = ''
+
+  // 找到这条用户消息对应的 AI 消息（后面那条）
+  const idx = messages.value.findIndex(m => m.id === msgId)
+  if (idx < 0) return
+  const aiMsg = messages.value[idx + 1]
+  if (!aiMsg || aiMsg.role !== 'assistant') return
+
+  // 更新用户消息内容
+  const userMsg = messages.value[idx]
+  userMsg.content = text
+
+  // 执行重试
+  aiMsg.content = ''
+  aiMsg.streaming = true
+  aiMsg.error = null
+  retryingMsgId.value = aiMsg.id
+  isStreaming.value = true
+
+  abortController = fetchReChatStream({
+    query: text,
+    session_id: currentSessionId.value,
+    message_id: userMsg.id,
+    onChunk(content) {
+      aiMsg.content += content
+      scrollToBottom()
+    },
+    onDone(data) {
+      aiMsg.streaming = false
+      retryingMsgId.value = null
+      if (data.message_id) {
+        aiMsg.id = data.message_id
+      }
+      isStreaming.value = false
+      scrollToBottom()
+    },
+    onError(err) {
+      aiMsg.streaming = false
+      retryingMsgId.value = null
+      aiMsg.error = err.message || '生成失败，请重试'
+      isStreaming.value = false
+      scrollToBottom()
+    },
+  })
+}
+
+function handleEditKeydown(e) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    confirmEdit()
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    cancelEdit()
   }
 }
 
@@ -514,20 +673,58 @@ function renderMarkdown(text) {
 </script>
 
 <style scoped>
-.markdown-body {
-  word-break: break-word;
+/* ===== 消息入场动画 ===== */
+.msg-enter {
+  animation: msgSlideIn 0.3s ease-out both;
 }
-.markdown-body :deep(pre) {
-  white-space: pre-wrap;
+@keyframes msgSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.markdown-body :deep(code) {
-  font-family: 'Consolas', 'Monaco', monospace;
+
+/* ===== 流式光标 - 跳动圆点 ===== */
+.typing-dots { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; }
+.typing-dots .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #0D9488;
+  animation: dotBounce 1.4s ease-in-out infinite both;
 }
-.markdown-body :deep(strong) {
-  font-weight: 600;
+.typing-dots .dot:nth-child(1) { animation-delay: 0s; }
+.typing-dots .dot:nth-child(2) { animation-delay: 0.16s; }
+.typing-dots .dot:nth-child(3) { animation-delay: 0.32s; }
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+  40% { transform: scale(1); opacity: 1; }
 }
-.markdown-body :deep(ul),
-.markdown-body :deep(ol) {
-  padding-left: 0;
+
+/* ===== AI 图标头像 ===== */
+.ai-avatar {
+  background: linear-gradient(135deg, #0D9488, #0891B2);
+  box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
 }
+
+/* ===== 用户消息渐变 ===== */
+.user-bubble {
+  background: linear-gradient(135deg, #0D9488 0%, #0891B2 100%);
+}
+
+/* ===== 侧边栏选中指示条 ===== */
+.session-active {
+  border-left: 3px solid #0D9488;
+  background-color: #F0FDFA;
+}
+
+/* ===== 输入区 ===== */
+.input-area :deep(.el-textarea__inner) {
+  padding-right: 44px;
+  border-radius: 12px;
+  resize: none;
+}
+
+/* ===== Markdown 正文 ===== */
+.markdown-body { word-break: break-word; }
+.markdown-body :deep(pre) { white-space: pre-wrap; }
+.markdown-body :deep(code) { font-family: 'Consolas', 'Monaco', monospace; }
+.markdown-body :deep(strong) { font-weight: 600; }
+.markdown-body :deep(ul), .markdown-body :deep(ol) { padding-left: 0; }
 </style>
