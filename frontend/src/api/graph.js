@@ -19,7 +19,7 @@ export function getGraphOverview(reservoirCode) {
  */
 export function searchNodes(keyword, type) {
   return request.get('/v1/graph/search', {
-    params: { keyword, type }
+    params: { keyword, ...(type ? { type } : {}) }
   })
 }
 

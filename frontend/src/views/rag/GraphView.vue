@@ -391,7 +391,7 @@ async function handleSearch(query, cb) {
   }
   try {
     const res = await searchNodes(query)
-    const items = (res.data || []).map((item) => ({
+    const items = (res.data?.node_list || []).map((item) => ({
       ...item,
       value: item.name,
     }))

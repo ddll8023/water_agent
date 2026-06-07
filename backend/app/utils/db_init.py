@@ -43,8 +43,6 @@ async def init_neo4j():
     with open(SEED_PATH, "r", encoding="utf-8") as f:
         seed = json.load(f)
 
-    driver = get_neo4j_driver()
-
     async with driver.session() as session:
         result = await session.run("MATCH (n:Reservoir) RETURN count(n) AS cnt")
         record = await result.single()

@@ -3392,10 +3392,63 @@ Authorization: Bearer <token>
 | edges[].target | string | 终点节点 id |
 | edges[].relation | string | 关系类型 |
 
-### 14.2 节点搜索（待补）
+### 14.2 节点搜索
 
 - **GET** `/api/v1/graph/search`
-- **描述**：按关键词搜索图谱节点，返回匹配的节点列表。**暂未实现**。
+- **描述**：按关键词搜索图谱节点，返回匹配的节点列表。需要 Bearer Token 认证，需 admin 或 user 角色。
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| keyword       | string | query  | 是   | 搜索关键词，匹配节点 name 或 code     |
+
+**请求示例**：
+
+```
+GET /api/v1/graph/search?keyword=梅山
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "node_list": [
+      {
+        "id": "reservoir:msh-002",
+        "name": "梅山水库",
+        "type": "Reservoir",
+        "code": "MSH-002",
+        "watershed": "淮河流域",
+        "water_grade": null,
+        "risk_level": null,
+        "subtype": null
+      }
+    ]
+  }
+}
+```
+
+| 字段              | 类型         | 说明                                                               |
+| ----------------- | ------------ | ------------------------------------------------------------------ |
+| node_list[].id    | string       | 节点唯一标识（复合 ID），格式 `{type}:{code\|name}`               |
+| node_list[].name  | string       | 节点名称                                                           |
+| node_list[].type  | string       | 节点类型：Reservoir/River/PollutionSource/Indicator/MonitoringStation |
+| node_list[].code  | string\|null | 节点编码                                                           |
+| node_list[].watershed | string\|null | 所属流域                                                       |
+| node_list[].water_grade | string\|null | 水质等级                                                     |
+| node_list[].risk_level | string\|null | 风险等级                                                     |
+| node_list[].subtype | string\|null | 子类型                                                           |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 2003   | 权限不足                 |
+| 5001   | 服务器内部错误           |
 
 ### 14.3 节点详情（待补）
 

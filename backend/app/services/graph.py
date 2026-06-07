@@ -7,6 +7,7 @@ from app.schemas.graph import (
 )
 from app.utils.logger_config import setup_logger
 from neo4j import AsyncDriver
+from app.schemas import graph as schemas_graph
 
 logger = setup_logger(__name__)
 
@@ -17,7 +18,9 @@ def _node_id(node_type: str, node) -> str:
     return f"{node_type.lower()}:{key}"
 
 
-async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = None):
+async def get_graph_overview(
+    neo4j_driver: AsyncDriver, reservoir_code: str | None = None
+):
     """获取图谱全局概览"""
     nodes = []
     edges = []
@@ -43,7 +46,7 @@ async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = 
         node_query = "MATCH (n) RETURN n, labels(n)[0] AS nodeType"
         params = {}
 
-    result = await session.run(node_query, **params)
+    result = await neo4j_driver.run(node_query, **params)
     async for record in result:
         n = record["n"]
         node_type = record["nodeType"]
@@ -87,7 +90,7 @@ async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = 
                    type(r) AS relType
         """
 
-    result = await session.run(edge_query, **params)
+    result = await neo4j_driver.run(edge_query, **params)
     async for record in result:
         source_id = _node_id(record["sourceType"], record["a"])
         target_id = _node_id(record["targetType"], record["b"])
@@ -100,3 +103,32 @@ async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = 
         )
 
     return GetGraphOverviewResponse(nodes=nodes, edges=edges)
+
+
+async def search_node(
+    neo4j_driver: AsyncDriver, search_node_request: schemas_graph.SearchNodeRequest
+):
+    """搜索节点"""
+    query = """
+        MATCH (n)
+        WHERE n.name CONTAINS $keyword OR n.code CONTAINS $keyword
+        RETURN n, labels(n)[0] AS nodeType
+    """
+    result = await neo4j_driver.run(query, keyword=search_node_request.keyword)
+    node_list = []
+    async for record in result:
+        n = record["n"]
+        node_type = record["nodeType"]
+        node_list.append(
+            GetGraphOverviewNodeItem(
+                id=_node_id(node_type, n),
+                name=n.get("name"),
+                type=node_type,
+                code=n.get("code"),
+                watershed=n.get("watershed"),
+                water_grade=n.get("waterGrade"),
+                risk_level=n.get("risk_level"),
+                subtype=n.get("type"),
+            )
+        )
+    return schemas_graph.SearchNodeResponse(node_list=node_list)
