@@ -163,3 +163,56 @@ async def get_node_detail(
         type=record["nodeType"],
         attributes=attributes,
     )
+
+
+async def get_node_expand(
+    neo4j_driver: AsyncDriver, node_type: str, node_id: str
+):
+    """节点一跳扩展"""
+    nodes = []
+    edges = []
+
+    node_query = """
+        MATCH (n)-[r]-(connected)
+        WHERE toLower(labels(n)[0]) = $node_type
+          AND (n.code = $node_id OR n.name = $node_id)
+        RETURN DISTINCT connected, labels(connected)[0] AS nodeType
+    """
+    result = await neo4j_driver.run(node_query, node_type=node_type.lower(), node_id=node_id)
+    async for record in result:
+        connected = record["connected"]
+        node_label = record["nodeType"]
+        nodes.append(
+            GetGraphOverviewNodeItem(
+                id=_node_id(node_label, connected),
+                name=connected.get("name"),
+                type=node_label,
+                code=connected.get("code"),
+                watershed=connected.get("watershed"),
+                water_grade=connected.get("waterGrade"),
+                risk_level=connected.get("risk_level"),
+                subtype=connected.get("type"),
+            )
+        )
+
+    edge_query = """
+        MATCH (n)-[r]-(connected)
+        WHERE toLower(labels(n)[0]) = $node_type
+          AND (n.code = $node_id OR n.name = $node_id)
+        RETURN DISTINCT n, labels(n)[0] AS sourceType,
+               connected, labels(connected)[0] AS targetType,
+               type(r) AS relType
+    """
+    result = await neo4j_driver.run(edge_query, node_type=node_type.lower(), node_id=node_id)
+    async for record in result:
+        source_id = _node_id(record["sourceType"], record["n"])
+        target_id = _node_id(record["targetType"], record["connected"])
+        edges.append(
+            GetGraphOverviewEdgeItem(
+                source=source_id,
+                target=target_id,
+                relation=record["relType"],
+            )
+        )
+
+    return schemas_graph.GetGraphExpandResponse(nodes=nodes, edges=edges)

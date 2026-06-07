@@ -94,32 +94,35 @@
       </el-button-group>
     </div>
 
-    <el-drawer
-      v-model="drawerVisible"
-      direction="rtl"
-      size="360px"
-      :with-header="false"
-      class="graph-drawer"
-    >
-      <template v-if="selectedNode">
-        <div class="p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-semibold text-gray-900">{{ selectedNode.name }}</h3>
-            <el-tag :type="tagType(selectedNode.type)" size="small">{{ selectedNode.type }}</el-tag>
-          </div>
+    <Transition name="panel-slide">
+      <div
+        v-if="drawerVisible && selectedNode"
+        class="absolute top-14 right-2 bottom-2 w-80 z-20
+               rounded-xl border border-slate-700/50
+               bg-slate-900/90 backdrop-blur-xl
+               flex flex-col overflow-hidden pointer-events-auto"
+        @click.stop
+      >
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700/50 shrink-0">
+          <h3 class="text-base font-semibold text-white truncate mr-2">{{ selectedNode.name }}</h3>
+          <el-tag :type="tagType(selectedNode.type)" size="small" class="shrink-0">{{ selectedNode.type }}</el-tag>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
           <div v-if="nodeDetailLoading" class="flex items-center justify-center py-8">
             <el-icon class="is-loading text-teal-400" :size="20"><Loading /></el-icon>
             <span class="ml-2 text-sm text-slate-400">加载详情中...</span>
           </div>
-          <el-descriptions v-else :column="2" border size="small" class="mb-4">
-            <el-descriptions-item
+          <template v-else>
+            <div
               v-for="(val, key) in nodeProperties"
               :key="key"
-              :label="key"
+              class="flex justify-between items-start gap-2 text-sm"
             >
-              {{ val ?? '-' }}
-            </el-descriptions-item>
-          </el-descriptions>
+              <span class="text-slate-400 shrink-0">{{ key }}</span>
+              <span class="text-slate-200 text-right break-all">{{ val ?? '-' }}</span>
+            </div>
+          </template>
+          <el-divider class="!border-slate-700 !my-3" />
           <div class="flex flex-col gap-2">
             <el-button
               v-if="selectedNode.type === 'Reservoir'"
@@ -143,8 +146,8 @@
             >展开上下游</el-button>
           </div>
         </div>
-      </template>
-    </el-drawer>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -377,6 +380,9 @@ async function renderGraph() {
           }
         }
       }
+    } else {
+      drawerVisible.value = false
+      chartInstance.value?.dispatchAction({ type: 'downplay' })
     }
   })
 }
@@ -451,17 +457,32 @@ async function handleExpandNode() {
   if (parts.length < 2) return
   const type = parts[0]
   const id = parts.slice(1).join(':')
+
+  const nodeIdx = allNodes.value.findIndex((n) => n.id === selectedNode.value.id)
+  if (chartInstance.value && nodeIdx >= 0) {
+    chartInstance.value.dispatchAction({ type: 'downplay' })
+    chartInstance.value.dispatchAction({
+      type: 'highlight',
+      seriesIndex: 0,
+      dataIndex: nodeIdx,
+    })
+  }
+
   try {
     const res = await expandNode(type, id)
     const newNodes = res.data?.nodes || []
     const newEdges = res.data?.edges || []
     const existingIds = new Set(allNodes.value.map((n) => n.id))
     const newIds = newNodes.filter((n) => !existingIds.has(n.id))
-    allNodes.value = [...allNodes.value, ...newIds]
-    allEdges.value = [...allEdges.value, ...newEdges]
-    renderGraph()
-    if (!newIds.length) {
+    if (newIds.length) {
+      allNodes.value = [...allNodes.value, ...newIds]
+      allEdges.value = [...allEdges.value, ...newEdges]
+      renderGraph()
+      ElMessage.success('已扩展 ' + newIds.length + ' 个关联节点')
+    } else if (!newNodes.length) {
       ElMessage.info('该节点已无更多关联')
+    } else {
+      ElMessage.success('已高亮上下游关联节点')
     }
   } catch {
     ElMessage.error('扩展节点失败')
@@ -525,7 +546,13 @@ function handleResize() {
 </script>
 
 <style scoped>
-.graph-drawer :deep(.el-drawer__body) {
-  padding: 0;
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition: all 0.2s ease;
+}
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
 }
 </style>

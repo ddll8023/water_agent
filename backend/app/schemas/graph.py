@@ -67,6 +67,19 @@ class GetGraphOverviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class GetGraphExpandResponse(BaseModel):
+    """节点一跳扩展响应"""
+
+    nodes: list[GetGraphOverviewNodeItem] = Field(
+        default_factory=list, description="相邻节点列表"
+    )
+    edges: list[GetGraphOverviewEdgeItem] = Field(
+        default_factory=list, description="相邻关系列表"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class SearchNodeResponse(BaseModel):
     """搜索节点响应"""
 

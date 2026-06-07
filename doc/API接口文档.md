@@ -3509,10 +3509,65 @@ Authorization: Bearer <token>
 | 2003   | 权限不足                 |
 | 5001   | 服务器内部错误           |
 
-### 14.4 节点一跳扩展（待补）
+### 14.4 节点一跳扩展
 
-- **GET** `/api/v1/graph/expand/{type}/{id}`
-- **描述**：扩展指定节点的相邻子图。**暂未实现**。
+- **GET** `/api/v1/graph/expand/{node_type}/{node_id}`
+- **描述**：以指定节点为中心扩展相邻子图，返回该节点 1 跳范围内的所有邻居节点和关系。需要 Bearer Token 认证，需 admin 或 user 角色。
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| node_type     | string | path   | 是   | 节点类型（小写），如 `reservoir`、`river` |
+| node_id       | string | path   | 是   | 节点标识（code 或 name）              |
+
+**请求示例**：
+
+```
+GET /api/v1/graph/expand/reservoir/msh-002
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "nodes": [
+      {
+        "id": "river:史河",
+        "name": "史河",
+        "type": "River",
+        "code": null,
+        "watershed": "淮河流域",
+        "water_grade": null,
+        "risk_level": null,
+        "subtype": null
+      }
+    ],
+    "edges": [
+      {
+        "source": "reservoir:msh-002",
+        "target": "river:史河",
+        "relation": "FLOWS_INTO"
+      }
+    ]
+  }
+}
+```
+
+| 字段               | 类型           | 说明                                                               |
+| ------------------ | -------------- | ------------------------------------------------------------------ |
+| nodes              | array          | 相邻节点列表，结构同概览接口节点                                     |
+| edges              | array          | 相邻关系列表，结构同概览接口边                                       |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 2003   | 权限不足                 |
+| 5001   | 服务器内部错误           |
 
 ### 14.5 污染溯源路径（待补）
 

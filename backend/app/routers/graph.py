@@ -69,3 +69,22 @@ async def get_node_detail(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/expand/{node_type}/{node_id}",
+    response_model=ApiResponse[schemas_grapg.GetGraphExpandResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    description="节点一跳扩展",
+)
+async def get_node_expand(
+    neo4j_driver: Annotated[AsyncDriver, Depends(get_neo4j_session)],
+    node_type: str,
+    node_id: str,
+):
+    """节点一跳扩展"""
+    try:
+        result = await services_graph.get_node_expand(neo4j_driver, node_type, node_id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
