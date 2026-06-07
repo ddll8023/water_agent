@@ -7,7 +7,7 @@ import request from '@/utils/request'
  */
 export function getGraphOverview(reservoirCode) {
   return request.get('/v1/graph/overview', {
-    params: { reservoir_code: reservoirCode }
+    params: reservoirCode ? { reservoir_code: reservoirCode } : {}
   })
 }
 

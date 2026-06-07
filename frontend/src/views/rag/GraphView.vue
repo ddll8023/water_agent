@@ -1,12 +1,13 @@
 <template>
   <div class="h-full flex flex-col bg-slate-900 relative">
-    <el-skeleton :loading="loading" animated class="absolute inset-0 z-50">
-      <template #template>
-        <div class="h-full flex items-center justify-center bg-slate-900">
-          <el-skeleton-item variant="rect" class="w-3/4 h-3/4 rounded-lg opacity-20" />
-        </div>
-      </template>
-    </el-skeleton>
+    <div v-if="initialLoading" class="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-900">
+      <el-icon class="is-loading text-teal-400" :size="40"><Loading /></el-icon>
+      <p class="mt-4 text-sm text-slate-400">正在加载图谱数据...</p>
+    </div>
+    <div v-if="loading && !initialLoading" class="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity duration-300">
+      <el-icon class="is-loading text-teal-400" :size="28"><Loading /></el-icon>
+      <span class="ml-3 text-sm text-slate-400">加载中...</span>
+    </div>
 
     <header class="h-14 flex items-center gap-4 px-4 bg-slate-800/80 border-b border-slate-700 shrink-0">
       <h1 class="text-white font-semibold text-base whitespace-nowrap">水质知识图谱</h1>
@@ -30,6 +31,15 @@
           </div>
         </template>
       </el-autocomplete>
+      <el-select
+        v-model="reservoirCode"
+        placeholder="水库筛选"
+        clearable
+        class="w-44"
+        @change="loadData"
+      >
+        <el-option v-for="r in reservoirOptions" :key="r.code" :label="r.name" :value="r.code" />
+      </el-select>
       <el-select
         v-model="watershedFilter"
         placeholder="流域筛选"
@@ -76,11 +86,11 @@
     </div>
 
     <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
-      <el-button-group class="backdrop-blur-sm bg-slate-800/60 rounded-lg">
-        <el-button size="small" @click="handleSnapshot">快照</el-button>
-        <el-button size="small" @click="handleExport">导出</el-button>
-        <el-button size="small" @click="handleReset">重置</el-button>
-        <el-button size="small" @click="handleFit">适配</el-button>
+      <el-button-group class="backdrop-blur-sm bg-slate-800/60 rounded-lg border border-slate-700/40">
+        <el-button size="small" :icon="Camera" @click="handleSnapshot">快照</el-button>
+        <el-button size="small" :icon="Download" @click="handleExport">导出</el-button>
+        <el-button size="small" :icon="Refresh" @click="handleReset">重置</el-button>
+        <el-button size="small" :icon="ZoomOut" @click="handleFit">适配</el-button>
       </el-button-group>
     </div>
 
@@ -142,7 +152,7 @@
  */
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Camera, Download, Refresh, ZoomOut, Loading } from '@element-plus/icons-vue'
 import * as echarts from 'echarts/core'
 import { GraphChart } from 'echarts/charts'
 import {
@@ -151,13 +161,17 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { getGraphOverview, searchNodes, expandNode } from '@/api/graph'
+import { getReservoirOverviewList } from '@/api/dashboard'
 import { NODE_STYLE, EDGE_STYLE, LEGEND_CONFIG } from './graphConfig'
 
 echarts.use([GraphChart, TooltipComponent, TitleComponent, CanvasRenderer])
 
 const chartRef = ref(null)
 const loading = ref(true)
+const initialLoading = ref(true)
 const searchKeyword = ref('')
+const reservoirCode = ref('')
+const reservoirOptions = ref([])
 const watershedFilter = ref('')
 const drawerVisible = ref(false)
 const selectedNode = ref(null)
@@ -229,13 +243,19 @@ function buildEChartsOption() {
     .filter((n) => showNodeTypes.has(n.type))
     .map((n) => {
       const style = getNodeStyle(n)
+      const hexToRgba = (hex, alpha) => {
+        const r = parseInt(hex.slice(1, 3), 16)
+        const g = parseInt(hex.slice(3, 5), 16)
+        const b = parseInt(hex.slice(5, 7), 16)
+        return `rgba(${r},${g},${b},${alpha})`
+      }
       return {
         id: n.id,
         name: n.name,
         value: n.type,
         category: n.type,
         symbol: style.symbol,
-        itemStyle: { color: style.color },
+        itemStyle: { color: style.color, shadowBlur: 8, shadowColor: hexToRgba(style.color, 0.3) },
         symbolSize: style.size,
         watershed: n.watershed,
       }
@@ -278,10 +298,10 @@ function buildEChartsOption() {
         type: 'graph',
         layout: 'force',
         force: {
-          repulsion: 300,
-          edgeLength: 120,
-          gravity: 0.1,
-          friction: 0.1,
+          repulsion: 400,
+          edgeLength: 150,
+          gravity: 0.08,
+          friction: 0.15,
         },
         roam: true,
         draggable: true,
@@ -298,15 +318,21 @@ function buildEChartsOption() {
           color: '#cbd5e1',
           formatter: (params) => params.name,
         },
-        edgeLabel: { show: false },
+        edgeLabel: {
+          show: true,
+          fontSize: 9,
+          color: '#64748b',
+          formatter: (p) => p.data?.label || '',
+        },
         lineStyle: { color: '#475569', width: 1.5, curveness: 0.2 },
         emphasis: {
           focus: 'adjacency',
-          lineStyle: { width: 2.5, color: '#94a3b8' },
+          itemStyle: { shadowBlur: 20, shadowColor: 'rgba(148,163,184,0.6)' },
+          lineStyle: { width: 3, color: '#94a3b8' },
         },
         blur: {
-          opacity: 0.15,
-          lineStyle: { opacity: 0.15 },
+          opacity: 0.1,
+          lineStyle: { opacity: 0.1 },
         },
         zoom: 1,
       },
@@ -333,16 +359,26 @@ async function renderGraph() {
   })
 }
 
+async function loadReservoirOptions() {
+  try {
+    const res = await getReservoirOverviewList()
+    reservoirOptions.value = (res.data || []).map((r) => ({ code: r.code, name: r.name }))
+  } catch {
+    reservoirOptions.value = []
+  }
+}
+
 async function loadData() {
   loading.value = true
   try {
-    const res = await getGraphOverview()
+    const res = await getGraphOverview(reservoirCode.value || undefined)
     allNodes.value = res.data?.nodes || []
     allEdges.value = res.data?.edges || []
   } catch {
     ElMessage.error('加载图谱数据失败')
   } finally {
     loading.value = false
+    if (initialLoading.value) initialLoading.value = false
     await nextTick()
     renderGraph()
   }
@@ -447,7 +483,8 @@ function handleFit() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await loadReservoirOptions()
   loadData()
   window.addEventListener('resize', handleResize)
 })

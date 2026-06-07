@@ -22,7 +22,28 @@ async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = 
     nodes = []
     edges = []
 
-    result = await session.run("MATCH (n) RETURN n, labels(n)[0] AS nodeType")
+    if reservoir_code:
+        node_query = """
+            MATCH (res:Reservoir {code: $code})
+            OPTIONAL MATCH (river:River)-[:FLOWS_INTO]->(res)
+            OPTIONAL MATCH (ps:PollutionSource)-[:DISCHARGES_INTO]->(river)
+            WITH COLLECT(DISTINCT res) + COLLECT(DISTINCT river) + COLLECT(DISTINCT ps) AS connected
+            MATCH (ind:Indicator)
+            WITH connected, COLLECT(ind) AS indicators
+            MATCH (ms:MonitoringStation)
+            WITH connected, indicators, COLLECT(ms) AS stations
+            WITH connected + indicators + stations AS all_nodes
+            UNWIND all_nodes AS n
+            WITH DISTINCT n
+            WHERE n IS NOT NULL
+            RETURN n, labels(n)[0] AS nodeType
+        """
+        params = {"code": reservoir_code}
+    else:
+        node_query = "MATCH (n) RETURN n, labels(n)[0] AS nodeType"
+        params = {}
+
+    result = await session.run(node_query, **params)
     async for record in result:
         n = record["n"]
         node_type = record["nodeType"]
@@ -40,12 +61,33 @@ async def get_graph_overview(session: AsyncDriver, reservoir_code: str | None = 
             )
         )
 
-    result = await session.run(
-        "MATCH (a)-[r]->(b) "
-        "RETURN a, labels(a)[0] AS sourceType, "
-        "       b, labels(b)[0] AS targetType, "
-        "       type(r) AS relType"
-    )
+    if reservoir_code:
+        edge_query = """
+            MATCH (res:Reservoir {code: $code})
+            OPTIONAL MATCH (river:River)-[:FLOWS_INTO]->(res)
+            OPTIONAL MATCH (ps:PollutionSource)-[:DISCHARGES_INTO]->(river)
+            WITH COLLECT(DISTINCT res) + COLLECT(DISTINCT river) + COLLECT(DISTINCT ps) AS connected
+            MATCH (ind:Indicator)
+            WITH connected, COLLECT(ind) AS indicators
+            MATCH (ms:MonitoringStation)
+            WITH connected, indicators, COLLECT(ms) AS stations
+            UNWIND connected + indicators + stations AS n
+            WITH COLLECT(DISTINCT elementId(n)) AS node_ids
+            MATCH (a)-[r]->(b)
+            WHERE elementId(a) IN node_ids AND elementId(b) IN node_ids
+            RETURN a, labels(a)[0] AS sourceType,
+                   b, labels(b)[0] AS targetType,
+                   type(r) AS relType
+        """
+    else:
+        edge_query = """
+            MATCH (a)-[r]->(b)
+            RETURN a, labels(a)[0] AS sourceType,
+                   b, labels(b)[0] AS targetType,
+                   type(r) AS relType
+        """
+
+    result = await session.run(edge_query, **params)
     async for record in result:
         source_id = _node_id(record["sourceType"], record["a"])
         target_id = _node_id(record["targetType"], record["b"])
