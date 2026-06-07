@@ -107,7 +107,11 @@
             <h3 class="text-lg font-semibold text-gray-900">{{ selectedNode.name }}</h3>
             <el-tag :type="tagType(selectedNode.type)" size="small">{{ selectedNode.type }}</el-tag>
           </div>
-          <el-descriptions :column="2" border size="small" class="mb-4">
+          <div v-if="nodeDetailLoading" class="flex items-center justify-center py-8">
+            <el-icon class="is-loading text-teal-400" :size="20"><Loading /></el-icon>
+            <span class="ml-2 text-sm text-slate-400">加载详情中...</span>
+          </div>
+          <el-descriptions v-else :column="2" border size="small" class="mb-4">
             <el-descriptions-item
               v-for="(val, key) in nodeProperties"
               :key="key"
@@ -160,7 +164,7 @@ import {
   TitleComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getGraphOverview, searchNodes, expandNode } from '@/api/graph'
+import { getGraphOverview, searchNodes, expandNode, getNodeDetail } from '@/api/graph'
 import { getReservoirOverviewList } from '@/api/dashboard'
 import { NODE_STYLE, EDGE_STYLE, LEGEND_CONFIG } from './graphConfig'
 
@@ -175,6 +179,8 @@ const reservoirOptions = ref([])
 const watershedFilter = ref('')
 const drawerVisible = ref(false)
 const selectedNode = ref(null)
+const nodeDetail = ref(null)
+const nodeDetailLoading = ref(false)
 
 const allNodes = ref([])
 const allEdges = ref([])
@@ -195,6 +201,9 @@ const watershedOptions = computed(() => {
 })
 
 const nodeProperties = computed(() => {
+  if (nodeDetail.value?.attributes && Object.keys(nodeDetail.value.attributes).length) {
+    return nodeDetail.value.attributes
+  }
   const n = selectedNode.value
   if (!n) return {}
   const props = { 名称: n.name, 类型: n.type }
@@ -348,12 +357,25 @@ async function renderGraph() {
   }
   const option = buildEChartsOption()
   chartInstance.value.setOption(option, true)
-  chartInstance.value.on('click', (params) => {
+  chartInstance.value.on('click', async (params) => {
     if (params.dataType === 'node') {
       const node = allNodes.value.find((n) => n.id === params.data.id)
       if (node) {
         selectedNode.value = node
+        nodeDetail.value = null
         drawerVisible.value = true
+        const parts = node.id.split(':')
+        if (parts.length >= 2) {
+          nodeDetailLoading.value = true
+          try {
+            const res = await getNodeDetail(parts[0], parts.slice(1).join(':'))
+            nodeDetail.value = res.data
+          } catch {
+            nodeDetail.value = null
+          } finally {
+            nodeDetailLoading.value = false
+          }
+        }
       }
     }
   })

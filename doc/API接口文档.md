@@ -3450,10 +3450,64 @@ Authorization: Bearer <token>
 | 2003   | 权限不足                 |
 | 5001   | 服务器内部错误           |
 
-### 14.3 节点详情（待补）
+### 14.3 节点详情
 
-- **GET** `/api/v1/graph/node/{type}/{id}`
-- **描述**：获取指定节点的完整属性。**暂未实现**。
+- **GET** `/api/v1/graph/node/{node_type}/{node_id}`
+- **描述**：获取指定节点的完整属性，以键值对形式返回所有字段。需要 Bearer Token 认证，需 admin 或 user 角色。
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| node_type     | string | path   | 是   | 节点类型（小写），如 `reservoir`、`river` |
+| node_id       | string | path   | 是   | 节点标识（code 或 name）              |
+
+**请求示例**：
+
+```
+GET /api/v1/graph/node/reservoir/msh-002
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": "reservoir:msh-002",
+    "name": "梅山水库",
+    "type": "Reservoir",
+    "attributes": {
+      "name": "梅山水库",
+      "code": "MSH-002",
+      "location": "安徽省金寨县",
+      "longitude": "115.902",
+      "latitude": "31.697",
+      "capacity": "234000",
+      "water_grade": "Ⅱ类",
+      "watershed": "淮河流域",
+      "sort_order": "0",
+      "status": "1"
+    }
+  }
+}
+```
+
+| 字段               | 类型                      | 说明                                                               |
+| ------------------ | ------------------------- | ------------------------------------------------------------------ |
+| id                 | string                    | 节点唯一标识（复合 ID），格式 `{type}:{code\|name}`               |
+| name               | string                    | 节点名称                                                           |
+| type               | string                    | 节点类型                                                           |
+| attributes         | object                    | 节点全部属性键值对，不同节点类型属性不同                           |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 数据不存在（节点不存在） |
+| 2003   | 权限不足                 |
+| 5001   | 服务器内部错误           |
 
 ### 14.4 节点一跳扩展（待补）
 

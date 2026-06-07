@@ -45,6 +45,19 @@ class SearchNodeRequest(BaseModel):
 # ========== 响应类（Response）==========
 
 
+class GetNodeDetailResponse(BaseModel):
+    """节点详情响应"""
+
+    id: str = Field(..., description="节点唯一标识")
+    name: str = Field(..., description="节点名称")
+    type: str = Field(..., description="节点类型")
+    attributes: dict[str, str | None] = Field(
+        default_factory=dict, description="节点全部属性键值对"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GetGraphOverviewResponse(BaseModel):
     """图谱全局概览响应"""
 

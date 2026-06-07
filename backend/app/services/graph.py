@@ -4,6 +4,7 @@ from app.schemas.graph import (
     GetGraphOverviewNodeItem,
     GetGraphOverviewEdgeItem,
     GetGraphOverviewResponse,
+    GetNodeDetailResponse,
 )
 from app.utils.logger_config import setup_logger
 from neo4j import AsyncDriver
@@ -132,3 +133,33 @@ async def search_node(
             )
         )
     return schemas_graph.SearchNodeResponse(node_list=node_list)
+
+
+async def get_node_detail(
+    neo4j_driver: AsyncDriver, node_type: str, node_id: str
+):
+    """获取节点详情"""
+    query = """
+        MATCH (n)
+        WHERE toLower(labels(n)[0]) = $node_type
+          AND (n.code = $node_id OR n.name = $node_id)
+        RETURN n, labels(n)[0] AS nodeType
+    """
+    result = await neo4j_driver.run(query, node_type=node_type.lower(), node_id=node_id)
+    record = await result.single()
+    if not record:
+        return None
+
+    n = record["n"]
+    attributes = {}
+    for key in n:
+        if key.startswith("_"):
+            continue
+        attributes[key] = str(n.get(key)) if n.get(key) is not None else None
+
+    return GetNodeDetailResponse(
+        id=_node_id(record["nodeType"], n),
+        name=n.get("name"),
+        type=record["nodeType"],
+        attributes=attributes,
+    )

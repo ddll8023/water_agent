@@ -50,3 +50,22 @@ async def search_node(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/node/{node_type}/{node_id}",
+    response_model=ApiResponse[schemas_grapg.GetNodeDetailResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    description="获取节点详情",
+)
+async def get_node_detail(
+    neo4j_driver: Annotated[AsyncDriver, Depends(get_neo4j_session)],
+    node_type: str,
+    node_id: str,
+):
+    """获取节点详情"""
+    try:
+        result = await services_graph.get_node_detail(neo4j_driver, node_type, node_id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
