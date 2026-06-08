@@ -3569,7 +3569,109 @@ Authorization: Bearer <token>
 | 2003   | 权限不足                 |
 | 5001   | 服务器内部错误           |
 
-### 14.5 污染溯源路径（待补）
+### 14.5 污染溯源路径
 
 - **GET** `/api/v1/graph/trace`
-- **描述**：从超标水库出发向上游追溯污染源路径。**暂未实现**。
+- **描述**：从指定水库出发向上游追溯污染源路径，返回路径节点、边和污染源排序列表。需要 Bearer Token 认证，需 admin 或 user 角色。
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| reservoir_code | string | query  | 是   | 水库编号                              |
+
+**请求示例**：
+
+```
+GET /api/v1/graph/trace?reservoir_code=MSH-002
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "nodes": [
+      {
+        "id": "reservoir:msh-002",
+        "name": "梅山水库",
+        "type": "Reservoir",
+        "code": "MSH-002",
+        "watershed": null,
+        "water_grade": null,
+        "risk_level": null,
+        "subtype": null
+      },
+      {
+        "id": "river:史河",
+        "name": "史河",
+        "type": "River",
+        "code": null,
+        "watershed": "淮河流域",
+        "water_grade": null,
+        "risk_level": null,
+        "subtype": null
+      },
+      {
+        "id": "pollutionsource:梅山化工厂",
+        "name": "梅山化工厂",
+        "type": "PollutionSource",
+        "code": null,
+        "watershed": null,
+        "water_grade": null,
+        "risk_level": "高",
+        "subtype": null
+      },
+      {
+        "id": "pollutionsource:青龙山养猪场",
+        "name": "青龙山养猪场",
+        "type": "PollutionSource",
+        "code": null,
+        "watershed": null,
+        "water_grade": null,
+        "risk_level": "中",
+        "subtype": null
+      }
+    ],
+    "edges": [
+      { "source": "pollutionsource:梅山化工厂", "target": "river:史河", "relation": "DISCHARGES_INTO" },
+      { "source": "pollutionsource:青龙山养猪场", "target": "river:史河", "relation": "DISCHARGES_INTO" },
+      { "source": "river:史河", "target": "reservoir:msh-002", "relation": "FLOWS_INTO" }
+    ],
+    "sources": [
+      {
+        "name": "梅山化工厂",
+        "risk_level": "高",
+        "distance_km": 0.3,
+        "violation_count": 5
+      },
+      {
+        "name": "青龙山养猪场",
+        "risk_level": "中",
+        "distance_km": 0.8,
+        "violation_count": 2
+      }
+    ]
+  }
+}
+```
+
+| 字段               | 类型           | 说明                                                               |
+| ------------------ | -------------- | ------------------------------------------------------------------ |
+| nodes              | array          | 溯源路径上的所有节点，结构同概览接口节点                               |
+| edges              | array          | 溯源路径上的所有关系，结构同概览接口边                                 |
+| sources            | array          | 污染源排序列表（按距离升序 + 违规次数降序）                           |
+| sources[].name     | string         | 污染源名称                                                           |
+| sources[].risk_level | string\|null | 风险等级                                                           |
+| sources[].distance_km | float\|null  | 距水库距离(km)                                                      |
+| sources[].violation_count | int\|null  | 违规次数                                                           |
+
+**错误场景**：
+
+| 错误码 | 场景                     |
+| ------ | ------------------------ |
+| 1002   | 该水库暂无溯源数据       |
+| 2003   | 权限不足                 |
+| 5001   | 服务器内部错误           |

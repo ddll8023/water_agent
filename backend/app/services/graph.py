@@ -216,3 +216,82 @@ async def get_node_expand(
         )
 
     return schemas_graph.GetGraphExpandResponse(nodes=nodes, edges=edges)
+
+
+async def trace_pollution(
+    neo4j_driver: AsyncDriver, reservoir_code: str
+):
+    """污染溯源路径查询"""
+    from app.schemas.common import ErrorCode
+    from app.utils.exception import ServiceException
+
+    node_query = """
+        MATCH path = (ps:PollutionSource)-[d:DISCHARGES_INTO]->(river:River)-[f:FLOWS_INTO]->(res:Reservoir {code: $code})
+        WITH nodes(path) AS path_nodes
+        UNWIND path_nodes AS n
+        RETURN DISTINCT n, labels(n)[0] AS nodeType
+    """
+    result = await neo4j_driver.run(node_query, code=reservoir_code)
+    nodes = []
+    async for record in result:
+        n = record["n"]
+        node_type = record["nodeType"]
+        node_id = _node_id(node_type, n)
+        nodes.append(
+            GetGraphOverviewNodeItem(
+                id=node_id,
+                name=n.get("name"),
+                type=node_type,
+                code=n.get("code"),
+                watershed=n.get("watershed"),
+                water_grade=n.get("waterGrade"),
+                risk_level=n.get("risk_level"),
+                subtype=n.get("type"),
+            )
+        )
+
+    if not nodes:
+        raise ServiceException(code=ErrorCode.DATA_NOT_FOUND, message="该水库暂无溯源数据")
+
+    edge_query = """
+        MATCH path = (ps:PollutionSource)-[d:DISCHARGES_INTO]->(river:River)-[f:FLOWS_INTO]->(res:Reservoir {code: $code})
+        WITH relationships(path) AS path_rels
+        UNWIND path_rels AS r
+        RETURN DISTINCT startNode(r) AS a, labels(startNode(r))[0] AS sourceType,
+               endNode(r) AS b, labels(endNode(r))[0] AS targetType,
+               type(r) AS relType
+    """
+    result = await neo4j_driver.run(edge_query, code=reservoir_code)
+    edges = []
+    async for record in result:
+        source_id = _node_id(record["sourceType"], record["a"])
+        target_id = _node_id(record["targetType"], record["b"])
+        edges.append(
+            GetGraphOverviewEdgeItem(
+                source=source_id,
+                target=target_id,
+                relation=record["relType"],
+            )
+        )
+
+    source_query = """
+        MATCH (ps:PollutionSource)-[d:DISCHARGES_INTO]->(river:River)-[f:FLOWS_INTO]->(res:Reservoir {code: $code})
+        RETURN ps.name AS name, ps.risk_level AS risk_level,
+               d.distance_km AS distance_km, ps.violation_count AS violation_count
+        ORDER BY d.distance_km ASC, ps.violation_count DESC
+    """
+    result = await neo4j_driver.run(source_query, code=reservoir_code)
+    sources = []
+    async for record in result:
+        ps = record
+        sources.append(
+            schemas_graph.TraceSourceItem(
+                id=_node_id("pollutionsource", {"code": None, "name": ps["name"]}),
+                name=ps["name"],
+                risk_level=ps["risk_level"],
+                distance_km=ps["distance_km"],
+                violation_count=ps["violation_count"],
+            )
+        )
+
+    return schemas_graph.GetTracePollutionResponse(nodes=nodes, edges=edges, sources=sources)

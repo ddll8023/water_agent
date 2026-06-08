@@ -71,7 +71,7 @@
 
     <div class="absolute top-20 right-4 z-10 space-y-1">
       <div
-        v-for="item in legendItems"
+        v-for="item in LEGEND_CONFIG"
         :key="item.name"
         class="flex items-center gap-2 px-2 py-1 rounded cursor-pointer transition-colors"
         :class="legendVisible[item.name] ? 'bg-slate-700/60 text-slate-200' : 'bg-slate-800/40 text-slate-500 line-through'"
@@ -86,12 +86,13 @@
     </div>
 
     <div class="absolute bottom-6 left-1/2 -translate-x-1/2 z-10">
-      <el-button-group class="backdrop-blur-sm bg-slate-800/60 rounded-lg border border-slate-700/40">
+      <el-button-group v-if="!focusMode" class="backdrop-blur-sm bg-slate-800/60 rounded-lg border border-slate-700/40">
         <el-button size="small" :icon="Camera" @click="handleSnapshot">快照</el-button>
         <el-button size="small" :icon="Download" @click="handleExport">导出</el-button>
         <el-button size="small" :icon="Refresh" @click="handleReset">重置</el-button>
         <el-button size="small" :icon="ZoomOut" @click="handleFit">适配</el-button>
       </el-button-group>
+      <el-button v-else type="primary" size="small" :icon="ZoomOut" @click="exitFocusMode">返回全图</el-button>
     </div>
 
     <Transition name="panel-slide">
@@ -129,7 +130,7 @@
               type="primary"
               size="small"
               plain
-              disabled
+              @click="handleTracePollution"
             >查看溯源路径</el-button>
             <el-button
               v-if="selectedNode.type === 'MonitoringStation'"
@@ -167,7 +168,7 @@ import {
   TitleComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { getGraphOverview, searchNodes, expandNode, getNodeDetail } from '@/api/graph'
+import { getGraphOverview, searchNodes, expandNode, getNodeDetail, tracePollution } from '@/api/graph'
 import { getReservoirOverviewList } from '@/api/dashboard'
 import { NODE_STYLE, EDGE_STYLE, LEGEND_CONFIG } from './graphConfig'
 
@@ -184,6 +185,9 @@ const drawerVisible = ref(false)
 const selectedNode = ref(null)
 const nodeDetail = ref(null)
 const nodeDetailLoading = ref(false)
+const focusMode = ref(null)
+const backupNodes = ref([])
+const backupEdges = ref([])
 
 const allNodes = ref([])
 const allEdges = ref([])
@@ -245,10 +249,12 @@ function getNodeStyle(node) {
 
 function buildEChartsOption() {
   const showNodeTypes = new Set(
-    LEGEND_CONFIG.filter((item) => legendVisible[item.name]).map((item) => {
-      const map = { 水库: 'Reservoir', 监测站点: 'MonitoringStation', 河流: 'River', 污染源: 'PollutionSource', 监测指标: 'Indicator' }
-      return map[item.name]
-    })
+    focusMode.value
+      ? ['Reservoir', 'River', 'PollutionSource', 'Indicator', 'MonitoringStation']
+      : LEGEND_CONFIG.filter((item) => legendVisible[item.name]).map((item) => {
+          const map = { 水库: 'Reservoir', 监测站点: 'MonitoringStation', 河流: 'River', 污染源: 'PollutionSource', 监测指标: 'Indicator' }
+          return map[item.name]
+        })
   )
 
   const nodes = allNodes.value
@@ -270,6 +276,9 @@ function buildEChartsOption() {
         itemStyle: { color: style.color, shadowBlur: 8, shadowColor: hexToRgba(style.color, 0.3) },
         symbolSize: style.size,
         watershed: n.watershed,
+        x: n.x,
+        y: n.y,
+        fixed: n.fixed,
       }
     })
 
@@ -308,11 +317,11 @@ function buildEChartsOption() {
     series: [
       {
         type: 'graph',
-        layout: 'force',
-        force: {
-          repulsion: 400,
-          edgeLength: 150,
-          gravity: 0.08,
+        layout: focusMode.value ? 'none' : 'force',
+        force: focusMode.value ? undefined : {
+          repulsion: 500,
+          edgeLength: 200,
+          gravity: 0.05,
           friction: 0.15,
         },
         roam: true,
@@ -343,9 +352,10 @@ function buildEChartsOption() {
           lineStyle: { width: 3, color: '#94a3b8' },
         },
         blur: {
-          opacity: 0.1,
-          lineStyle: { opacity: 0.1 },
+          opacity: 0.05,
+          lineStyle: { opacity: 0.05 },
         },
+        animationDurationUpdate: focusMode.value ? 500 : 0,
         zoom: 1,
       },
     ],
@@ -361,6 +371,7 @@ async function renderGraph() {
   const option = buildEChartsOption()
   chartInstance.value.setOption(option, true)
   chartInstance.value.on('click', async (params) => {
+    if (focusMode.value) return
     if (params.dataType === 'node') {
       const node = allNodes.value.find((n) => n.id === params.data.id)
       if (node) {
@@ -451,6 +462,20 @@ function toggleLegend(name) {
   renderGraph()
 }
 
+function layoutExpandPath(centerNode, nodes, edges) {
+  const cx = 400, cy = 300, radius = 200
+  const connected = nodes.filter((n) => n.id !== centerNode.id)
+  const total = connected.length
+  return nodes.map((n) => {
+    if (n.id === centerNode.id) {
+      return { ...n, x: cx, y: cy, fixed: true }
+    }
+    const idx = connected.indexOf(n)
+    const angle = (idx / total) * 2 * Math.PI - Math.PI / 2
+    return { ...n, x: cx + radius * Math.cos(angle), y: cy + radius * Math.sin(angle), fixed: true }
+  })
+}
+
 async function handleExpandNode() {
   if (!selectedNode.value) return
   const parts = selectedNode.value.id.split(':')
@@ -458,34 +483,75 @@ async function handleExpandNode() {
   const type = parts[0]
   const id = parts.slice(1).join(':')
 
-  const nodeIdx = allNodes.value.findIndex((n) => n.id === selectedNode.value.id)
-  if (chartInstance.value && nodeIdx >= 0) {
-    chartInstance.value.dispatchAction({ type: 'downplay' })
-    chartInstance.value.dispatchAction({
-      type: 'highlight',
-      seriesIndex: 0,
-      dataIndex: nodeIdx,
-    })
+  const res = await expandNode(type, id)
+  const newNodes = res.data?.nodes || []
+  const newEdges = res.data?.edges || []
+  if (!newNodes.length) {
+    ElMessage.info('该节点已无更多关联')
+    return
   }
 
-  try {
-    const res = await expandNode(type, id)
-    const newNodes = res.data?.nodes || []
-    const newEdges = res.data?.edges || []
-    const existingIds = new Set(allNodes.value.map((n) => n.id))
-    const newIds = newNodes.filter((n) => !existingIds.has(n.id))
-    if (newIds.length) {
-      allNodes.value = [...allNodes.value, ...newIds]
-      allEdges.value = [...allEdges.value, ...newEdges]
-      renderGraph()
-      ElMessage.success('已扩展 ' + newIds.length + ' 个关联节点')
-    } else if (!newNodes.length) {
-      ElMessage.info('该节点已无更多关联')
-    } else {
-      ElMessage.success('已高亮上下游关联节点')
+  const allConnected = [selectedNode.value, ...newNodes.filter((n) => n.id !== selectedNode.value.id)]
+  backupNodes.value = [...allNodes.value]
+  backupEdges.value = [...allEdges.value]
+  focusMode.value = 'expand'
+  drawerVisible.value = false
+  allNodes.value = layoutExpandPath(selectedNode.value, allConnected, newEdges)
+  allEdges.value = newEdges
+  renderGraph()
+  ElMessage.success('已展开 ' + newNodes.length + ' 个关联节点')
+}
+
+function layoutTracePath(nodes, edges) {
+  const layers = { PollutionSource: 0, River: 1, Reservoir: 2 }
+  const getLayer = (type) => layers[type] ?? 3
+  const layerNodes = { 0: [], 1: [], 2: [] }
+  nodes.forEach((n) => {
+    const layer = getLayer(n.type)
+    if (layer < 3) layerNodes[layer].push(n)
+  })
+  const positioned = nodes.map((n) => {
+    const layer = getLayer(n.type)
+    const list = layerNodes[layer]
+    const idx = list.indexOf(n)
+    const total = list.length
+    return {
+      ...n,
+      x: layer * 300 + 150,
+      y: total > 1 ? ((idx + 1) / (total + 1)) * 500 : 250,
+      fixed: true,
     }
+  })
+  return { nodes: positioned, edges }
+}
+
+function exitFocusMode() {
+  focusMode.value = null
+  allNodes.value = backupNodes.value
+  allEdges.value = backupEdges.value
+  renderGraph()
+}
+
+async function handleTracePollution() {
+  if (!selectedNode.value?.code) return
+  try {
+    const res = await tracePollution(selectedNode.value.code)
+    const data = res.data
+    if (!data?.nodes?.length) {
+      ElMessage.info('未发现污染源路径')
+      return
+    }
+    backupNodes.value = [...allNodes.value]
+    backupEdges.value = [...allEdges.value]
+    focusMode.value = 'trace'
+    drawerVisible.value = false
+    const layout = layoutTracePath(data.nodes, data.edges)
+    allNodes.value = layout.nodes
+    allEdges.value = layout.edges
+    renderGraph()
+    ElMessage.success(`发现 ${data.sources?.length || 0} 个疑似污染源`)
   } catch {
-    ElMessage.error('扩展节点失败')
+    ElMessage.error('溯源查询失败')
   }
 }
 

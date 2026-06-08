@@ -33,6 +33,18 @@ class GetGraphOverviewEdgeItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TraceSourceItem(BaseModel):
+    """污染源嫌疑排序项"""
+
+    id: str = Field(..., description="污染源节点 ID")
+    name: str = Field(..., description="污染源名称")
+    risk_level: str | None = Field(None, description="风险等级")
+    distance_km: float | None = Field(None, description="距水库距离(km)")
+    violation_count: int | None = Field(None, description="违规次数")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== 请求类（Request）==========
 
 
@@ -75,6 +87,22 @@ class GetGraphExpandResponse(BaseModel):
     )
     edges: list[GetGraphOverviewEdgeItem] = Field(
         default_factory=list, description="相邻关系列表"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GetTracePollutionResponse(BaseModel):
+    """污染溯源路径响应"""
+
+    nodes: list[GetGraphOverviewNodeItem] = Field(
+        default_factory=list, description="溯源路径节点列表"
+    )
+    edges: list[GetGraphOverviewEdgeItem] = Field(
+        default_factory=list, description="溯源路径关系列表"
+    )
+    sources: list[TraceSourceItem] = Field(
+        default_factory=list, description="污染源排序列表"
     )
 
     model_config = ConfigDict(from_attributes=True)

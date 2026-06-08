@@ -88,3 +88,21 @@ async def get_node_expand(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/trace",
+    response_model=ApiResponse[schemas_grapg.GetTracePollutionResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    description="污染溯源路径",
+)
+async def trace_pollution(
+    neo4j_driver: Annotated[AsyncDriver, Depends(get_neo4j_session)],
+    reservoir_code: Annotated[str, Query(description="水库编号")],
+):
+    """污染溯源路径"""
+    try:
+        result = await services_graph.trace_pollution(neo4j_driver, reservoir_code)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
