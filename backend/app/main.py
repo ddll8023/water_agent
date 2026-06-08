@@ -6,6 +6,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.ws_manager import manager
+from app.core.redis import close_redis
 from app.routers import auth as auth_router
 from app.routers import users as users_router
 from app.routers import roles as roles_router
@@ -62,6 +63,8 @@ async def lifespan(app: FastAPI):
     # ---- shutdown ----
     if scheduler.running:
         scheduler.shutdown(wait=False)
+
+    await close_redis()
 
 
 app = FastAPI(

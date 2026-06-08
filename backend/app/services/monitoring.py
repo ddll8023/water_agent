@@ -10,7 +10,7 @@ from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import commit_or_rollback, get_background_db_session
-from app.core.redis import redis_client, is_redis_available
+from app.core.redis import get_redis, is_redis_available
 from app.models import monitoring as models_monitoring
 from app.models import station as models_station
 from app.models import indicator as models_indicator
@@ -20,6 +20,7 @@ from app.schemas import monitorings as schemas_monitorings
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
 from app.services.alert_rules import evaluate_alert_rules
+from redis import Redis
 
 logger = setup_logger(__name__)
 
@@ -209,7 +210,7 @@ async def get_reservoir_latest_indicators(
 
     records = []
     fallback_indicator_ids = []
-
+    redis_client: Redis = await get_redis()
     for indicator_id, indicator_name in core_rows:
         key = f"monitoring:last:{reservoir_id}:{indicator_id}"
         try:
@@ -425,7 +426,7 @@ async def _cache_to_redis(
 
     key_trend = f"monitoring:trend:{reservoir_id}:{indicator_id}"
     key_last = f"monitoring:last:{reservoir_id}:{indicator_id}"
-
+    redis_client: Redis = await get_redis()
     try:
         await redis_client.zadd(key_trend, {member: ts})
         await redis_client.zremrangebyscore(
@@ -456,6 +457,7 @@ async def _query_trend_from_redis(
 ):
     """从 Redis 查询时间段内的趋势数据，失败返回 None"""
     key = f"monitoring:trend:{reservoir_id}:{indicator_id}"
+    redis_client: Redis = await get_redis()
     try:
         data = await redis_client.zrangebyscore(
             key, start.timestamp(), end.timestamp(), withscores=True

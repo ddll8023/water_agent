@@ -1,8 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
-
 # ========== 辅助类（Support）==========
+
 
 class AlertNoteItem(BaseModel):
     """处置备注条目（嵌入 AlertEvent.notes JSON 数组）"""
@@ -13,7 +13,30 @@ class AlertNoteItem(BaseModel):
     created_at: datetime = Field(description="创建时间")
 
 
+class AlertDetailItem(BaseModel):
+    """预警详情"""
+
+    id: int = Field(description="预警ID")
+    reservoir_id: int = Field(description="水库ID")
+    title: str = Field(description="预警标题")
+    alert_level: int = Field(description="预警等级：1=info 2=warning 3=critical")
+    indicators: list[dict] | None = Field(
+        None, description="超标指标列表_name_value_limit"
+    )
+    source_desc: str | None = Field(None, description="溯源描述")
+    suggestion: str | None = Field(None, description="处置建议")
+    notes: list[AlertNoteItem] | None = Field(
+        default_factory=list, description="处置备注列表"
+    )
+    status: int = Field(description="状态：0=待确认/1=已确认/2=处置中/3=已解决")
+    detected_at: datetime = Field(description="检出时间")
+    resolved_at: datetime | None = Field(None, description="解决时间")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== 请求类（Request）==========
+
 
 class AddAlertNoteRequest(BaseModel):
     """添加处置备注请求参数"""
@@ -34,7 +57,9 @@ class GetAlertListRequest(BaseModel):
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=10, ge=1, le=100, description="每页记录数")
     reservoir_id: int | None = Field(None, description="水库ID")
-    alert_level: int | None = Field(None, description="预警等级：1=info 2=warning 3=critical")
+    alert_level: int | None = Field(
+        None, description="预警等级：1=info 2=warning 3=critical"
+    )
     status: int | None = Field(
         None, description="状态：0=待确认/1=已确认/2=处置中/3=已解决"
     )
@@ -50,6 +75,7 @@ class UpdateAlertRequest(BaseModel):
 
 
 # ========== 响应类（Response）==========
+
 
 class GetUnreadCountResponse(BaseModel):
     """未读预警数响应参数"""

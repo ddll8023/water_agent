@@ -1,5 +1,6 @@
 import redis.asyncio as aioredis
 from app.core.config import settings
+from redis import Redis
 
 redis_client = aioredis.from_url(
     f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}",
@@ -11,7 +12,7 @@ redis_client = aioredis.from_url(
 
 
 async def get_redis():
-    yield redis_client
+    return redis_client
 
 
 async def close_redis():

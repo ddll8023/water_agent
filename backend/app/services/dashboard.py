@@ -9,6 +9,8 @@ from app.models import reservoir as models_reservoir
 from app.models import indicator as models_indicator
 from app.schemas import dashboard as schemas_dashboard
 from app.models import alert as models_alert
+from app.core.redis import get_redis, Redis
+import json
 
 
 async def get_dashboard_overview(db: AsyncSession):
@@ -188,7 +190,14 @@ async def get_reservoir_cards(db: AsyncSession):
 async def get_last_alert(
     db: AsyncSession,
 ):
-    """获取最近一次告警记录"""
+    """获取最近告警记录"""
+    redis_client = await get_redis()
+    alert_list = await redis_client.lrange("alert:recent", 0, -1)
+    if alert_list:
+        return [
+            schemas_dashboard.GetLastAlertResponse.model_validate(json.loads(alert))
+            for alert in alert_list
+        ]
     alert_entity_list = await db.scalars(
         select(models_alert.AlertEvent)
         .order_by(models_alert.AlertEvent.detected_at.desc())
