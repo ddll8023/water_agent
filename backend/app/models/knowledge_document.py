@@ -26,7 +26,7 @@ class KnowledgeDocument(Base):
         SmallInteger,
         default=0,
         index=True,
-        comment="文档类型：0=标准 1=案例 2=预案 3=其他",
+        comment="文档类型：0=标准 1=案例 2=预案",
     )
     file_name = Column[str](String(255), nullable=False, comment="原始文件名")
     file_path = Column[str](String(500), nullable=False, comment="服务器存储路径")

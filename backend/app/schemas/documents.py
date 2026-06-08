@@ -12,7 +12,6 @@ class DocumentType(IntEnum):
     STANDARD = 0
     CASE = 1
     SOP = 2
-    OTHER = 3
 
 
 class DocumentStatus(IntEnum):

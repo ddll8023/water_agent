@@ -39,6 +39,7 @@ async def upload_document(
     logger.info(f"收到上传请求: {len(files)} 个文件, category={category}")
     result_list: list[schemas_documents.UploadDocumentItem] = []
     fail_count = 0
+    pending_doc_ids: list[int] = []
     for file in files:
         try:
             # 检验
@@ -46,6 +47,7 @@ async def upload_document(
             if not is_valid:
                 logger.warning(f"文件校验失败: {file.filename}, {message}")
                 raise ServiceException(ErrorCode.INVALID_FILE, message)
+
             # 保存文件，数据库记录
             filename_list = os.path.splitext(file.filename)
             new_filename = f"{filename_list[0]}_{uuid.uuid4().hex}{filename_list[1]}"
@@ -54,6 +56,7 @@ async def upload_document(
                 file_bytes,
                 os.path.join(ROOT_DIR, settings.UPDATE_PATH_NAME, new_filename),
             )
+
             document_entity = models_document.KnowledgeDocument(
                 title=filename_list[0],
                 doc_type=category,
@@ -63,7 +66,9 @@ async def upload_document(
             )
             db.add(document_entity)
             await db.flush()
-            asyncio.create_task(_process_document(document_id=document_entity.id))
+
+            pending_doc_ids.append(document_entity.id)
+
             result_list.append(
                 schemas_documents.UploadDocumentItem(
                     document_id=document_entity.id,
@@ -87,6 +92,9 @@ async def upload_document(
             fail_count += 1
 
     await commit_or_rollback(db)
+
+    for doc_id in pending_doc_ids:
+        asyncio.create_task(_process_document(document_id=doc_id))
 
     return schemas_documents.UploadDocumentResponse(
         total=len(files),
@@ -239,7 +247,13 @@ async def _process_document(document_id: int):
         vector_store = get_vector_store()
         metadatas = []
         for i, base_meta in enumerate(metadatas_base):
-            base_meta.update({"doc_id": document_id, "chunk_index": i})
+            base_meta.update(
+                {
+                    "doc_id": document_id,
+                    "chunk_index": i,
+                    "doc_type": document_entity.doc_type,
+                }
+            )
             metadatas.append(base_meta)
         chunk_ids_list = await asyncio.to_thread(
             vector_store.add_texts,
@@ -281,5 +295,5 @@ async def _extract_text(filename: str):
 
         return await asyncio.to_thread(_read_pdf)
     else:
-        async with aiofiles.open(path, "r") as f:
+        async with aiofiles.open(path, "r", encoding="utf-8") as f:
             return await f.read()

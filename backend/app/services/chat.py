@@ -1,14 +1,8 @@
 import json
 import math
-import random
-import httpx
-from datetime import datetime, timedelta
-
-from sqlalchemy import select, and_, func, update
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import UploadFile, BackgroundTasks
 from app.core.database import commit_or_rollback, get_background_db_session
-from app.core.redis import redis_client
 from app.models import chat_session as models_chat_session
 from app.models import chat_message as models_chat_message
 from app.utils.logger_config import setup_logger
@@ -16,22 +10,16 @@ from app.schemas import chat as schemas_chat
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
 from app.schemas import documents as schemas_documents
-from app.models import knowledge_document as models_document
 from app.constants import documents as constants_documents
-import os
-import uuid
-from app.utils.file import save_file, ROOT_DIR
 from app.core.config import settings
 import asyncio
-import aiofiles
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.chroma import get_vector_store
 from langchain_core.prompts import PromptTemplate
 from app.utils.prompt_factory import get_prompt
 from app.utils.model_factory import get_model
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_core.documents import Document
+from langchain_core.output_parsers import JsonOutputParser
 
 logger = setup_logger(__name__)
 
@@ -67,16 +55,23 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         )
         db.add(message_entity)
         await db.flush()
-        vector_store = get_vector_store()
-        rag_result_list = await asyncio.to_thread(
-            vector_store.similarity_search, query=chat_request.query, k=settings.TOP_K
-        )
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'retrieval', 'message': '正在检索知识库...'})}\n\n"
+
+        rag_result_list = await _rag_retriever(chat_request.query)
         logger.info(
             f"知识库检索完成: session_id={session_entity.id} "
             f"result_count={len(rag_result_list)}"
         )
 
-        system_prompt = PromptTemplate.from_template(get_prompt.chat["CHAT"]["SYSTEM"])
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'rerank', 'message': '正在对检索结果进行排序...'})}\n\n"
+
+        rag_result_list = await _re_sort(
+            chat_request.query, [rag_result[0] for rag_result in rag_result_list]
+        )
+        system_prompt = PromptTemplate.from_template(
+            get_prompt.chat["CHAT"]["SYSTEM"]
+        ).format()
         user_prompt = PromptTemplate.from_template(
             get_prompt.chat["CHAT"]["USER"]
         ).format(
@@ -106,7 +101,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         )
 
         message_list = []
-        message_list.append(SystemMessage(system_prompt.format()))
+        message_list.append(SystemMessage(system_prompt))
 
         for msg in history_message_list:
             if msg.role == "user":
@@ -115,11 +110,16 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
                 message_list.append(AIMessage(msg.content))
 
         message_list.append(HumanMessage(user_prompt))
+
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在生成回答...'})}\n\n"
+
         logger.info(f"LLM 开始生成: session_id={session_entity.id}")
 
         model = get_model.chat_one_model
         result = ""
         async for chunk in model.astream(message_list):
+            if not chunk.content:
+                continue
             yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
             result += chunk.content
         logger.info(
@@ -253,3 +253,109 @@ async def re_chat(
         ),
     ):
         yield chunk
+
+
+async def _rag_retriever(query: str):
+    """rag检索"""
+    vector_store = get_vector_store()
+
+    tasks = [
+        asyncio.to_thread(
+            vector_store.similarity_search_with_relevance_scores,
+            query=query,
+            k=settings.TOP_K,
+            filter={"doc_type": doc_type.value},
+        )
+        for doc_type in schemas_documents.DocumentType
+    ]
+    results = await asyncio.gather(*tasks)
+
+    for doc_type, sublist in zip(schemas_documents.DocumentType, results):
+        logger.info(f"RAG检索各类型数量: doc_type={doc_type.name} count={len(sublist)}")
+
+    seen = set()
+    for sublist in results:
+        i = 0
+        while i < len(sublist):
+            doc = sublist[i]
+            key = (doc[0].metadata["doc_id"], doc[0].metadata["chunk_index"])
+            if key in seen:
+                sublist.pop(i)
+            else:
+                seen.add(key)
+                i += 1
+    sorted_result_list: list[tuple[Document, float]] = []
+    i = 0
+    for doc_type in schemas_documents.DocumentType:
+        for doc, score in results[i]:
+            sorted_result_list.append(
+                (doc, score * constants_documents.DOCUMENT_WEIGHT[doc_type])
+            )
+    sorted_result_list.sort(key=lambda x: x[1], reverse=True)
+
+    if sorted_result_list:
+        logger.info(
+            f"RAG加权融合完成: total={len(sorted_result_list)} "
+            f"top1_score={sorted_result_list[0][1]:.4f}"
+        )
+    return sorted_result_list[:10]
+
+
+async def _re_sort(query: str, document_list: list[Document]):
+    """重排序"""
+    logger.info(f"重排序解析开始: parsed={query} " f"len={len(document_list)}")
+    document_list_str = ""
+    for i, document in enumerate(document_list):
+        document_list_str += f"文档{i}:{document.page_content}\n"
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.chat["RESORT"]["SYSTEM"]
+    ).format()
+    user_prompt = PromptTemplate.from_template(
+        get_prompt.chat["RESORT"]["USER"]
+    ).format(query=query, doc_count=len(document_list), document_list=document_list_str)
+    message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+    model = get_model.chat_one_model
+    chain = model | JsonOutputParser()
+
+    try:
+        response = await chain.ainvoke(message_list)
+        result_list = [
+            schemas_chat.ReSortResultItem.model_validate(r) for r in response
+        ]
+    except Exception:
+        logger.warning(f"重排序失败，退回原始排序: query={query[:50]}")
+        return document_list[:5]
+
+    logger.info(
+        f"重排序解析完成: parsed={len(result_list)} "
+        f"scores={[r.score for r in result_list]}"
+    )
+
+    result_list.sort(key=lambda x: x.score, reverse=True)
+
+    before_labels = [
+        f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
+        for d in document_list[:5]
+    ]
+
+    seen_indices = set()
+    sorted_document_list: list[Document] = []
+    for item in result_list:
+        idx = item.index
+        if 0 <= idx < len(document_list) and idx not in seen_indices:
+            sorted_document_list.append(document_list[idx])
+            seen_indices.add(idx)
+        if len(sorted_document_list) >= 5:
+            break
+
+    after_labels = [
+        f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
+        for d in sorted_document_list[:5]
+    ]
+
+    logger.info(
+        f"重排序完成: before=[{', '.join(before_labels)}] "
+        f"after=[{', '.join(after_labels)}]"
+    )
+
+    return sorted_document_list or document_list[:5]

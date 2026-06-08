@@ -142,6 +142,7 @@
           <!-- AI 消息 -->
           <div v-else class="flex justify-start items-start gap-3">
             <div class="w-8 h-8 rounded-full ai-avatar flex items-center justify-center shrink-0 mt-0.5">
+              <span v-if="msg.streaming" class="streaming-ring"></span>
               <el-icon class="text-white text-sm"><ChatLineSquare /></el-icon>
             </div>
             <div class="max-w-[65%]">
@@ -149,12 +150,18 @@
                 <!-- 正文 -->
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
 
-                <!-- 流式光标 - 跳动圆点 -->
-                <span v-if="msg.streaming && !msg.content" class="typing-dots">
-                  <span class="dot"></span>
-                  <span class="dot"></span>
-                  <span class="dot"></span>
-                </span>
+                <!-- 流式光标 - 进度指示  -->
+                <div v-if="msg.streaming && !msg.content" class="flex items-center gap-2.5 py-1">
+                  <!-- 三节步骤指示器 -->
+                  <div class="flex items-center gap-px">
+                    <span class="ripple-step" :class="stageDot('retrieval', msg.progressStage)"></span>
+                    <span class="ripple-step-connector" :class="connectorDot('retrieval', msg.progressStage)"></span>
+                    <span class="ripple-step" :class="stageDot('rerank', msg.progressStage)"></span>
+                    <span class="ripple-step-connector" :class="connectorDot('rerank', msg.progressStage)"></span>
+                    <span class="ripple-step" :class="stageDot('generate', msg.progressStage)"></span>
+                  </div>
+                  <span class="text-gray-400 text-xs tracking-wide">{{ progressTextMap[msg.progressStage] }}</span>
+                </div>
 
                 <!-- 错误状态 -->
                 <div
@@ -275,6 +282,27 @@ const editInputRef = ref(null)
 // 重试旋转状态
 const retryingMsgId = ref(null)
 
+const stageOrder = ['retrieval', 'rerank', 'generate']
+const progressTextMap = {
+  retrieval: '正在检索知识库',
+  rerank: '正在排序中',
+  generate: '正在生成回答',
+}
+
+function stageDot(stage, current) {
+  const idx = stageOrder.indexOf(stage)
+  const curIdx = stageOrder.indexOf(current)
+  if (idx < curIdx) return 'ripple-step-done'
+  if (idx === curIdx) return 'ripple-step-active'
+  return 'ripple-step-pending'
+}
+
+function connectorDot(stage, current) {
+  const idx = stageOrder.indexOf(stage)
+  const curIdx = stageOrder.indexOf(current)
+  return idx < curIdx ? 'ripple-connector-done' : ''
+}
+
 // SSE 控制器（用于取消）
 let abortController = null
 
@@ -392,6 +420,7 @@ async function sendMessage() {
     references: [],
     streaming: true,
     error: null,
+    progressStage: null,
   })
 
   const aiMsg = messages.value[messages.value.length - 1]
@@ -405,6 +434,9 @@ async function sendMessage() {
     onChunk(content) {
       aiMsg.content += content
       scrollToBottom()
+    },
+    onProgress(stage) {
+      aiMsg.progressStage = stage
     },
     onDone(data) {
       aiMsg.streaming = false
@@ -456,6 +488,7 @@ function retry(msg) {
   msg.error = null
   msg.content = ''
   msg.streaming = true
+  msg.progressStage = null
   retryingMsgId.value = msg.id
 
   isStreaming.value = true
@@ -467,6 +500,9 @@ function retry(msg) {
     onChunk(content) {
       msg.content += content
       scrollToBottom()
+    },
+    onProgress(stage) {
+      msg.progressStage = stage
     },
     onDone(data) {
       msg.streaming = false
@@ -557,6 +593,7 @@ function confirmEdit() {
   aiMsg.content = ''
   aiMsg.streaming = true
   aiMsg.error = null
+  aiMsg.progressStage = null
   retryingMsgId.value = aiMsg.id
   isStreaming.value = true
 
@@ -682,25 +719,73 @@ function renderMarkdown(text) {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ===== 流式光标 - 跳动圆点 ===== */
-.typing-dots { display: inline-flex; align-items: center; gap: 3px; margin-left: 4px; }
-.typing-dots .dot {
-  width: 5px; height: 5px; border-radius: 50%;
-  background: #0D9488;
-  animation: dotBounce 1.4s ease-in-out infinite both;
-}
-.typing-dots .dot:nth-child(1) { animation-delay: 0s; }
-.typing-dots .dot:nth-child(2) { animation-delay: 0.16s; }
-.typing-dots .dot:nth-child(3) { animation-delay: 0.32s; }
-@keyframes dotBounce {
-  0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
-  40% { transform: scale(1); opacity: 1; }
-}
-
-/* ===== AI 图标头像 ===== */
+/* ===== AI 头像 - 生成中呼吸环 ===== */
 .ai-avatar {
+  position: relative;
   background: linear-gradient(135deg, #0D9488, #0891B2);
   box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
+}
+.streaming-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid #0D9488;
+  animation: ringPulse 1.8s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes ringPulse {
+  0%   { transform: scale(0.85); opacity: 0.6; }
+  50%  { transform: scale(1.1);  opacity: 0.2; }
+  100% { transform: scale(0.85); opacity: 0.6; }
+}
+
+/* ===== 三节步骤指示器 ===== */
+.ripple-step {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transition: all 0.4s ease;
+}
+.ripple-step-active {
+  background: #0D9488;
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+  animation: rippleActive 1.6s ease-in-out infinite;
+}
+.ripple-step-done {
+  background: #0D9488;
+  opacity: 0.4;
+}
+.ripple-step-pending {
+  background: #D1D5DB;
+}
+@keyframes rippleActive {
+  0%   { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
+  50%  { box-shadow: 0 0 0 5px rgba(13, 148, 136, 0.1); }
+  100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
+}
+
+/* ===== 步骤连接线 ===== */
+.ripple-step-connector {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: #E5E7EB;
+  transition: background 0.4s ease;
+}
+.ripple-connector-done {
+  background: #0D9488;
+  opacity: 0.4;
+}
+
+/* ===== 流式内容入场 ===== */
+.markdown-body > * {
+  animation: fadeInUp 0.15s ease-out both;
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* ===== 用户消息渐变 ===== */

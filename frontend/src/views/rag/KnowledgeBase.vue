@@ -129,7 +129,7 @@
             drag
             multiple
             :auto-upload="false"
-            accept=".pdf"
+            accept=".pdf,.md"
             :limit="10"
             :on-exceed="handleExceed"
             @change="handleFileChange"
@@ -140,7 +140,7 @@
             </div>
             <template #tip>
               <div class="el-upload__tip text-gray-400">
-                支持 .pdf 格式，单文件不超过 50MB，单次最多 10 个文件
+                支持 .pdf、.md 格式，单文件不超过 50MB，单次最多 10 个文件
               </div>
             </template>
           </el-upload>

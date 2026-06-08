@@ -15,6 +15,16 @@ class ChatItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ReSortResultItem(BaseModel):
+    """重排序ai返回结果信息"""
+
+    index: int = Field(..., description="文档在原列表中的序号（从0开始）")
+    score: int = Field(..., ge=1, le=5, description="相关性得分（1-5）")
+    reason: str = Field(..., description="简短打分理由")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ChatRequest(BaseModel):
     """对话请求"""
 

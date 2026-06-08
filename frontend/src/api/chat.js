@@ -17,7 +17,7 @@ export function deleteChat(id) {
   return request.delete(`/v1/chat/${id}`)
 }
 
-export function fetchReChatStream({ query, session_id, message_id, onChunk, onDone, onError }) {
+export function fetchReChatStream({ query, session_id, message_id, onChunk, onDone, onError, onProgress }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')
 
@@ -62,6 +62,9 @@ export function fetchReChatStream({ query, session_id, message_id, onChunk, onDo
                   case 'done':
                     onDone?.({ session_id: event.session_id, message_id: event.message_id, user_message_id: event.user_message_id })
                     break
+                  case 'progress':
+                    onProgress?.(event.stage, event.message)
+                    break
                 }
               } catch {
                 /* 单条事件解析失败，静默跳过 */
@@ -79,7 +82,7 @@ export function fetchReChatStream({ query, session_id, message_id, onChunk, onDo
   return controller
 }
 
-export function fetchChatStream({ query, session_id, onChunk, onDone, onError }) {
+export function fetchChatStream({ query, session_id, onChunk, onDone, onError, onProgress }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')
 
@@ -123,6 +126,9 @@ export function fetchChatStream({ query, session_id, onChunk, onDone, onError })
                     break
                   case 'done':
                     onDone?.({ session_id: event.session_id, message_id: event.message_id, user_message_id: event.user_message_id })
+                    break
+                  case 'progress':
+                    onProgress?.(event.stage, event.message)
                     break
                 }
               } catch {
