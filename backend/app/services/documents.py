@@ -6,15 +6,9 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import UploadFile, BackgroundTasks
+from fastapi import UploadFile
 from app.core.database import commit_or_rollback, get_background_db_session
-from app.core.redis import redis_client
-from app.models import monitoring as models_monitoring
-from app.models import station as models_station
-from app.models import indicator as models_indicator
-from app.constants import monitoring as constants_monitoring
 from app.utils.logger_config import setup_logger
-from app.schemas import monitorings as schemas_monitorings
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
 from app.schemas import documents as schemas_documents
@@ -22,12 +16,15 @@ from app.models import knowledge_document as models_document
 from app.constants import documents as constants_documents
 import os
 import uuid
+import aiofiles
 from app.utils.file import save_file, ROOT_DIR
 from app.core.config import settings
 import asyncio
-import aiofiles
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import (
+    RecursiveCharacterTextSplitter,
+    MarkdownHeaderTextSplitter,
+)
 from app.core.chroma import get_vector_store
 
 logger = setup_logger(__name__)
@@ -199,7 +196,7 @@ async def _validate_file(file: UploadFile):
     """校验文件"""
     filename = file.filename
     if not filename.endswith(constants_documents.FILE_EXTENSION):
-        return False, "仅支持PDF格式的文件"
+        return False, "仅支持PDF和md格式的文件"
     if file.size > constants_documents.MAX_FILE_SIZE:
         return False, "文件大小不能超过10MB"
     return True, "文件校验通过"
@@ -218,21 +215,32 @@ async def _process_document(document_id: int):
         logger.info(f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}")
         document_entity.content = file_text
         # 切块
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.CHUNK_SIZE,
-            chunk_overlap=settings.CHUNK_OVERLAP,
-            separators=settings.SEPARATORS,
-            length_function=len,
-        )
-        splited_text_list = splitter.split_text(file_text)
+        if document_entity.file_path.endswith("md"):
+            splitter = MarkdownHeaderTextSplitter(
+                headers_to_split_on=[("#", "title"), ("##", "section")]
+            )
+            doc_chunks = splitter.split_text(file_text)
+            splited_text_list = [doc.page_content for doc in doc_chunks]
+            metadatas_base = [doc.metadata for doc in doc_chunks]
+        else:
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=settings.CHUNK_SIZE,
+                chunk_overlap=settings.CHUNK_OVERLAP,
+                separators=settings.SEPARATORS,
+                length_function=len,
+            )
+            splited_text_list = splitter.split_text(file_text)
+            metadatas_base = [{} for _ in splited_text_list]
+
         logger.info(
             f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}"
         )
         # 向量化
         vector_store = get_vector_store()
         metadatas = []
-        for i in range(len(splited_text_list)):
-            metadatas.append({"doc_id": document_id, "chunk_index": i})
+        for i, base_meta in enumerate(metadatas_base):
+            base_meta.update({"doc_id": document_id, "chunk_index": i})
+            metadatas.append(base_meta)
         chunk_ids_list = await asyncio.to_thread(
             vector_store.add_texts,
             texts=splited_text_list,
@@ -262,11 +270,16 @@ async def _extract_text(filename: str):
         logger.error(f"文件不存在: {path}")
         raise ServiceException(message="文件不存在")
 
-    def _read_pdf():
-        loader = PyPDFLoader(path)
-        content = ""
-        for document in loader.load():
-            content += document.page_content
-        return content
+    if filename.endswith("pdf"):
 
-    return await asyncio.to_thread(_read_pdf)
+        def _read_pdf():
+            loader = PyPDFLoader(path)
+            content = ""
+            for document in loader.load():
+                content += document.page_content
+            return content
+
+        return await asyncio.to_thread(_read_pdf)
+    else:
+        async with aiofiles.open(path, "r") as f:
+            return await f.read()
