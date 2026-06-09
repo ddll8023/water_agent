@@ -24,6 +24,7 @@ from app.utils.db_init import init_mysql, init_neo4j
 from app.routers import documents as documents_router
 from app.routers import chat as chat_router
 from app.routers import graph as graph_router
+from app.routers import graph_admin as graph_admin_router
 
 logger = setup_logger(__name__)
 
@@ -94,6 +95,7 @@ app.include_router(alert_rules_router.router)
 app.include_router(documents_router.router)
 app.include_router(chat_router.router)
 app.include_router(graph_router.router)
+app.include_router(graph_admin_router.router)
 
 
 @app.websocket("/ws/alerts")

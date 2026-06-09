@@ -1,14 +1,18 @@
 """指标CRUD服务"""
 
-from app.core.database import get_db, commit_or_rollback
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.utils.logger_config import setup_logger
-from app.utils.exception import ServiceException
-from sqlalchemy import func, select
-from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
+import asyncio
 import math
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db, commit_or_rollback, get_background_db_session
+from app.core.neo4j import driver
 from app.models import indicator as models_indicator
 from app.schemas import indicators as schemas_indicators
+from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
+from app.utils.exception import ServiceException
+from app.utils.logger_config import setup_logger
 
 logger = setup_logger(__name__)
 
@@ -30,6 +34,9 @@ async def create_indicator(
     )
     db.add(indicator_entity)
     await commit_or_rollback(db)
+    asyncio.create_task(
+        _sync_indicator_to_neo4j(indicator_entity.id, "create")
+    )
     return True
 
 
@@ -107,6 +114,9 @@ async def update_indicator(
     for key, value in update_data.items():
         setattr(indicator_entity, key, value)
     await commit_or_rollback(db)
+    asyncio.create_task(
+        _sync_indicator_to_neo4j(indicator_id, "update")
+    )
     return True
 
 
@@ -118,6 +128,47 @@ async def delete_indicator(
     indicator_entity = await db.get(models_indicator.Indicator, indicator_id)
     if not indicator_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "指标不存在")
+    code = indicator_entity.code
     await db.delete(indicator_entity)
     await commit_or_rollback(db)
+    asyncio.create_task(
+        _sync_indicator_to_neo4j(indicator_id, "delete", code)
+    )
     return True
+
+
+"""辅助函数"""
+
+
+async def _sync_indicator_to_neo4j(indicator_id: int, action: str, entity_code: str | None = None):
+    """同步监测指标到 Neo4j"""
+    db = None
+    neo4j_session = None
+    try:
+        db = get_background_db_session()
+        neo4j_session = driver.session()
+        if action == "delete":
+            await neo4j_session.run(
+                "MATCH (n:Indicator {code: $code}) DETACH DELETE n",
+                code=entity_code,
+            )
+            return
+
+        entity = await db.get(models_indicator.Indicator, indicator_id)
+        if not entity:
+            return
+
+        await neo4j_session.run(
+            """MERGE (i:Indicator {code: $code})
+               ON CREATE SET i.name = $name, i.unit = $unit, i.category = $category
+               ON MATCH SET i.name = $name, i.unit = $unit, i.category = $category""",
+            code=entity.code, name=entity.name,
+            unit=entity.unit, category=entity.category,
+        )
+    except Exception as e:
+        logger.error(f"Neo4j 指标同步失败: id={indicator_id}, action={action}, error={e}")
+    finally:
+        if neo4j_session:
+            await neo4j_session.close()
+        if db:
+            await db.close()

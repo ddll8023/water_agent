@@ -10,6 +10,9 @@
       <el-tab-pane label="监测指标管理" name="indicator">
         <indicator-tab v-if="activeTab === 'indicator'" />
       </el-tab-pane>
+      <el-tab-pane label="图谱实体管理" name="graph">
+        <graph-admin-tab v-if="activeTab === 'graph'" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -24,6 +27,7 @@ import { ref } from 'vue'
 import ReservoirTab from './components/ReservoirTab.vue'
 import StationTab from './components/StationTab.vue'
 import IndicatorTab from './components/IndicatorTab.vue'
+import GraphAdminTab from './components/GraphAdminTab.vue'
 
 const activeTab = ref('reservoir')
 </script>

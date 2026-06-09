@@ -1,15 +1,20 @@
-from app.core.database import get_db, commit_or_rollback
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.utils.logger_config import setup_logger
-from app.utils.exception import ServiceException
-from sqlalchemy import func, select
-from app.models import role as models_role
-from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
-from app.schemas import roles as schemas_roles
+import asyncio
 import math
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db, commit_or_rollback, get_background_db_session
+from app.core.neo4j import driver
 from app.models import station as models_station
+from app.models import reservoir as models_reservoir
+from app.models import indicator as models_indicator
 from app.schemas import stations as schemas_stations
+from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
+from app.utils.logger_config import setup_logger
+
+logger = setup_logger(__name__)
 
 
 async def create_monitoring_station(
@@ -32,6 +37,7 @@ async def create_monitoring_station(
     )
     db.add(monitoring_station_entity)
     await commit_or_rollback(db)
+    asyncio.create_task(_sync_station_to_neo4j(monitoring_station_entity.id, "create"))
     return True
 
 
@@ -154,6 +160,7 @@ async def update_monitoring_station(
     if update_monitoring_station_request.latitude is not None:
         monitoring_station_entity.latitude = update_monitoring_station_request.latitude
     await commit_or_rollback(db)
+    asyncio.create_task(_sync_station_to_neo4j(monitoring_station_id, "update"))
     return True
 
 
@@ -167,6 +174,69 @@ async def delete_monitoring_station(
     )
     if not monitoring_station_entity:
         raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
+    code = monitoring_station_entity.code
     await db.delete(monitoring_station_entity)
     await commit_or_rollback(db)
+    asyncio.create_task(_sync_station_to_neo4j(monitoring_station_id, "delete", code))
     return True
+
+
+"""辅助函数"""
+
+
+async def _sync_station_to_neo4j(station_id: int, action: str, entity_code: str | None = None):
+    """同步监测站点到 Neo4j（含 BELONGS_TO + MEASURES）"""
+    db = None
+    neo4j_session = None
+    try:
+        db = get_background_db_session()
+        neo4j_session = driver.session()
+        if action == "delete":
+            await neo4j_session.run(
+                "MATCH (n:MonitoringStation {code: $code}) DETACH DELETE n",
+                code=entity_code,
+            )
+            return
+
+        entity = await db.get(models_station.MonitoringStation, station_id)
+        if not entity:
+            return
+
+        await neo4j_session.run(
+            """MERGE (s:MonitoringStation {code: $code})
+               ON CREATE SET s.name = $name, s.type = $type,
+                   s.longitude = $longitude, s.latitude = $latitude,
+                   s.samplingPoint = $samplingPoint
+               ON MATCH SET s.name = $name, s.type = $type,
+                   s.longitude = $longitude, s.latitude = $latitude,
+                   s.samplingPoint = $samplingPoint""",
+            code=entity.code, name=entity.name, type=entity.type,
+            longitude=entity.longitude,
+            latitude=entity.latitude,
+            samplingPoint=entity.sampling_point,
+        )
+
+        reservoir = await db.get(models_reservoir.Reservoir, entity.reservoir_id)
+        if reservoir:
+            await neo4j_session.run(
+                """MATCH (s:MonitoringStation {code: $scode})
+                   MATCH (r:Reservoir {code: $rcode})
+                   MERGE (s)-[:BELONGS_TO]->(r)""",
+                scode=entity.code, rcode=reservoir.code,
+            )
+
+        indicators = (await db.execute(select(models_indicator.Indicator))).scalars().all()
+        for ind in indicators:
+            await neo4j_session.run(
+                """MATCH (s:MonitoringStation {code: $scode})
+                   MATCH (i:Indicator {code: $icode})
+                   MERGE (s)-[:MEASURES]->(i)""",
+                scode=entity.code, icode=ind.code,
+            )
+    except Exception as e:
+        logger.error(f"Neo4j 站点同步失败: id={station_id}, action={action}, error={e}")
+    finally:
+        if neo4j_session:
+            await neo4j_session.close()
+        if db:
+            await db.close()

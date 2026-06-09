@@ -2886,7 +2886,330 @@ category: 0
 
 ---
 
-## 十四、智能问答（/api/v1/chat）
+## 十五、图谱实体管理（/api/v1/graph/admin）
+
+Neo4j 直写管理接口。所有接口需要 Bearer Token 认证，且要求 admin 角色。
+
+### 15.1 创建河流
+
+- **POST** `/api/v1/graph/admin/rivers/create`
+- **描述**：在 Neo4j 中创建或更新河流节点。同名则属性覆盖。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| name | string | body | 是 | 河流名称 |
+| length | float\|null | body | 否 | 长度（km） |
+| watershed | string\|null | body | 否 | 所属流域 |
+| flows_into_reservoir_code | string\|null | body | 否 | 注入水库编号 |
+
+**请求体示例**：
+
+```json
+{
+  "name": "史河",
+  "length": 220,
+  "watershed": "淮河流域",
+  "flows_into_reservoir_code": "MSH-003"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "name": "史河",
+    "length": 220,
+    "watershed": "淮河流域",
+    "flows_into_reservoir_code": "MSH-003"
+  }
+}
+```
+
+---
+
+### 15.2 获取河流列表
+
+- **GET** `/api/v1/graph/admin/rivers/list`
+- **描述**：分页获取河流列表，支持流域筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 20 |
+| watershed | string\|null | query | 否 | 流域筛选 |
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "name": "史河",
+        "length": 220,
+        "watershed": "淮河流域",
+        "flows_into_reservoir_code": "MSH-003"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 4,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+---
+
+### 15.3 获取河流详情
+
+- **GET** `/api/v1/graph/admin/rivers/{name}`
+- **描述**：根据名称获取河流详情。
+- **参数**：`name` 路径参数，河流名称。
+
+---
+
+### 15.4 更新河流
+
+- **PUT** `/api/v1/graph/admin/rivers/{name}`
+- **描述**：更新河流属性。路径参数 `name` 为河流名称。
+- **请求体**：`length`, `watershed`, `flows_into_reservoir_code`（全部可选）。
+
+---
+
+### 15.5 删除河流
+
+- **DELETE** `/api/v1/graph/admin/rivers/{name}`
+- **描述**：删除河流节点及关联关系。
+
+---
+
+### 15.6 创建污染源
+
+- **POST** `/api/v1/graph/admin/pollution-sources/create`
+- **描述**：创建或更新污染源节点。同名则属性覆盖。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| name | string | body | 是 | 污染源名称 |
+| type | string | body | 是 | 类型：养殖场/工业企业/农业面源/其他 |
+| longitude | float | body | 是 | 经度 |
+| latitude | float | body | 是 | 纬度 |
+| risk_level | string | body | 是 | 风险等级：高/中/低 |
+| violation_count | int | body | 否 | 违规次数，默认 0 |
+| discharges_into_river_name | string\|null | body | 否 | 排入河流名称 |
+| distance_km | float\|null | body | 否 | 距水库距离（km） |
+
+---
+
+### 15.7 获取污染源列表
+
+- **GET** `/api/v1/graph/admin/pollution-sources/list`
+- **描述**：分页获取污染源列表，支持类型和风险等级筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 20 |
+| source_type | string\|null | query | 否 | 类型筛选 |
+| risk_level | string\|null | query | 否 | 风险等级筛选 |
+
+---
+
+### 15.8 获取污染源详情
+
+- **GET** `/api/v1/graph/admin/pollution-sources/{name}`
+- **描述**：根据名称获取污染源详情。
+
+---
+
+### 15.9 更新污染源
+
+- **PUT** `/api/v1/graph/admin/pollution-sources/{name}`
+- **描述**：更新污染源属性及排入河流关系。
+
+---
+
+### 15.10 删除污染源
+
+- **DELETE** `/api/v1/graph/admin/pollution-sources/{name}`
+- **描述**：删除污染源节点及关联关系。
+
+---
+
+### 15.11 创建水库（Neo4j直写）
+
+- **POST** `/api/v1/graph/admin/reservoirs/create`
+- **描述**：在 Neo4j 中直接创建/更新水库节点。此接口不写入 MySQL。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| code | string | body | 是 | 水库编号 |
+| name | string | body | 是 | 水库名称 |
+| location | string\|null | body | 否 | 所在位置 |
+| longitude | float\|null | body | 否 | 经度 |
+| latitude | float\|null | body | 否 | 纬度 |
+| capacity | float\|null | body | 否 | 库容（万m³） |
+| water_grade | string\|null | body | 否 | 水质等级 |
+| watershed | string\|null | body | 否 | 所属流域 |
+
+---
+
+### 15.12 获取水库列表（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/reservoirs/list`
+- **描述**：从 Neo4j 分页读取水库节点列表，支持流域筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 20 |
+| watershed | string\|null | query | 否 | 流域筛选 |
+
+---
+
+### 15.13 获取水库详情（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/reservoirs/{code}`
+- **描述**：根据水库编号从 Neo4j 获取详情。
+
+---
+
+### 15.14 更新水库（Neo4j直写）
+
+- **PUT** `/api/v1/graph/admin/reservoirs/{code}`
+- **描述**：更新 Neo4j 中的水库节点属性。
+
+---
+
+### 15.15 删除水库（Neo4j直写）
+
+- **DELETE** `/api/v1/graph/admin/reservoirs/{code}`
+- **描述**：删除 Neo4j 中的水库节点及关联关系。
+
+---
+
+### 15.16 创建监测站点（Neo4j直写）
+
+- **POST** `/api/v1/graph/admin/stations/create`
+- **描述**：在 Neo4j 中创建/更新监测站点节点，自动建立 BELONGS_TO 和 MEASURES 关系。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| code | string | body | 是 | 站点编号 |
+| name | string | body | 是 | 站点名称 |
+| type | string | body | 是 | 类型：auto/manual/sensing |
+| longitude | float\|null | body | 否 | 经度 |
+| latitude | float\|null | body | 否 | 纬度 |
+| sampling_point | string\|null | body | 否 | 采样点位描述 |
+| reservoir_code | string\|null | body | 否 | 所属水库编号（用于 BELONGS_TO） |
+
+---
+
+### 15.17 获取监测站点列表（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/stations/list`
+- **描述**：从 Neo4j 分页读取站点列表，支持类型筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 20 |
+| station_type | string\|null | query | 否 | 类型筛选：auto/manual/sensing |
+
+---
+
+### 15.18 获取监测站点详情（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/stations/{code}`
+- **描述**：根据站点编号从 Neo4j 获取详情。
+
+---
+
+### 15.19 更新监测站点（Neo4j直写）
+
+- **PUT** `/api/v1/graph/admin/stations/{code}`
+- **描述**：更新 Neo4j 中的站点节点属性及 BELONGS_TO 关系。
+
+---
+
+### 15.20 删除监测站点（Neo4j直写）
+
+- **DELETE** `/api/v1/graph/admin/stations/{code}`
+- **描述**：删除 Neo4j 中的站点节点及关联关系。
+
+---
+
+### 15.21 创建监测指标（Neo4j直写）
+
+- **POST** `/api/v1/graph/admin/indicators/create`
+- **描述**：在 Neo4j 中创建/更新监测指标节点。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| code | string | body | 是 | 指标编码 |
+| name | string | body | 是 | 指标名称 |
+| unit | string\|null | body | 否 | 单位 |
+| category | string\|null | body | 否 | 分类：物理/化学/生物 |
+
+---
+
+### 15.22 获取监测指标列表（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/indicators/list`
+- **描述**：从 Neo4j 分页读取指标列表，支持分类筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+|------|------|------|------|------|
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 否 | 页码，默认 1 |
+| page_size | int | query | 否 | 每页数量，默认 20 |
+| category | string\|null | query | 否 | 分类筛选：物理/化学/生物 |
+
+---
+
+### 15.23 获取监测指标详情（Neo4j直写）
+
+- **GET** `/api/v1/graph/admin/indicators/{code}`
+- **描述**：根据指标编码从 Neo4j 获取详情。
+
+---
+
+### 15.24 更新监测指标（Neo4j直写）
+
+- **PUT** `/api/v1/graph/admin/indicators/{code}`
+- **描述**：更新 Neo4j 中的指标节点属性。
+
+---
+
+### 15.25 删除监测指标（Neo4j直写）
+
+- **DELETE** `/api/v1/graph/admin/indicators/{code}`
+- **描述**：删除 Neo4j 中的指标节点及关联关系。
+
+**错误场景（通用）**：
+
+| 错误码 | 场景 |
+| ------ | ---- |
+| 1002   | 数据不存在 |
+| 2003   | 权限不足 |
 
 SSE 流式对话接口。需要 Bearer Token 认证，admin 与 user 角色均可访问。
 
