@@ -270,6 +270,9 @@ import {
   DArrowLeft, DArrowRight, Document,
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import { marked } from 'marked'
+
+marked.setOptions({ breaks: true })
 
 /* ========== 状态 ========== */
 
@@ -704,37 +707,7 @@ function escapeHtml(text) {
 
 function renderMarkdown(text) {
   if (!text) return ''
-  let html = escapeHtml(text)
-
-  // 代码块（多行）
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre class="bg-gray-100 rounded-lg p-3 my-2 overflow-x-auto text-xs"><code>${escapeHtml(code)}</code></pre>`
-  })
-
-  // 行内代码
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-red-500">$1</code>')
-
-  // 加粗 **text**
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-
-  // 斜体 *text*
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-  // 无序列表
-  html = html.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-  html = html.replace(/(<li.*<\/li>\n?)+/g, '<ul class="my-1">$&</ul>')
-
-  // 有序列表
-  html = html.replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
-  html = html.replace(/(<li.*<\/li>\n?)+/g, (match) => {
-    if (!match.startsWith('<ul')) return `<ol class="my-1">${match}</ol>`
-    return match
-  })
-
-  // 换行
-  html = html.replace(/\n/g, '<br>')
-
-  return html
+  return marked.parse(text)
 }
 </script>
 
@@ -869,4 +842,13 @@ function renderMarkdown(text) {
 .markdown-body :deep(code) { font-family: 'Consolas', 'Monaco', monospace; }
 .markdown-body :deep(strong) { font-weight: 600; }
 .markdown-body :deep(ul), .markdown-body :deep(ol) { padding-left: 0; }
+.markdown-body :deep(table) { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.875rem; }
+.markdown-body :deep(th) { background-color: #F9FAFB; border: 1px solid #E5E7EB; padding: 8px 12px; text-align: left; font-weight: 600; }
+.markdown-body :deep(td) { border: 1px solid #E5E7EB; padding: 8px 12px; }
+.markdown-body :deep(tr:nth-child(even)) { background-color: #F9FAFB; }
+.markdown-body :deep(h1) { font-size: 1.25rem; font-weight: 600; margin: 16px 0 8px; }
+.markdown-body :deep(h2) { font-size: 1.125rem; font-weight: 600; margin: 14px 0 6px; }
+.markdown-body :deep(h3) { font-size: 1rem; font-weight: 600; margin: 12px 0 4px; }
+.markdown-body :deep(blockquote) { border-left: 3px solid #0D9488; padding-left: 12px; color: #6B7280; margin: 8px 0; }
+.markdown-body :deep(hr) { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
 </style>

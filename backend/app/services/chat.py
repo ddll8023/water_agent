@@ -1,6 +1,6 @@
 import json
 import math
-from sqlalchemy import select, func, update
+from sqlalchemy import select, func, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import commit_or_rollback, get_background_db_session
 from app.models import chat_session as models_chat_session
@@ -71,9 +71,15 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             "mysql": ("mysql_query", "正在查询监测数据..."),
             "graph": ("graph_query", "正在查询知识图谱..."),
         }
-
+        logger.info(f"intent_results:{intent_results}")
         if "rag" in intent_results:
+
+            logger.info(f"rag_query:{intent_results["rag"]}")
             task_map["rag"] = _rag_retriever(intent_results["rag"])
+
+        if "mysql" in intent_results:
+            logger.info(f"sql_query:{intent_results["mysql"]}")
+            task_map["mysql"] = _generate_sql(db, intent_results["mysql"])
 
         for tool_name in task_map:
             stage, msg = stage_names.get(
@@ -91,11 +97,10 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             task_results = {}
 
         rag_result_list = task_results.get("rag", [])
-        if "rag" in task_results:
-            logger.info(
-                f"知识库检索完成: session_id={session_entity.id} "
-                f"result_count={len(task_results["rag"])} "
-            )
+        mysql_raw = task_results.get("mysql", "")
+        mysql_result_str = mysql_raw if isinstance(mysql_raw, str) else ""
+        if not isinstance(mysql_raw, str):
+            logger.warning(f"MySQL查询异常: {mysql_raw}")
 
         if rag_result_list:
             rag_section = "以下是与问题相关的知识库内容：\n" + "\n".join(
@@ -103,9 +108,13 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
                 if rag_result_list
                 else ""
             )
-
         else:
             rag_section = "（本次查询未检索到相关知识库内容，请根据自身专业知识回答）"
+
+        if mysql_result_str:
+            mysql_section = f"以下是从数据库中查询的数据：\n {mysql_result_str}"
+        else:
+            mysql_section = "数据库中没有查询到数据，提示用户情况，不要乱编"
 
         system_prompt = PromptTemplate.from_template(
             get_prompt.chat["CHAT"]["SYSTEM"]
@@ -114,6 +123,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             get_prompt.chat["CHAT"]["USER"]
         ).format(
             rag_content_section=rag_section,
+            mysql_content_section=mysql_section,
             query=chat_request.query,
         )
         history_message_id_list = (session_entity.message_list or [])[
@@ -326,6 +336,7 @@ async def _identify_intent(query: str):
 
 async def _rag_retriever(query: str):
     """rag检索"""
+
     vector_store = get_vector_store()
 
     tasks = [
@@ -422,3 +433,38 @@ async def _re_sort(query: str, document_list: list[Document]):
     )
 
     return ranked_docs or document_list[:5]
+
+
+async def _generate_sql(db: AsyncSession, query: str):
+    """mysql结构化数据查询"""
+
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.chat["SQL_GENERATION"]["SYSTEM"]
+    ).format()
+    user_prompt = PromptTemplate.from_template(
+        get_prompt.chat["SQL_GENERATION"]["USER"]
+    ).format(query=query)
+    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+
+    model = get_model.build_chat_model(thinking=False)
+
+    try:
+        llm_output = await model.ainvoke(llm_messages)
+
+    except Exception as exc:
+        logger.error(f"AI请求生成SQL错误:{str(exc)}")
+        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "AI请求生成SQL错误")
+
+    # logger.info(f"SQL语句:{llm_output.content}")
+
+    try:
+        sql_result_rows = (await db.execute(text(llm_output.content))).all()
+        rows_as_dicts = [dict(row._mapping) for row in sql_result_rows]
+        sql_result_str = json.dumps(rows_as_dicts, ensure_ascii=False, default=str)
+    except Exception as exc:
+        logger.error(f"mysql结构化数据查询错误:{str(exc)}")
+        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "mysql结构化数据查询错误")
+
+    # logger.info(f"SQL查询结果: {sql_result_str}")
+
+    return sql_result_str
