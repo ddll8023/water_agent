@@ -163,23 +163,15 @@
 
                 <!-- 垂直时间线（流式中且无正文时） -->
                 <div v-if="msg.streaming && !msg.content" class="mt-2">
-                  <div class="timeline-item">
-                    <div class="timeline-dot" :class="stageDot('retrieval', msg.progressStage)"></div>
-                    <span class="timeline-label">检索知识库</span>
+                  <div v-for="s in msg.toolStages" :key="s" class="timeline-item">
+                    <div class="timeline-dot" :class="stageDot(s, msg.progressStage, msg.toolStages)"></div>
+                    <span class="timeline-label">{{ stageLabel(s) }}</span>
                   </div>
-                  <div class="timeline-item">
-                    <div class="timeline-dot" :class="stageDot('rerank', msg.progressStage)"></div>
-                    <span class="timeline-label">排序检索结果</span>
-                  </div>
-                  <div class="timeline-item">
-                    <div class="timeline-dot" :class="stageDot('generate', msg.progressStage)"></div>
-                    <span class="timeline-label">思考分析</span>
-                  </div>
-                  <div v-if="msg.thinking" class="ml-6 pl-4 border-l-2 border-teal-200 mb-1">
+                  <div v-if="msg.thinking && msg.progressStage === 'generate'" class="ml-6 pl-4 border-l-2 border-teal-200 mb-1">
                     <div class="thinking-content">{{ msg.thinking }}</div>
                   </div>
                   <div class="timeline-item">
-                    <div class="timeline-dot" :class="msg.streaming ? 'timeline-dot-pending' : 'timeline-dot-done'"></div>
+                    <div class="timeline-dot" :class="msg.progressStage === 'generate' ? 'timeline-dot-active' : 'timeline-dot-pending'"></div>
                     <span class="timeline-label">生成回答</span>
                   </div>
                 </div>
@@ -303,13 +295,22 @@ const editInputRef = ref(null)
 // 重试旋转状态
 const retryingMsgId = ref(null)
 
-function stageDot(stage, current) {
-  const order = ['retrieval', 'rerank', 'generate']
-  const idx = order.indexOf(stage)
-  const cur = order.indexOf(current)
+function stageDot(stage, current, stages) {
+  const idx = stages.indexOf(stage)
+  const cur = stages.indexOf(current)
   if (idx < cur) return 'timeline-dot-done'
   if (idx === cur) return 'timeline-dot-active'
   return 'timeline-dot-pending'
+}
+
+const stageLabels = {
+  intent: '识别意图',
+  retrieval: '检索知识库',
+  mysql_query: '查询监测数据',
+  graph_query: '查询知识图谱',
+}
+function stageLabel(stage) {
+  return stageLabels[stage] || stage
 }
 
 // SSE 控制器（用于取消）
@@ -431,6 +432,7 @@ async function sendMessage() {
     streaming: true,
     error: null,
     progressStage: null,
+    toolStages: [],
   })
 
   const aiMsg = messages.value[messages.value.length - 1]
@@ -450,6 +452,9 @@ async function sendMessage() {
       scrollToBottom()
     },
     onProgress(stage) {
+      if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
+        aiMsg.toolStages.push(stage)
+      }
       aiMsg.progressStage = stage
     },
     onDone(data) {
@@ -504,6 +509,7 @@ function retry(msg) {
   msg.thinking = ''
   msg.streaming = true
   msg.progressStage = null
+  msg.toolStages = []
   retryingMsgId.value = msg.id
 
   isStreaming.value = true
@@ -521,6 +527,9 @@ function retry(msg) {
       scrollToBottom()
     },
     onProgress(stage) {
+      if (stage !== 'generate' && !msg.toolStages.includes(stage)) {
+        msg.toolStages.push(stage)
+      }
       msg.progressStage = stage
     },
     onDone(data) {
@@ -613,6 +622,7 @@ function confirmEdit() {
   aiMsg.streaming = true
   aiMsg.error = null
   aiMsg.progressStage = null
+  aiMsg.toolStages = []
   retryingMsgId.value = aiMsg.id
   isStreaming.value = true
 

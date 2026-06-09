@@ -31,6 +31,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         f"query_len={len(chat_request.query)} query_preview={chat_request.query[:50]}"
     )
     db = get_background_db_session()
+
     try:
         if chat_request.session_id is None:
             session_entity = models_chat_session.ChatSession(
@@ -56,19 +57,54 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         db.add(message_entity)
         await db.flush()
 
-        yield f"data: {json.dumps({'type': 'progress', 'stage': 'retrieval', 'message': '正在检索知识库...'})}\n\n"
+        current_ids = (session_entity.message_list or []).copy()
+        current_ids.append(message_entity.id)
+        session_entity.message_list = current_ids
+        await db.flush()
 
-        rag_result_list = await _rag_retriever(chat_request.query)
-        logger.info(
-            f"知识库检索完成: session_id={session_entity.id} "
-            f"result_count={len(rag_result_list)} "
-        )
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'intent', 'message': '正在识别意图...'})}\n\n"
+        intent_results = await _identify_intent(chat_request.query)
 
-        yield f"data: {json.dumps({'type': 'progress', 'stage': 'rerank', 'message': '正在对检索结果进行排序...'})}\n\n"
+        task_map: dict[str, any] = {}
+        stage_names = {
+            "rag": ("retrieval", "正在检索知识库..."),
+            "mysql": ("mysql_query", "正在查询监测数据..."),
+            "graph": ("graph_query", "正在查询知识图谱..."),
+        }
 
-        rag_result_list = await _re_sort(
-            chat_request.query, [rag_result[0] for rag_result in rag_result_list]
-        )
+        if "rag" in intent_results:
+            task_map["rag"] = _rag_retriever(intent_results["rag"])
+
+        for tool_name in task_map:
+            stage, msg = stage_names.get(
+                tool_name, (tool_name, f"正在执行{tool_name}查询...")
+            )
+            yield f"data: {json.dumps({'type': 'progress', 'stage': stage, 'message': msg})}\n\n"
+
+        task_results: dict[str, any] = {}
+        if task_map:
+            raw_results = await asyncio.gather(
+                *task_map.values(), return_exceptions=True
+            )
+            task_results = dict(zip(task_map.keys(), raw_results))
+        else:
+            task_results = {}
+        rag_result_list = task_results.get("rag", [])
+        if "rag" in task_results:
+            logger.info(
+                f"知识库检索完成: session_id={session_entity.id} "
+                f"result_count={len(task_results["rag"])} "
+            )
+
+        if rag_result_list:
+            rag_section = "以下是与问题相关的知识库内容：\n" + "\n".join(
+                "\n".join([rag_result.page_content for rag_result in rag_result_list])
+                if rag_result_list
+                else ""
+            )
+
+        else:
+            rag_section = "（本次查询未检索到相关知识库内容，请根据自身专业知识回答）"
 
         system_prompt = PromptTemplate.from_template(
             get_prompt.chat["CHAT"]["SYSTEM"]
@@ -76,13 +112,12 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         user_prompt = PromptTemplate.from_template(
             get_prompt.chat["CHAT"]["USER"]
         ).format(
-            rag_content="\n".join(
-                [rag_result.page_content for rag_result in rag_result_list]
-            ),
+            rag_content_section=rag_section,
             query=chat_request.query,
         )
-
-        history_message_id_list = session_entity.message_list or []
+        history_message_id_list = (session_entity.message_list or [])[
+            :-1
+        ]  # 去掉最后一条（当前用户消息）
         if history_message_id_list:
             history_message_list = (
                 await db.scalars(
@@ -106,9 +141,9 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
 
         for msg in history_message_list:
             if msg.role == "user":
-                message_list.append(HumanMessage(msg.content))
+                message_list.append(HumanMessage(f"用户query:{msg.content}"))
             elif msg.role == "assistant":
-                message_list.append(AIMessage(msg.content))
+                message_list.append(AIMessage(f"ai回复:{msg.content}"))
 
         message_list.append(HumanMessage(user_prompt))
 
@@ -151,8 +186,9 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         )
         db.add(new_message_entity)
         await db.flush()
-        new_ids = session_entity.message_list.copy() or []
-        new_ids.extend([message_entity.id, new_message_entity.id])
+
+        new_ids = (session_entity.message_list or []).copy()
+        new_ids.append(new_message_entity.id)
         session_entity.message_list = new_ids[-20:]
 
         await commit_or_rollback(db)
@@ -207,7 +243,8 @@ async def get_chat_detail(db: AsyncSession, session_id: int):
     message_id_list = session_entity.message_list
     message_entity_list = await db.scalars(
         select(models_chat_message.ChatMessage).where(
-            models_chat_message.ChatMessage.id.in_(message_id_list)
+            models_chat_message.ChatMessage.id.in_(message_id_list),
+            models_chat_message.ChatMessage.status == 0,  # 只返回活跃消息
         )
     )
 
@@ -242,10 +279,12 @@ async def re_chat(
     )
     if not session_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "对话不存在")
-    old_message_list: list[int] = session_entity.message_list.copy() or []
+
+    old_message_list: list[int] = (session_entity.message_list or []).copy()
     re_message_index = old_message_list.index(re_chat_request.message_id)
     new_message_list = old_message_list[:re_message_index]
     delete_message_list = old_message_list[re_message_index:]
+
     await db.execute(
         update(models_chat_message.ChatMessage)
         .where(models_chat_message.ChatMessage.id.in_(delete_message_list))
@@ -261,6 +300,27 @@ async def re_chat(
         ),
     ):
         yield chunk
+
+
+async def _identify_intent(query: str):
+    """意图识别"""
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.chat["INTENT"]["SYSTEM"]
+    ).format()
+    user_prompt = PromptTemplate.from_template(
+        get_prompt.chat["INTENT"]["USER"]
+    ).format(query=query)
+    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+
+    model = get_model.build_chat_model(thinking=False)
+    chain = model | JsonOutputParser()
+
+    try:
+        parsed_output: dict = await chain.ainvoke(llm_messages)
+        return parsed_output
+    except Exception as exc:
+        logger.error(f"意图识别错误:{str(exc)}")
+        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "意图识别错误")
 
 
 async def _rag_retriever(query: str):
@@ -281,56 +341,59 @@ async def _rag_retriever(query: str):
     for doc_type, sublist in zip(schemas_documents.DocumentType, results):
         logger.info(f"RAG检索各类型数量: doc_type={doc_type.name} count={len(sublist)}")
 
-    sorted_result_list: list[tuple[Document, float]] = []
-    i = 0
-    for doc_type in schemas_documents.DocumentType:
-        for doc, score in results[i]:
-            sorted_result_list.append(
+    fused_results: list[tuple[Document, float]] = []
+    for doc_type, doc_scores in zip(schemas_documents.DocumentType, results):
+        for doc, score in doc_scores:
+            fused_results.append(
                 (doc, score * constants_documents.DOCUMENT_WEIGHT[doc_type])
             )
-        i += 1
 
-    sorted_result_list.sort(key=lambda x: x[1], reverse=True)
+    fused_results.sort(key=lambda x: x[1], reverse=True)
 
-    if sorted_result_list:
+    if fused_results:
         logger.info(
-            f"RAG加权融合完成: total={len(sorted_result_list)} "
-            f"top1_score={sorted_result_list[0][1]:.4f}"
+            f"RAG加权融合完成: total={len(fused_results)} "
+            f"top1_score={fused_results[0][1]:.4f}"
         )
-    return sorted_result_list[:10]
+    top_docs = [doc for doc, score in fused_results[:10]]
+
+    return await _re_sort(query, top_docs)
 
 
 async def _re_sort(query: str, document_list: list[Document]):
     """重排序"""
     logger.info(f"重排序解析开始: parsed={query} " f"len={len(document_list)}")
-    document_list_str = ""
+
+    docs_text = ""
     for i, document in enumerate(document_list):
-        document_list_str += f"文档{i}:{document.page_content}\n"
+        docs_text += f"文档{i}:{document.page_content}\n"
+
     system_prompt = PromptTemplate.from_template(
         get_prompt.chat["RESORT"]["SYSTEM"]
     ).format()
     user_prompt = PromptTemplate.from_template(
         get_prompt.chat["RESORT"]["USER"]
-    ).format(query=query, doc_count=len(document_list), document_list=document_list_str)
-    message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+    ).format(query=query, doc_count=len(document_list), document_list=docs_text)
+    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+
     model = get_model.build_chat_model(thinking=False)
     chain = model | JsonOutputParser()
 
     try:
-        response = await chain.ainvoke(message_list)
-        result_list = [
-            schemas_chat.ReSortResultItem.model_validate(r) for r in response
+        parsed_output = await chain.ainvoke(llm_messages)
+        ranked_items = [
+            schemas_chat.ReSortResultItem.model_validate(r) for r in parsed_output
         ]
     except Exception as e:
         logger.warning(f"重排序失败，退回原始排序: query={query[:50]},e:{str(e)}")
         return document_list[:5]
 
     logger.info(
-        f"重排序解析完成: parsed={len(result_list)} "
-        f"scores={[r.score for r in result_list]}"
+        f"重排序解析完成: parsed={len(ranked_items)} "
+        f"scores={[r.score for r in ranked_items]}"
     )
 
-    result_list.sort(key=lambda x: x.score, reverse=True)
+    ranked_items.sort(key=lambda x: x.score, reverse=True)
 
     before_labels = [
         f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
@@ -338,18 +401,18 @@ async def _re_sort(query: str, document_list: list[Document]):
     ]
 
     seen_indices = set()
-    sorted_document_list: list[Document] = []
-    for item in result_list:
-        idx = item.index
-        if 0 <= idx < len(document_list) and idx not in seen_indices:
-            sorted_document_list.append(document_list[idx])
-            seen_indices.add(idx)
-        if len(sorted_document_list) >= 5:
+    ranked_docs: list[Document] = []
+    for item in ranked_items:
+        doc_index = item.index
+        if 0 <= doc_index < len(document_list) and doc_index not in seen_indices:
+            ranked_docs.append(document_list[doc_index])
+            seen_indices.add(doc_index)
+        if len(ranked_docs) >= 5:
             break
 
     after_labels = [
         f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
-        for d in sorted_document_list[:5]
+        for d in ranked_docs[:5]
     ]
 
     logger.info(
@@ -357,4 +420,4 @@ async def _re_sort(query: str, document_list: list[Document]):
         f"after=[{', '.join(after_labels)}]"
     )
 
-    return sorted_document_list or document_list[:5]
+    return ranked_docs or document_list[:5]
