@@ -1,5 +1,5 @@
 <template>
-  <el-container class="h-screen">
+  <el-container class="h-screen overflow-hidden">
     <el-aside :width="isCollapse ? '64px' : '220px'" class="transition-all duration-300 bg-slate-800 flex flex-col">
       <div class="h-16 flex items-center justify-center border-b border-slate-700">
         <el-icon class="text-slate-300 text-2xl" :size="24"><Monitor /></el-icon>
@@ -177,3 +177,9 @@ const handleLogout = () => {
   router.push('/login')
 }
 </script>
+
+<style scoped>
+:deep(.el-main) {
+  overflow: hidden;
+}
+</style>

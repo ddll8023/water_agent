@@ -1,5 +1,5 @@
 <template>
-  <el-container class="h-[calc(100vh-7rem)]">
+  <el-container class="h-[calc(100vh-7rem)] overflow-hidden">
     <!-- 左侧：对话历史侧边栏 -->
     <el-aside
       :width="sidebarCollapsed ? '0' : '260px'"
@@ -78,7 +78,7 @@
       </header>
 
       <!-- 消息列表 -->
-      <el-scrollbar ref="scrollbarRef" class="flex-1 h-full min-h-0 px-6 py-4">
+      <el-scrollbar ref="scrollbarRef" class="flex-1 h-full min-h-0 w-full px-6 py-4">
         <!-- 初始状态：推荐问题 -->
         <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full min-h-[400px] text-center">
           <el-icon class="text-5xl text-gray-300 mb-4"><ChatLineSquare /></el-icon>

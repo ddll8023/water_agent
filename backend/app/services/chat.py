@@ -89,6 +89,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             task_results = dict(zip(task_map.keys(), raw_results))
         else:
             task_results = {}
+
         rag_result_list = task_results.get("rag", [])
         if "rag" in task_results:
             logger.info(
