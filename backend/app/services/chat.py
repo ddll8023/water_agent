@@ -61,7 +61,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         rag_result_list = await _rag_retriever(chat_request.query)
         logger.info(
             f"知识库检索完成: session_id={session_entity.id} "
-            f"result_count={len(rag_result_list)}"
+            f"result_count={len(rag_result_list)} "
         )
 
         yield f"data: {json.dumps({'type': 'progress', 'stage': 'rerank', 'message': '正在对检索结果进行排序...'})}\n\n"
@@ -69,6 +69,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         rag_result_list = await _re_sort(
             chat_request.query, [rag_result[0] for rag_result in rag_result_list]
         )
+
         system_prompt = PromptTemplate.from_template(
             get_prompt.chat["CHAT"]["SYSTEM"]
         ).format()
@@ -115,11 +116,18 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
 
         logger.info(f"LLM 开始生成: session_id={session_entity.id}")
 
-        model = get_model.chat_one_model
+        model = get_model.build_chat_model()
         result = ""
+        thinking_parts = []
         async for chunk in model.astream(message_list):
+            reasoning = chunk.additional_kwargs.get("reasoning_content")
+            if reasoning is not None:
+                thinking_parts.append(reasoning)
+                yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning}, ensure_ascii=False)}\n\n"
+
             if not chunk.content:
                 continue
+
             yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
             result += chunk.content
         logger.info(
@@ -273,17 +281,6 @@ async def _rag_retriever(query: str):
     for doc_type, sublist in zip(schemas_documents.DocumentType, results):
         logger.info(f"RAG检索各类型数量: doc_type={doc_type.name} count={len(sublist)}")
 
-    seen = set()
-    for sublist in results:
-        i = 0
-        while i < len(sublist):
-            doc = sublist[i]
-            key = (doc[0].metadata["doc_id"], doc[0].metadata["chunk_index"])
-            if key in seen:
-                sublist.pop(i)
-            else:
-                seen.add(key)
-                i += 1
     sorted_result_list: list[tuple[Document, float]] = []
     i = 0
     for doc_type in schemas_documents.DocumentType:
@@ -291,6 +288,8 @@ async def _rag_retriever(query: str):
             sorted_result_list.append(
                 (doc, score * constants_documents.DOCUMENT_WEIGHT[doc_type])
             )
+        i += 1
+
     sorted_result_list.sort(key=lambda x: x[1], reverse=True)
 
     if sorted_result_list:
@@ -314,7 +313,7 @@ async def _re_sort(query: str, document_list: list[Document]):
         get_prompt.chat["RESORT"]["USER"]
     ).format(query=query, doc_count=len(document_list), document_list=document_list_str)
     message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
-    model = get_model.chat_one_model
+    model = get_model.build_chat_model(thinking=False)
     chain = model | JsonOutputParser()
 
     try:
@@ -322,8 +321,8 @@ async def _re_sort(query: str, document_list: list[Document]):
         result_list = [
             schemas_chat.ReSortResultItem.model_validate(r) for r in response
         ]
-    except Exception:
-        logger.warning(f"重排序失败，退回原始排序: query={query[:50]}")
+    except Exception as e:
+        logger.warning(f"重排序失败，退回原始排序: query={query[:50]},e:{str(e)}")
         return document_list[:5]
 
     logger.info(

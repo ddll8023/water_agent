@@ -147,20 +147,41 @@
             </div>
             <div class="max-w-[65%]">
               <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm">
+                <!-- 思考过程折叠面板（正文出现后） -->
+                <div v-if="msg.thinking && msg.content" class="mb-3 border-b border-gray-100 pb-2">
+                  <el-collapse accordion>
+                    <el-collapse-item title="思考过程" name="thinking">
+                      <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
+                        {{ msg.thinking }}
+                      </div>
+                    </el-collapse-item>
+                  </el-collapse>
+                </div>
+
                 <!-- 正文 -->
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
 
-                <!-- 流式光标 - 进度指示  -->
-                <div v-if="msg.streaming && !msg.content" class="flex items-center gap-2.5 py-1">
-                  <!-- 三节步骤指示器 -->
-                  <div class="flex items-center gap-px">
-                    <span class="ripple-step" :class="stageDot('retrieval', msg.progressStage)"></span>
-                    <span class="ripple-step-connector" :class="connectorDot('retrieval', msg.progressStage)"></span>
-                    <span class="ripple-step" :class="stageDot('rerank', msg.progressStage)"></span>
-                    <span class="ripple-step-connector" :class="connectorDot('rerank', msg.progressStage)"></span>
-                    <span class="ripple-step" :class="stageDot('generate', msg.progressStage)"></span>
+                <!-- 垂直时间线（流式中且无正文时） -->
+                <div v-if="msg.streaming && !msg.content" class="mt-2">
+                  <div class="timeline-item">
+                    <div class="timeline-dot" :class="stageDot('retrieval', msg.progressStage)"></div>
+                    <span class="timeline-label">检索知识库</span>
                   </div>
-                  <span class="text-gray-400 text-xs tracking-wide">{{ progressTextMap[msg.progressStage] }}</span>
+                  <div class="timeline-item">
+                    <div class="timeline-dot" :class="stageDot('rerank', msg.progressStage)"></div>
+                    <span class="timeline-label">排序检索结果</span>
+                  </div>
+                  <div class="timeline-item">
+                    <div class="timeline-dot" :class="stageDot('generate', msg.progressStage)"></div>
+                    <span class="timeline-label">思考分析</span>
+                  </div>
+                  <div v-if="msg.thinking" class="ml-6 pl-4 border-l-2 border-teal-200 mb-1">
+                    <div class="thinking-content">{{ msg.thinking }}</div>
+                  </div>
+                  <div class="timeline-item">
+                    <div class="timeline-dot" :class="msg.streaming ? 'timeline-dot-pending' : 'timeline-dot-done'"></div>
+                    <span class="timeline-label">生成回答</span>
+                  </div>
                 </div>
 
                 <!-- 错误状态 -->
@@ -282,25 +303,13 @@ const editInputRef = ref(null)
 // 重试旋转状态
 const retryingMsgId = ref(null)
 
-const stageOrder = ['retrieval', 'rerank', 'generate']
-const progressTextMap = {
-  retrieval: '正在检索知识库',
-  rerank: '正在排序中',
-  generate: '正在生成回答',
-}
-
 function stageDot(stage, current) {
-  const idx = stageOrder.indexOf(stage)
-  const curIdx = stageOrder.indexOf(current)
-  if (idx < curIdx) return 'ripple-step-done'
-  if (idx === curIdx) return 'ripple-step-active'
-  return 'ripple-step-pending'
-}
-
-function connectorDot(stage, current) {
-  const idx = stageOrder.indexOf(stage)
-  const curIdx = stageOrder.indexOf(current)
-  return idx < curIdx ? 'ripple-connector-done' : ''
+  const order = ['retrieval', 'rerank', 'generate']
+  const idx = order.indexOf(stage)
+  const cur = order.indexOf(current)
+  if (idx < cur) return 'timeline-dot-done'
+  if (idx === cur) return 'timeline-dot-active'
+  return 'timeline-dot-pending'
 }
 
 // SSE 控制器（用于取消）
@@ -385,7 +394,7 @@ async function loadSessionMessages(id) {
     messages.value = msgs
   } catch (e) {
     messages.value = [
-      { id: genId(), role: 'assistant', content: '', references: [], streaming: false, error: e.message || '加载对话失败' },
+      { id: genId(), role: 'assistant', content: '', thinking: '', references: [], streaming: false, error: e.message || '加载对话失败' },
     ]
   } finally {
     sessionLoading.value = false
@@ -417,6 +426,7 @@ async function sendMessage() {
     id: genId(),
     role: 'assistant',
     content: '',
+    thinking: '',
     references: [],
     streaming: true,
     error: null,
@@ -433,6 +443,10 @@ async function sendMessage() {
     session_id: currentSessionId.value,
     onChunk(content) {
       aiMsg.content += content
+      scrollToBottom()
+    },
+    onThinking(content) {
+      aiMsg.thinking += content
       scrollToBottom()
     },
     onProgress(stage) {
@@ -487,6 +501,7 @@ function retry(msg) {
 
   msg.error = null
   msg.content = ''
+  msg.thinking = ''
   msg.streaming = true
   msg.progressStage = null
   retryingMsgId.value = msg.id
@@ -499,6 +514,10 @@ function retry(msg) {
     message_id: userMsg.id,
     onChunk(content) {
       msg.content += content
+      scrollToBottom()
+    },
+    onThinking(content) {
+      msg.thinking += content
       scrollToBottom()
     },
     onProgress(stage) {
@@ -739,44 +758,72 @@ function renderMarkdown(text) {
   100% { transform: scale(0.85); opacity: 0.6; }
 }
 
-/* ===== 三节步骤指示器 ===== */
-.ripple-step {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  transition: all 0.4s ease;
+/* ===== 垂直时间线 ===== */
+.timeline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  position: relative;
 }
-.ripple-step-active {
+.timeline-item + .timeline-item::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: -8px;
+  width: 1.5px;
+  height: 16px;
+  background: #E5E7EB;
+}
+.timeline-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #D1D5DB;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+.timeline-dot-done {
+  background: #0D9488;
+}
+.timeline-dot-done::after {
+  content: '✓';
+  position: absolute;
+  inset: -3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: #fff;
+}
+.timeline-dot-active {
   background: #0D9488;
   box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
-  animation: rippleActive 1.6s ease-in-out infinite;
+  animation: tlPulse 1.6s ease-in-out infinite;
 }
-.ripple-step-done {
-  background: #0D9488;
-  opacity: 0.4;
-}
-.ripple-step-pending {
+.timeline-dot-pending {
   background: #D1D5DB;
 }
-@keyframes rippleActive {
+.timeline-label {
+  font-size: 12px;
+  color: #6B7280;
+}
+.thinking-content {
+  font-size: 12px;
+  color: #6B7280;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  background: #F9FAFB;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin: 2px 0;
+}
+@keyframes tlPulse {
   0%   { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
   50%  { box-shadow: 0 0 0 5px rgba(13, 148, 136, 0.1); }
   100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
-}
-
-/* ===== 步骤连接线 ===== */
-.ripple-step-connector {
-  display: inline-block;
-  width: 18px;
-  height: 2px;
-  border-radius: 1px;
-  background: #E5E7EB;
-  transition: background 0.4s ease;
-}
-.ripple-connector-done {
-  background: #0D9488;
-  opacity: 0.4;
 }
 
 /* ===== 流式内容入场 ===== */
