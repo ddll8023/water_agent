@@ -125,11 +125,6 @@
           @row-click="handleSourceRowClick"
         >
           <el-table-column prop="name" label="名称" min-width="110" />
-          <el-table-column prop="type" label="类型" width="90">
-            <template #default="{ row }">
-              <el-tag :type="sourceTypeTagType(row.type)" size="small">{{ row.type }}</el-tag>
-            </template>
-          </el-table-column>
           <el-table-column prop="distance" label="距离(km)" width="90" sortable />
           <el-table-column prop="risk_level" label="风险等级" width="95" sortable>
             <template #default="{ row }">
@@ -242,7 +237,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Place, Clock, User } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertDetail, updateAlert, submitAlertNote } from '@/api/alert'
+import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
 import { useAuthStore } from '@/stores/auth'
 import * as echarts from 'echarts/core'
@@ -303,6 +298,7 @@ const noteContent = ref('')
 const noteSubmitting = ref(false)
 const drawerVisible = ref(false)
 
+const graphRef = ref(null)
 const graphInstance = ref(null)
 const sparklineInstances = ref([])
 const sparklineRefMap = new Map()
@@ -360,11 +356,6 @@ const progressColor = (percentage) => {
   if (percentage <= 30) return '#e6a23c'
   if (percentage <= 60) return '#f56c6c'
   return '#dd3333'
-}
-
-const sourceTypeTagType = (type) => {
-  const map = { 工业: 'danger', 农业: 'warning', 生活: 'info', 养殖: 'warning' }
-  return map[type] || 'info'
 }
 
 const riskLevelTagType = (level) => {
@@ -452,17 +443,75 @@ const initSparklines = () => {
   })
 }
 
+const initTraceGraph = () => {
+  if (graphInstance.value) graphInstance.value.dispose()
+  const el = graphRef.value
+  if (!el || !traceNodes.value.length) return
+
+  const chart = echarts.init(el)
+
+  const colors = {
+    Reservoir: '#409eff',
+    River: '#67c23a',
+    PollutionSource: '#f56c6c'
+  }
+
+  const nodes = traceNodes.value.map(n => ({
+    id: n.id,
+    name: n.name,
+    symbolSize: n.type === 'Reservoir' ? 40 : n.type === 'PollutionSource' ? 32 : 28,
+    itemStyle: { color: colors[n.type] || '#999' },
+    category: n.type
+  }))
+
+  const edges = traceEdges.value.map(e => ({
+    source: e.source,
+    target: e.target,
+    label: { show: true, formatter: e.relation, fontSize: 10 }
+  }))
+
+  chart.setOption({
+    tooltip: {
+      formatter: p => `<b>${p.data.name}</b><br/>类型: ${p.data.category}`
+    },
+    series: [{
+      type: 'graph',
+      layout: 'force',
+      data: nodes,
+      edges: edges,
+      roam: true,
+      draggable: true,
+      force: { repulsion: 400, edgeLength: 150 },
+      categories: ['Reservoir', 'River', 'PollutionSource'].map(t => ({ name: t })),
+      label: { show: true, position: 'bottom', fontSize: 11 },
+      lineStyle: { color: 'source', curveness: 0.3, width: 2 }
+    }]
+  })
+
+  graphInstance.value = chart
+}
+
 const loadTraceData = async () => {
   traceLoading.value = true
   traceError.value = false
   try {
-    traceNodes.value = []
-    traceEdges.value = []
-    pollutionSources.value = []
-    await new Promise((resolve) => setTimeout(resolve, 800))
-  } catch {
+    const res = await getAlertTrace(alertDetail.id)
+    const data = res.data
+    traceNodes.value = data.nodes || []
+    traceEdges.value = data.edges || []
+    pollutionSources.value = (data.sources || []).map(s => ({
+      id: s.id,
+      name: s.name,
+      distance: s.distance_km,
+      risk_level: s.risk_level,
+      violations: s.violation_count
+    }))
+    traceLoading.value = false
+    await nextTick()
+    initTraceGraph()
+  } catch (e) {
     traceError.value = true
-  } finally {
+    console.error('溯源数据加载失败:', e)
     traceLoading.value = false
   }
 }
@@ -581,11 +630,23 @@ const handleSubmitNote = async () => {
   }
 }
 
-const handleSourceRowClick = () => {
-  // 占位：高亮图谱对应节点
+const handleSourceRowClick = (row) => {
+  if (!graphInstance.value) return
+  const idx = traceNodes.value.findIndex(n => n.id === row.id)
+  if (idx === -1) return
+  graphInstance.value.dispatchAction({
+    type: 'highlight',
+    seriesIndex: 0,
+    dataIndex: idx
+  })
+}
+
+const handleResize = () => {
+  graphInstance.value?.resize()
 }
 
 onMounted(async () => {
+  window.addEventListener('resize', handleResize)
   await Promise.all([
     loadAlertDetail(),
     loadTraceData(),
@@ -599,5 +660,6 @@ onBeforeUnmount(() => {
   if (graphInstance.value) {
     graphInstance.value.dispose()
   }
+  window.removeEventListener('resize', handleResize)
 })
 </script>

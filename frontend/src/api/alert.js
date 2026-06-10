@@ -85,3 +85,15 @@ export function batchReadAlerts(ids) {
     data: { ids }
   })
 }
+
+/**
+ * 获取预警溯源路径
+ * @param {number} id - 预警 ID
+ * @returns {Promise} { nodes, edges, sources }
+ */
+export function getAlertTrace(id) {
+  return request({
+    method: 'get',
+    url: `/v1/alerts/${id}/trace`
+  })
+}

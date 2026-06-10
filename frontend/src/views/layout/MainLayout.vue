@@ -180,6 +180,6 @@ const handleLogout = () => {
 
 <style scoped>
 :deep(.el-main) {
-  overflow: hidden;
+  overflow: auto;
 }
 </style>

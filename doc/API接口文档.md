@@ -2463,6 +2463,96 @@ Authorization: Bearer <token>
 | ------ | ---------------------- |
 | 5001   | 服务器内部错误         |
 
+### 10.7 预警溯源
+
+- **GET** `/api/v1/alerts/{id}/trace`
+- **描述**：根据预警 ID 获取该预警关联水库的污染溯源路径，返回图谱节点、关系边和嫌疑污染源列表。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 预警 ID                               |
+
+**请求示例**：
+
+```
+GET /api/v1/alerts/1/trace
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "nodes": [
+      {
+        "id": "pollutionsource:龙河口采砂场",
+        "name": "龙河口采砂场",
+        "type": "PollutionSource",
+        "risk_level": "低",
+        "subtype": "其他"
+      },
+      {
+        "id": "river:杭埠河",
+        "name": "杭埠河",
+        "type": "River",
+        "watershed": "长江流域"
+      },
+      {
+        "id": "reservoir:LHK-003",
+        "name": "龙河口水库",
+        "type": "Reservoir",
+        "code": "LHK-003",
+        "water_grade": "Ⅲ类"
+      }
+    ],
+    "edges": [
+      { "source": "pollutionsource:龙河口采砂场", "target": "river:杭埠河", "relation": "DISCHARGES_INTO" },
+      { "source": "river:杭埠河", "target": "reservoir:LHK-003", "relation": "FLOWS_INTO" }
+    ],
+    "sources": [
+      {
+        "id": "pollutionsource:龙河口采砂场",
+        "name": "龙河口采砂场",
+        "risk_level": "低",
+        "distance_km": 0.2,
+        "violation_count": 0
+      }
+    ]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| nodes[].id | string | 节点唯一标识 |
+| nodes[].name | string | 节点名称 |
+| nodes[].type | string | 节点类型：Reservoir/River/PollutionSource |
+| nodes[].code | string\|null | 编码（仅水库有） |
+| nodes[].watershed | string\|null | 所属流域（仅河流/水库有） |
+| nodes[].water_grade | string\|null | 水质等级（仅水库有） |
+| nodes[].risk_level | string\|null | 风险等级（仅污染源有） |
+| nodes[].subtype | string\|null | 子类型（仅污染源有） |
+| edges[].source | string | 起点节点 id |
+| edges[].target | string | 终点节点 id |
+| edges[].relation | string | 关系类型：DISCHARGES_INTO / FLOWS_INTO |
+| sources[].id | string | 污染源节点 id |
+| sources[].name | string | 污染源名称 |
+| sources[].risk_level | string\|null | 风险等级 |
+| sources[].distance_km | float\|null | 距水库距离（km） |
+| sources[].violation_count | int | 历史违规次数 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| ------ | ---- |
+| 1002   | 数据不存在（预警记录或关联水库不存在） |
+| 5001   | 服务器内部错误 |
+
 ---
 
 ## 十一、预警规则管理（/api/v1/alert-rules）

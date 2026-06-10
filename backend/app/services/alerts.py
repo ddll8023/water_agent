@@ -2,13 +2,16 @@ import math
 from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from neo4j import AsyncDriver
 
 from app.models import alert as models_alert
+from app.models import reservoir as models_reservoir
 from app.schemas import alerts as schemas_alerts
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
 from app.models import user as models_user
 from app.core.database import commit_or_rollback
+from app.services import graph as services_graph
 
 
 async def get_alert_detail(
@@ -22,6 +25,24 @@ async def get_alert_detail(
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
 
     return schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)
+
+
+async def get_alert_trace(
+    db: AsyncSession,
+    neo4j_driver: AsyncDriver,
+    alert_id: int,
+):
+    """获取预警溯源路径"""
+    alert = await db.get(models_alert.AlertEvent, alert_id)
+    if not alert:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
+
+    reservoir = await db.get(models_reservoir.Reservoir, alert.reservoir_id)
+    if not reservoir:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "关联水库不存在")
+
+    result = await services_graph.trace_pollution(neo4j_driver, reservoir.code)
+    return schemas_alerts.GetTracePollutionResponse(**result.model_dump())
 
 
 async def get_alert_list(

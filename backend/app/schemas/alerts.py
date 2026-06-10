@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
+from app.schemas import graph as schemas_graph
 
 # ========== 辅助类（Support）==========
 
@@ -134,3 +135,15 @@ class GetAlertDetailResponse(BaseModel):
     resolved_at: datetime | None = Field(None, description="解决时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GetTracePollutionResponse(BaseModel):
+    nodes: list[schemas_graph.GetGraphOverviewNodeItem] = Field(
+        default_factory=list, description="节点"
+    )
+    edges: list[schemas_graph.GetGraphOverviewEdgeItem] = Field(
+        default_factory=list, description="边"
+    )
+    sources: list[schemas_graph.TraceSourceItem] = Field(
+        default_factory=list, description="来源"
+    )

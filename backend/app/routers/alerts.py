@@ -3,8 +3,10 @@ from fastapi import APIRouter, Depends, Query, Path, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.neo4j import get_neo4j_session
 from app.core.security import require_role, get_current_user
 from app.schemas.common import ApiResponse, PaginatedResponse
+from neo4j import AsyncDriver
 from app.schemas.response import success, error
 from app.schemas import auth as schemas_auth
 from app.schemas import alerts as schemas_alerts
@@ -43,6 +45,25 @@ async def get_alert_detail(
     """根据预警ID查询预警详情"""
     try:
         result = await services_alerts.get_alert_detail(db, id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
+@router.get(
+    "/{id}/trace",
+    response_model=ApiResponse[schemas_alerts.GetTracePollutionResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取预警溯源路径",
+)
+async def get_alert_trace(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    neo4j_driver: Annotated[AsyncDriver, Depends(get_neo4j_session)],
+    id: int,
+):
+    """获取预警溯源路径"""
+    try:
+        result = await services_alerts.get_alert_trace(db, neo4j_driver, id)
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
