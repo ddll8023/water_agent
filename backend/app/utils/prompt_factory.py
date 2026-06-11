@@ -16,6 +16,13 @@ class PromptFactory:
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
+    @property
+    def alert(self):
+        """获取对话模型提示词"""
+        config_path = os.path.join(SCRIPT_DIR, "alert.yaml")
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
 
 @lru_cache()
 def get_prompt_factory():

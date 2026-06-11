@@ -36,6 +36,36 @@ class AlertDetailItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class SuggestionPromptInputItem(BaseModel):
+    """AI 建议提示词输入"""
+
+    reservoir_name: str = Field("未知", description="水库名称")
+    reservoir_code: str = Field("未知", description="水库编号")
+    reservoir_location: str = Field("未知", description="水库所在位置")
+    watershed: str = Field("未知", description="所属流域")
+    capacity: str = Field("未知", description="库容")
+    water_grade: str = Field("未知", description="当前水质等级")
+    alert_level: int = Field(description="预警等级：1=info 2=warning 3=critical")
+    detected_at: datetime = Field(description="检出时间")
+    source_desc: str = Field("暂无", description="溯源信息描述")
+    indicators_text: str = Field(description="超标指标文本")
+    rag_content_section: str = Field(
+        "（未检索到相关知识库内容）", description="知识库检索参考内容"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LLMSuggestionItem(BaseModel):
+    """ai生成建议步骤内容"""
+
+    step: int = Field(..., ge=1, description="序号")
+    title: str = Field(..., description="步骤标题")
+    description: str = Field(..., description="详细说明")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ========== 请求类（Request）==========
 
 
@@ -126,7 +156,7 @@ class GetAlertDetailResponse(BaseModel):
         None, description="超标指标列表_name_value_limit"
     )
     source_desc: str | None = Field(None, description="溯源描述")
-    suggestion: str | None = Field(None, description="处置建议")
+    suggestion: list[dict] = Field(default_factory=list, description="处置建议")
     notes: list[AlertNoteItem] | None = Field(
         default_factory=list, description="处置备注列表"
     )
@@ -138,6 +168,8 @@ class GetAlertDetailResponse(BaseModel):
 
 
 class GetTracePollutionResponse(BaseModel):
+    """溯源响应"""
+
     nodes: list[schemas_graph.GetGraphOverviewNodeItem] = Field(
         default_factory=list, description="节点"
     )
@@ -147,3 +179,9 @@ class GetTracePollutionResponse(BaseModel):
     sources: list[schemas_graph.TraceSourceItem] = Field(
         default_factory=list, description="来源"
     )
+
+
+class LLMSuggestionResponse(BaseModel):
+    """ai生成建议响应"""
+
+    lists: list[LLMSuggestionItem] = Field(default_factory=list, description="步骤列表")

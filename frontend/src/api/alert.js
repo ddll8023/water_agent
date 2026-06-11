@@ -97,3 +97,15 @@ export function getAlertTrace(id) {
     url: `/v1/alerts/${id}/trace`
   })
 }
+
+/**
+ * 生成AI处置建议
+ * @param {number} id - 预警 ID
+ * @returns {Promise} { lists: [{ step, title, description }] }
+ */
+export function generateSuggestion(id) {
+  return request({
+    method: 'post',
+    url: `/v1/alerts/${id}/suggestion`
+  })
+}

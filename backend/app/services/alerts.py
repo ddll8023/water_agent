@@ -12,6 +12,25 @@ from app.utils.exception import ServiceException
 from app.models import user as models_user
 from app.core.database import commit_or_rollback
 from app.services import graph as services_graph
+from app.core.chroma import get_vector_store
+import asyncio
+from app.core.config import settings
+from app.schemas import documents as schemas_documents
+from app.utils.logger_config import setup_logger
+from langchain_core.documents import Document
+from app.constants import documents as constants_documents
+from langchain_community.retrievers import BM25Retriever
+from langchain_classic.retrievers import EnsembleRetriever
+import json
+from langchain_core.prompts import PromptTemplate
+from app.utils.prompt_factory import get_prompt
+from app.utils.model_factory import get_model
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.messages import HumanMessage, SystemMessage
+
+logger = setup_logger(__name__)
+
+_ensemble_retriever: EnsembleRetriever | None = None
 
 
 async def get_alert_detail(
@@ -164,3 +183,109 @@ async def batch_read_alerts(
 
     await commit_or_rollback(db)
     return True
+
+
+async def llm_suggestion(db: AsyncSession, neo4j_driver: AsyncDriver, alert_id: int):
+    """AI 建议提示词"""
+    alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+    if not alert_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
+
+    if not alert_entity.suggestion:
+        return schemas_alerts.LLMSuggestionResponse(
+            lists=[
+                schemas_alerts.LLMSuggestionItem.model_validate(r) for r in json_output
+            ]
+        )
+
+    reservoir_entity = await db.get(
+        models_reservoir.Reservoir, alert_entity.reservoir_id
+    )
+    if not reservoir_entity:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
+
+    source_desc = json.dumps(
+        (
+            await services_graph.trace_pollution(neo4j_driver, reservoir_entity.code)
+        ).model_dump()
+    )
+
+    query = (
+        " ".join(
+            [ind.get("name", "") for ind in alert_entity.indicators if ind.get("name")]
+        )
+        + " 超标 处置 应急 水质标准"
+    )
+    rag_doc_list = await _rag_retriever_to_suggestion(query)
+    rag_content_section = ""
+    for index, doc in enumerate(rag_doc_list):
+        rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
+
+    suggestion_input = schemas_alerts.SuggestionPromptInputItem(
+        reservoir_name=reservoir_entity.name,
+        reservoir_code=reservoir_entity.code,
+        reservoir_location=reservoir_entity.location,
+        watershed=reservoir_entity.watershed,
+        capacity=reservoir_entity.capacity,
+        water_grade=reservoir_entity.water_grade,
+        alert_level=alert_entity.alert_level,
+        detected_at=alert_entity.detected_at,
+        source_desc=source_desc,
+        indicators_text=json.dumps(alert_entity.indicators),
+        rag_content_section=rag_content_section,
+    )
+
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.alert["SUGGESTION"]["SYSTEM"]
+    ).format()
+    user_prompt = PromptTemplate.from_template(
+        get_prompt.alert["SUGGESTION"]["USER"]
+    ).format(**suggestion_input.model_dump())
+    llm_messages = [(SystemMessage(system_prompt)), (HumanMessage(user_prompt))]
+
+    model = get_model.build_chat_model(thinking=False)
+
+    chain = model | JsonOutputParser()
+    try:
+        json_output: list[dict] = await chain.ainvoke(llm_messages)
+    except Exception as e:
+        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, f"生成建议错误:{str(e)}")
+
+    logger.info(f"ai生成建议完成")
+
+    alert_entity.suggestion = json_output
+    await commit_or_rollback(db)
+
+    return schemas_alerts.LLMSuggestionResponse(
+        lists=[schemas_alerts.LLMSuggestionItem.model_validate(r) for r in json_output]
+    )
+
+
+async def _rag_retriever_to_suggestion(query: str):
+    """RAG检索建议相关信息（向量 + BM25 双路 RRF）"""
+    global _ensemble_retriever
+
+    if _ensemble_retriever is None:
+        vector_store = get_vector_store()
+
+        stored = vector_store.get(include=["documents", "metadatas"])
+        all_docs = [
+            Document(page_content=t, metadata=m)
+            for t, m in zip(stored["documents"], stored["metadatas"])
+        ]
+
+        _ensemble_retriever = EnsembleRetriever(
+            retrievers=[
+                vector_store.as_retriever(search_kwargs={"k": 30}),
+                BM25Retriever.from_documents(documents=all_docs, k=30),
+            ],
+            weights=[0.5, 0.5],
+            c=60,
+        )
+        logger.info(f"EnsembleRetriever 初始化完成: total_docs={len(all_docs)}")
+
+    documents = await _ensemble_retriever.ainvoke(query)
+
+    logger.info(f"RRF检索完成: query={query} result_count={len(documents)}")
+
+    return documents[:10]

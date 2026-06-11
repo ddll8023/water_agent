@@ -2553,6 +2553,66 @@ Authorization: Bearer <token>
 | 1002   | 数据不存在（预警记录或关联水库不存在） |
 | 5001   | 服务器内部错误 |
 
+### 10.8 生成 AI 处置建议
+
+- **POST** `/api/v1/alerts/{id}/suggestion`
+- **描述**：为指定预警生成 AI 处置建议，会检索知识库中相关标准、案例和预案作为参考，由 LLM 生成步骤化处置方案。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 预警 ID                               |
+
+**请求示例**：
+
+```
+POST /api/v1/alerts/4/suggestion
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "step": 1,
+        "title": "数据复核与确认",
+        "description": "立即检查在线监测设备运行状态，确认数据非仪器故障所致。对比历史同期数据及上下游断面，排除单点异常。"
+      },
+      {
+        "step": 2,
+        "title": "原因排查与应急控制",
+        "description": "组织人员对水库周边及入库河流进行巡查，排查污染来源。同步启动应急措施：开启曝气设备增氧、调整取水层位或投加应急药剂，防止水质进一步恶化。"
+      },
+      {
+        "step": 3,
+        "title": "跟踪监测与事件归档",
+        "description": "加密监测频率至每1小时一次，动态跟踪水质变化趋势。待水质稳定后形成书面报告，内容包括事件经过、原因分析、处置措施及后续建议，录入平台归档。"
+      }
+    ]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| lists[].step | int | 步骤序号 |
+| lists[].title | string | 步骤标题 |
+| lists[].description | string | 详细说明 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| ------ | ---- |
+| 1002   | 数据不存在（预警记录或关联水库不存在） |
+| 4001   | 调用 AI 服务错误 |
+| 5001   | 服务器内部错误 |
+
 ---
 
 ## 十一、预警规则管理（/api/v1/alert-rules）

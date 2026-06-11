@@ -141,27 +141,43 @@
 
     <el-card shadow="never" class="mb-4">
       <template #header>
-        <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-teal-50 text-teal-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+          </span>
           <span class="font-semibold text-gray-800">AI 处置建议</span>
-          <el-button
-            v-if="suggestionSteps.length"
-            type="primary"
-            size="small"
-            :loading="suggestionAdopting"
-            @click="handleAdoptSuggestion"
-          >采纳方案</el-button>
         </div>
       </template>
       <el-skeleton v-if="suggestionLoading" :rows="4" animated />
-      <el-empty v-else-if="!suggestionSteps.length" description="暂无处置建议" />
-      <el-steps v-else direction="vertical" :active="-1" class="max-w-2xl">
-        <el-step
+      <el-empty v-else-if="!suggestionSteps.length" description="暂无处置建议">
+        <el-button type="primary" :loading="suggestionLoading" @click="handleGenerateSuggestion">
+          生成处置建议
+        </el-button>
+      </el-empty>
+      <div v-else class="space-y-5">
+        <div
           v-for="(step, idx) in suggestionSteps"
           :key="idx"
-          :title="step.title"
-          :description="step.description"
-        />
-      </el-steps>
+          class="relative pl-14"
+        >
+          <div class="absolute left-0 top-0 w-10 h-10 rounded-full bg-teal-50 border-2 border-teal-400 flex items-center justify-center">
+            <span class="text-sm font-bold text-teal-600">{{ String(step.step).padStart(2, '0') }}</span>
+          </div>
+          <div class="bg-white rounded-lg border border-gray-100 p-4 shadow-sm hover:shadow-md transition-shadow">
+            <h4 class="text-base font-semibold text-gray-800 mb-2">{{ step.title }}</h4>
+            <p class="text-sm text-gray-500 leading-relaxed">{{ step.description }}</p>
+          </div>
+        </div>
+        <el-button
+          type="primary"
+          class="w-full"
+          size="large"
+          :loading="suggestionAdopting"
+          @click="handleAdoptSuggestion"
+        >采纳方案并写入处置备注</el-button>
+      </div>
     </el-card>
 
     <el-card shadow="never" class="mb-4">
@@ -237,7 +253,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Place, Clock, User } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace } from '@/api/alert'
+import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace, generateSuggestion } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
 import { useAuthStore } from '@/stores/auth'
 import * as echarts from 'echarts/core'
@@ -282,7 +298,7 @@ const traceError = ref(false)
 const traceNodes = ref([])
 const traceEdges = ref([])
 
-const suggestionLoading = ref(true)
+const suggestionLoading = ref(false)
 const suggestionSteps = ref([])
 const suggestionAdopting = ref(false)
 
@@ -516,13 +532,29 @@ const loadTraceData = async () => {
   }
 }
 
-const loadSuggestionData = async () => {
-  suggestionLoading.value = true
+const loadSuggestionData = () => {
   try {
-    suggestionSteps.value = []
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    if (!alertDetail.suggestion) {
+      suggestionSteps.value = []
+      return
+    }
+    const parsed = JSON.parse(alertDetail.suggestion)
+    suggestionSteps.value = Array.isArray(parsed) ? parsed : []
   } catch {
     suggestionSteps.value = []
+  } finally {
+    suggestionLoading.value = false
+  }
+}
+
+const handleGenerateSuggestion = async () => {
+  suggestionLoading.value = true
+  try {
+    const res = await generateSuggestion(alertDetail.id)
+    suggestionSteps.value = res.data?.lists || []
+  } catch (e) {
+    ElMessage.error('生成处置建议失败')
+    console.error(e)
   } finally {
     suggestionLoading.value = false
   }
@@ -650,9 +682,9 @@ onMounted(async () => {
   await Promise.all([
     loadAlertDetail(),
     loadTraceData(),
-    loadSuggestionData(),
     loadSimilarData()
   ])
+  loadSuggestionData()
 })
 
 onBeforeUnmount(() => {

@@ -150,3 +150,22 @@ async def add_alert_note(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.post(
+    "/{id}/suggestion",
+    response_model=ApiResponse[schemas_alerts.LLMSuggestionResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="生成AI处置建议",
+)
+async def llm_suggestion(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    neo4j_driver: Annotated[AsyncDriver, Depends(get_neo4j_session)],
+    id: Annotated[int, Path(description="预警ID")],
+):
+    """生成ai建议"""
+    try:
+        result = await services_alerts.llm_suggestion(db, neo4j_driver, id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
