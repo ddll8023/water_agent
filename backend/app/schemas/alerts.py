@@ -185,3 +185,11 @@ class LLMSuggestionResponse(BaseModel):
     """ai生成建议响应"""
 
     lists: list[LLMSuggestionItem] = Field(default_factory=list, description="步骤列表")
+
+
+class SimilarEventItem(GetAlertListResponse):
+    """历史相似事件项"""
+
+    matched_indicators: list[str] = Field(
+        default_factory=list, description="与本预警匹配的指标名称列表"
+    )

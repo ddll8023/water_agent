@@ -2613,6 +2613,81 @@ Authorization: Bearer <token>
 | 4001   | 调用 AI 服务错误 |
 | 5001   | 服务器内部错误 |
 
+### 10.9 获取历史相似事件
+
+- **GET** `/api/v1/alerts/{id}/similar`
+- **描述**：根据预警 ID 查询同水库的历史已解决预警，按指标匹配数降序排序，支持分页。需 admin 或 user 角色。
+- **Content-Type**：application/json
+
+| 参数          | 类型   | 位置   | 必填 | 说明                                  |
+| ------------- | ------ | ------ | ---- | ------------------------------------- |
+| Authorization | string | header | 是   | Bearer Token，格式 `Bearer <token>` |
+| id            | int    | path   | 是   | 预警 ID                               |
+| page          | int    | query  | 否   | 页码，默认 1                          |
+| page_size     | int    | query  | 否   | 每页条数，默认 10                     |
+
+**请求示例**：
+
+```
+GET /api/v1/alerts/4/similar?page=1&page_size=10
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "reservoir_id": 4,
+        "title": "董铺水库总磷持续超标",
+        "alert_level": 3,
+        "indicators": [
+          {"name": "总磷", "value": 0.095, "limit": 0.05, "unit": "mg/L"}
+        ],
+        "status": 3,
+        "detected_at": "2026-05-24T06:05:00",
+        "resolved_at": "2026-05-24T06:05:00",
+        "matched_indicators": ["总磷"]
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 10,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| ---- | ---- | ---- |
+| lists[].id | int | 预警 ID |
+| lists[].reservoir_id | int | 水库 ID |
+| lists[].title | string | 预警标题 |
+| lists[].alert_level | int | 1=info / 2=warning / 3=critical |
+| lists[].indicators | array\|null | 超标指标列表 |
+| lists[].status | int | 状态：3=已解决 |
+| lists[].detected_at | datetime | 检出时间 |
+| lists[].resolved_at | datetime\|null | 解决时间 |
+| lists[].matched_indicators | array[string] | 与本预警匹配的指标名称列表 |
+| pagination.page | int | 当前页码 |
+| pagination.page_size | int | 每页数量 |
+| pagination.total | int | 总记录数 |
+| pagination.total_pages | int | 总页数 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| ------ | ---- |
+| 1002   | 数据不存在（预警记录不存在） |
+| 5001   | 服务器内部错误 |
+
 ---
 
 ## 十一、预警规则管理（/api/v1/alert-rules）

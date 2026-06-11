@@ -220,25 +220,59 @@
       type="info"
       plain
       :icon="Clock"
-      @click="drawerVisible = true"
+      @click="handleOpenSimilar"
     >历史相似事件</el-button>
 
-    <el-drawer v-model="drawerVisible" title="历史相似事件" direction="right" size="400px">
-      <el-skeleton v-if="similarLoading" :rows="8" animated />
-      <el-empty v-else-if="!similarEvents.length" description="暂无相似历史预警" />
-      <el-timeline v-else>
-        <el-timeline-item
-          v-for="(event, idx) in similarEvents"
-          :key="idx"
-          :timestamp="event.time"
-          placement="top"
-        >
-          <div class="text-sm font-medium">{{ event.title }}</div>
-          <div class="text-xs text-gray-500 mt-1">超标指标：{{ event.indicators }}</div>
-          <div class="text-xs text-gray-500">处置结果：{{ event.result }}</div>
-        </el-timeline-item>
-      </el-timeline>
-    </el-drawer>
+    <el-dialog v-model="drawerVisible" title="历史相似事件" width="420px" append-to-body top="5vh">
+      <template #header>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold">历史相似事件</span>
+          <el-tag v-if="similarTotal" size="small" type="info">{{ similarTotal }}条</el-tag>
+        </div>
+      </template>
+
+      <div class="min-h-[200px]">
+        <el-skeleton v-if="similarLoading" :rows="8" animated />
+        <el-empty v-else-if="!similarEvents.length" description="暂无相似历史预警" />
+        <div v-else class="space-y-3">
+          <el-card
+            v-for="event in similarEvents"
+            :key="event.id"
+            shadow="never"
+            class="!border !border-gray-100"
+          >
+            <div class="text-xs text-gray-400 mb-1">{{ formatDateTime(event.detected_at) }}</div>
+            <div class="text-sm font-medium text-gray-800 mb-2">{{ event.title }}</div>
+            <div class="flex flex-wrap gap-1 mb-2">
+              <el-tag
+                v-for="ind in (event.indicators || [])"
+                :key="ind.name"
+                size="small"
+                :type="(event.matched_indicators || []).includes(ind.name) ? 'warning' : 'info'"
+              >{{ ind.name }} {{ ind.value }}{{ ind.unit || '' }}</el-tag>
+            </div>
+            <div class="flex items-center justify-between text-xs text-gray-400">
+              <span>已解决 {{ formatDateTime(event.resolved_at) }}</span>
+              <el-tag size="small" type="success">已归档</el-tag>
+            </div>
+          </el-card>
+        </div>
+      </div>
+
+      <template #footer>
+        <div v-if="similarTotal > similarPageSize" class="flex justify-center">
+          <el-pagination
+            small
+            layout="prev, pager, next"
+            :total="similarTotal"
+            :page-size="similarPageSize"
+            v-model:current-page="similarPage"
+            @current-change="loadSimilarData"
+            background
+          />
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -253,7 +287,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Place, Clock, User } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace, generateSuggestion } from '@/api/alert'
+import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace, generateSuggestion, getSimilarEvents } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
 import { useAuthStore } from '@/stores/auth'
 import * as echarts from 'echarts/core'
@@ -304,6 +338,9 @@ const suggestionAdopting = ref(false)
 
 const similarLoading = ref(true)
 const similarEvents = ref([])
+const similarPage = ref(1)
+const similarPageSize = ref(10)
+const similarTotal = ref(0)
 
 const confirmLoading = ref(false)
 const processLoading = ref(false)
@@ -538,8 +575,12 @@ const loadSuggestionData = () => {
       suggestionSteps.value = []
       return
     }
-    const parsed = JSON.parse(alertDetail.suggestion)
-    suggestionSteps.value = Array.isArray(parsed) ? parsed : []
+    if (Array.isArray(alertDetail.suggestion)) {
+      suggestionSteps.value = alertDetail.suggestion
+    } else {
+      const parsed = JSON.parse(alertDetail.suggestion)
+      suggestionSteps.value = Array.isArray(parsed) ? parsed : []
+    }
   } catch {
     suggestionSteps.value = []
   } finally {
@@ -563,12 +604,25 @@ const handleGenerateSuggestion = async () => {
 const loadSimilarData = async () => {
   similarLoading.value = true
   try {
+    const res = await getSimilarEvents(alertDetail.id, {
+      page: similarPage.value,
+      page_size: similarPageSize.value
+    })
+    const data = res.data
+    similarEvents.value = data.lists || []
+    similarTotal.value = data.pagination?.total || 0
+  } catch (e) {
     similarEvents.value = []
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  } catch {
-    similarEvents.value = []
+    console.error('加载历史相似事件失败:', e)
   } finally {
     similarLoading.value = false
+  }
+}
+
+const handleOpenSimilar = async () => {
+  drawerVisible.value = true
+  if (!similarEvents.value.length) {
+    await loadSimilarData()
   }
 }
 
@@ -681,8 +735,7 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
   await Promise.all([
     loadAlertDetail(),
-    loadTraceData(),
-    loadSimilarData()
+    loadTraceData()
   ])
   loadSuggestionData()
 })

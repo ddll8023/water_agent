@@ -109,3 +109,19 @@ export function generateSuggestion(id) {
     url: `/v1/alerts/${id}/suggestion`
   })
 }
+
+/**
+ * 获取历史相似事件
+ * @param {number} id - 预警 ID
+ * @param {Object} params - 查询参数
+ * @param {number} params.page - 页码
+ * @param {number} params.page_size - 每页条数
+ * @returns {Promise} 分页历史事件列表
+ */
+export function getSimilarEvents(id, params) {
+  return request({
+    method: 'get',
+    url: `/v1/alerts/${id}/similar`,
+    params
+  })
+}

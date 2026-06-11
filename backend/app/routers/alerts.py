@@ -70,6 +70,26 @@ async def get_alert_trace(
 
 
 @router.get(
+    "/{id}/similar",
+    response_model=ApiResponse[PaginatedResponse[schemas_alerts.SimilarEventItem]],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="获取历史相似事件",
+)
+async def get_similar_events(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+):
+    """按同水库+指标匹配数排序，返回已解决的历史预警"""
+    try:
+        result = await services_alerts.get_similar_events(db, id, page, page_size)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
+
+
+@router.get(
     "",
     response_model=ApiResponse[PaginatedResponse[schemas_alerts.GetAlertListResponse]],
     dependencies=[Depends(require_role("admin", "user"))],

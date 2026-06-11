@@ -191,13 +191,6 @@ async def llm_suggestion(db: AsyncSession, neo4j_driver: AsyncDriver, alert_id: 
     if not alert_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
 
-    if not alert_entity.suggestion:
-        return schemas_alerts.LLMSuggestionResponse(
-            lists=[
-                schemas_alerts.LLMSuggestionItem.model_validate(r) for r in json_output
-            ]
-        )
-
     reservoir_entity = await db.get(
         models_reservoir.Reservoir, alert_entity.reservoir_id
     )
@@ -289,3 +282,69 @@ async def _rag_retriever_to_suggestion(query: str):
     logger.info(f"RRF检索完成: query={query} result_count={len(documents)}")
 
     return documents[:10]
+
+
+async def get_similar_events(
+    db: AsyncSession,
+    alert_id: int,
+    page: int = 1,
+    page_size: int = 10,
+):
+    """获取历史相似事件（同水库、按指标匹配数排序）"""
+    alert = await db.get(models_alert.AlertEvent, alert_id)
+    if not alert:
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
+
+    current_indicator_names = {
+        ind.get("name") for ind in (alert.indicators or []) if ind.get("name")
+    }
+    three_years_ago = datetime.now().replace(year=datetime.now().year - 3)
+
+    stmt = (
+        select(models_alert.AlertEvent)
+        .where(
+            models_alert.AlertEvent.reservoir_id == alert.reservoir_id,
+            models_alert.AlertEvent.status == 3,
+            models_alert.AlertEvent.id != alert_id,
+            models_alert.AlertEvent.detected_at >= three_years_ago,
+        )
+        .order_by(models_alert.AlertEvent.detected_at.desc())
+    )
+    all_candidates = (await db.execute(stmt)).scalars().all()
+
+    scored = []
+    for candidate in all_candidates:
+        candidate_names = {
+            ind.get("name") for ind in (candidate.indicators or []) if ind.get("name")
+        }
+        match_count = len(current_indicator_names & candidate_names)
+        scored.append((candidate, match_count))
+
+    scored.sort(key=lambda x: (x[1], x[0].detected_at), reverse=True)
+
+    total = len(scored)
+    offset = (page - 1) * page_size
+    page_items = scored[offset : offset + page_size]
+
+    result_list = []
+    for candidate, match_count in page_items:
+        item = schemas_alerts.SimilarEventItem.model_validate(candidate)
+        item.matched_indicators = list(
+            current_indicator_names
+            & {
+                ind.get("name")
+                for ind in (candidate.indicators or [])
+                if ind.get("name")
+            }
+        )
+        result_list.append(item)
+
+    return PaginatedResponse(
+        lists=result_list,
+        pagination=PaginationInfo(
+            page=page,
+            page_size=page_size,
+            total=total,
+            total_pages=math.ceil(total / page_size) if total > 0 else 0,
+        ),
+    )
