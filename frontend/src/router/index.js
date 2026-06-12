@@ -73,6 +73,18 @@ const routes = [
         name: 'GraphView',
         component: () => import('@/views/rag/GraphView.vue'),
         meta: { title: '知识图谱' }
+      },
+      {
+        path: 'reports/list',
+        name: 'ReportList',
+        component: () => import('@/views/report/ReportList.vue'),
+        meta: { title: '报告中心' }
+      },
+      {
+        path: 'reports/:id',
+        name: 'ReportDetail',
+        component: () => import('@/views/report/ReportDetail.vue'),
+        meta: { title: '报告详情' }
       }
     ]
   },

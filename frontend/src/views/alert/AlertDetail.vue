@@ -19,6 +19,8 @@
             <el-tag v-if="alertDetail.status !== null" :type="statusTagType" size="small">
               {{ statusLabel }}
             </el-tag>
+            <el-tag v-if="alertDetail.source === 1" type="warning" size="small">AI趋势分析</el-tag>
+            <el-tag v-else-if="alertDetail.source === 0" type="info" size="small">规则预警</el-tag>
           </div>
           <div class="flex items-center gap-6 text-sm text-gray-500">
             <span class="flex items-center gap-1">
@@ -148,6 +150,9 @@
             </svg>
           </span>
           <span class="font-semibold text-gray-800">AI 处置建议</span>
+          <el-tag v-if="suggestionStatus === '已生成'" type="warning" size="small">待确认</el-tag>
+          <el-tag v-else-if="suggestionStatus === '已确认'" type="success" size="small">已确认</el-tag>
+          <el-tag v-else-if="suggestionStatus === '生成中'" type="info" size="small">生成中</el-tag>
         </div>
       </template>
       <el-skeleton v-if="suggestionLoading" :rows="4" animated />
@@ -170,13 +175,28 @@
             <p class="text-sm text-gray-500 leading-relaxed">{{ step.description }}</p>
           </div>
         </div>
-        <el-button
-          type="primary"
-          class="w-full"
-          size="large"
-          :loading="suggestionAdopting"
-          @click="handleAdoptSuggestion"
-        >采纳方案并写入处置备注</el-button>
+        <div class="flex gap-3">
+          <el-button
+            v-if="suggestionStatus !== '已确认'"
+            type="primary"
+            class="flex-1"
+            size="large"
+            :loading="confirmSuggestionLoading"
+            @click="handleConfirmSuggestion"
+          >确认处置方案</el-button>
+          <el-button
+            class="flex-1"
+            size="large"
+            :loading="suggestionLoading"
+            @click="handleGenerateSuggestion"
+          >重新生成</el-button>
+          <el-button
+            class="flex-1"
+            size="large"
+            :loading="suggestionAdopting"
+            @click="handleAdoptSuggestion"
+          >采纳到备注</el-button>
+        </div>
       </div>
     </el-card>
 
@@ -287,7 +307,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Place, Clock, User } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
-import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace, generateSuggestion, getSimilarEvents } from '@/api/alert'
+import { getAlertDetail, updateAlert, submitAlertNote, getAlertTrace, generateSuggestion, getSimilarEvents, confirmSuggestion } from '@/api/alert'
 import { getReservoirList } from '@/api/reservoir'
 import { useAuthStore } from '@/stores/auth'
 import * as echarts from 'echarts/core'
@@ -335,6 +355,8 @@ const traceEdges = ref([])
 const suggestionLoading = ref(false)
 const suggestionSteps = ref([])
 const suggestionAdopting = ref(false)
+const suggestionStatus = ref('')
+const confirmSuggestionLoading = ref(false)
 
 const similarLoading = ref(true)
 const similarEvents = ref([])
@@ -570,6 +592,7 @@ const loadTraceData = async () => {
 }
 
 const loadSuggestionData = () => {
+  suggestionStatus.value = alertDetail.suggestion_status || ''
   try {
     if (!alertDetail.suggestion) {
       suggestionSteps.value = []
@@ -593,11 +616,25 @@ const handleGenerateSuggestion = async () => {
   try {
     const res = await generateSuggestion(alertDetail.id)
     suggestionSteps.value = res.data?.lists || []
+    suggestionStatus.value = '已生成'
   } catch (e) {
     ElMessage.error('生成处置建议失败')
     console.error(e)
   } finally {
     suggestionLoading.value = false
+  }
+}
+
+const handleConfirmSuggestion = async () => {
+  confirmSuggestionLoading.value = true
+  try {
+    await confirmSuggestion(alertDetail.id)
+    suggestionStatus.value = '已确认'
+    ElMessage.success('处置方案已确认')
+  } catch (e) {
+    ElMessage.error(e.message || '确认失败')
+  } finally {
+    confirmSuggestionLoading.value = false
   }
 }
 

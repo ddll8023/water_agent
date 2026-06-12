@@ -53,6 +53,9 @@ class AlertEvent(Base):
         index=True,
         comment="状态_0=待确认_1=已确认_2=处置中_3=已解决",
     )
+    source = Column[int](
+        SmallInteger, nullable=False, default=0, comment="来源_0=规则判定_1=Agent趋势分析"
+    )
     detected_at = Column[datetime](DateTime, nullable=False, comment="检出时间")
     resolved_at = Column[datetime](DateTime, comment="解决时间")
     updated_at = Column[datetime](

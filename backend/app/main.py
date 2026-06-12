@@ -17,7 +17,7 @@ from app.routers import monitoring as monitoring_router
 from app.routers import dashboard as dashboard_router
 from app.routers import alerts as alerts_router
 from app.routers import alert_rules as alert_rules_router
-from app.services.monitoring import collect_water_quality_data
+from app.agent.patrol_workflow import run_patrol_workflow
 from app.models import alert_rule as models_alert_rule
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_mysql, init_neo4j
@@ -25,6 +25,7 @@ from app.routers import documents as documents_router
 from app.routers import chat as chat_router
 from app.routers import graph as graph_router
 from app.routers import graph_admin as graph_admin_router
+from app.routers import patrol_log as patrol_log_router
 
 logger = setup_logger(__name__)
 
@@ -51,10 +52,10 @@ async def lifespan(app: FastAPI):
 
     # 每10分钟定时采集（从第二次开始计时）
     scheduler.add_job(
-        collect_water_quality_data,
+        run_patrol_workflow,
         "interval",
         minutes=10,
-        id="collect_water_quality",
+        id="patrol_agent",
         replace_existing=True,
     )
     scheduler.start()
@@ -96,6 +97,7 @@ app.include_router(documents_router.router)
 app.include_router(chat_router.router)
 app.include_router(graph_router.router)
 app.include_router(graph_admin_router.router)
+app.include_router(patrol_log_router.router)
 
 
 @app.websocket("/ws/alerts")

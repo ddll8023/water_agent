@@ -125,3 +125,15 @@ export function getSimilarEvents(id, params) {
     params
   })
 }
+
+/**
+ * 确认处置建议
+ * @param {number} id - 预警 ID
+ * @returns {Promise}
+ */
+export function confirmSuggestion(id) {
+  return request({
+    method: 'put',
+    url: `/v1/alerts/${id}/suggestion/confirm`
+  })
+}

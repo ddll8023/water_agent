@@ -53,6 +53,16 @@
               <span>知识图谱</span>
             </el-menu-item>
           </el-sub-menu>
+          <el-sub-menu index="report">
+            <template #title>
+              <el-icon><Tickets /></el-icon>
+              <span>报告中心</span>
+            </template>
+            <el-menu-item index="/reports/list">
+              <el-icon><Tickets /></el-icon>
+              <span>报告列表</span>
+            </el-menu-item>
+          </el-sub-menu>
           <el-sub-menu index="system">
             <template #title>
               <el-icon><Setting /></el-icon>
@@ -147,7 +157,8 @@ import {
   SwitchButton,
   House,
   WarningFilled,
-  ChatLineSquare
+  ChatLineSquare,
+  Tickets
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

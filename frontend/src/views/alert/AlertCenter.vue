@@ -127,6 +127,12 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="来源" width="85" align="center">
+          <template #default="{ row }">
+            <el-tag v-if="row.source === 1" type="warning" size="small">AI趋势</el-tag>
+            <el-tag v-else type="info" size="small">规则</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="指标摘要" min-width="260">
           <template #default="{ row }">
             <div v-if="row.indicators && row.indicators.length" class="text-xs leading-relaxed">

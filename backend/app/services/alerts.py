@@ -12,15 +12,10 @@ from app.utils.exception import ServiceException
 from app.models import user as models_user
 from app.core.database import commit_or_rollback
 from app.services import graph as services_graph
-from app.core.chroma import get_vector_store
 import asyncio
 from app.core.config import settings
-from app.schemas import documents as schemas_documents
 from app.utils.logger_config import setup_logger
-from langchain_core.documents import Document
-from app.constants import documents as constants_documents
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers import EnsembleRetriever
+from app.utils.retriever import ensemble_retrieve
 import json
 from langchain_core.prompts import PromptTemplate
 from app.utils.prompt_factory import get_prompt
@@ -29,8 +24,6 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.messages import HumanMessage, SystemMessage
 
 logger = setup_logger(__name__)
-
-_ensemble_retriever: EnsembleRetriever | None = None
 
 
 async def get_alert_detail(
@@ -209,7 +202,7 @@ async def llm_suggestion(db: AsyncSession, neo4j_driver: AsyncDriver, alert_id: 
         )
         + " 超标 处置 应急 水质标准"
     )
-    rag_doc_list = await _rag_retriever_to_suggestion(query)
+    rag_doc_list = await ensemble_retrieve(query, top_k=10)
     rag_content_section = ""
     for index, doc in enumerate(rag_doc_list):
         rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
@@ -252,36 +245,6 @@ async def llm_suggestion(db: AsyncSession, neo4j_driver: AsyncDriver, alert_id: 
     return schemas_alerts.LLMSuggestionResponse(
         lists=[schemas_alerts.LLMSuggestionItem.model_validate(r) for r in json_output]
     )
-
-
-async def _rag_retriever_to_suggestion(query: str):
-    """RAG检索建议相关信息（向量 + BM25 双路 RRF）"""
-    global _ensemble_retriever
-
-    if _ensemble_retriever is None:
-        vector_store = get_vector_store()
-
-        stored = vector_store.get(include=["documents", "metadatas"])
-        all_docs = [
-            Document(page_content=t, metadata=m)
-            for t, m in zip(stored["documents"], stored["metadatas"])
-        ]
-
-        _ensemble_retriever = EnsembleRetriever(
-            retrievers=[
-                vector_store.as_retriever(search_kwargs={"k": 30}),
-                BM25Retriever.from_documents(documents=all_docs, k=30),
-            ],
-            weights=[0.5, 0.5],
-            c=60,
-        )
-        logger.info(f"EnsembleRetriever 初始化完成: total_docs={len(all_docs)}")
-
-    documents = await _ensemble_retriever.ainvoke(query)
-
-    logger.info(f"RRF检索完成: query={query} result_count={len(documents)}")
-
-    return documents[:10]
 
 
 async def get_similar_events(

@@ -19,121 +19,128 @@ from app.utils.logger_config import setup_logger
 from app.schemas import monitorings as schemas_monitorings
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
-from app.services.alert_rules import evaluate_alert_rules
+from app.agent.state import ProcessResult
 from redis import Redis
 
 logger = setup_logger(__name__)
 
 
-async def collect_water_quality_data():
-    """定时采集水质数据：遍历所有在线站点，调用 API 采集并入库，同时写入 Redis 缓存"""
-    logger.info("开始执行定时采集任务")
-    real_record = await _fetch_real_data()
-    if not real_record:
-        return
-
-    monitor_time_str = real_record.get("monitorTime")
+async def process_and_save_data(db: AsyncSession, raw_data: dict) -> ProcessResult:
+    """处理并入库一条原始监测数据，返回处理统计"""
+    monitor_time_str = raw_data.get("monitorTime")
     monitor_time = datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
+
+    station_entity_list = (
+        await db.scalars(
+            select(models_station.MonitoringStation).where(
+                models_station.MonitoringStation.status == 1
+            )
+        )
+    ).all()
+
+    if not station_entity_list:
+        return ProcessResult(
+            station_count=0, record_count=0, alert_count=0, cached_records=[], error_info="没有在线站点"
+        )
+
+    total_records = 0
+    station_count = len(station_entity_list)
+    cached_records: list[dict] = []
+    pending_alerts: list[dict] = []
+
+    indicator_entity_list = (
+        await db.scalars(select(models_indicator.Indicator))
+    ).all()
+
+    indicator_code_dict = {item.code: item for item in indicator_entity_list}
+
+    for station in station_entity_list:
+        reservoir_id = station.reservoir_id
+
+        for api_field in raw_data:
+            indicator_entity = indicator_code_dict.get(api_field)
+            if indicator_entity is None:
+                continue
+            indicator_id = indicator_entity.id
+            raw_value = raw_data[api_field]
+
+            existing = await db.scalar(
+                select(models_monitoring.MonitoringRecord).where(
+                    and_(
+                        models_monitoring.MonitoringRecord.station_id == station.id,
+                        models_monitoring.MonitoringRecord.indicator_id == indicator_id,
+                        models_monitoring.MonitoringRecord.record_time == monitor_time,
+                    )
+                )
+            )
+            if existing is not None:
+                continue
+
+            offset_range = (-0.05, 0.05)
+            offset = random.uniform(*offset_range)
+            value = round(raw_value * (1 + offset), 4)
+
+            db.add(
+                models_monitoring.MonitoringRecord(
+                    reservoir_id=reservoir_id,
+                    station_id=station.id,
+                    indicator_id=indicator_id,
+                    value=value,
+                    data_source="auto",
+                    quality_flag=1,
+                    record_time=monitor_time,
+                    created_at=datetime.now(),
+                )
+            )
+            total_records += 1
+
+            cached_records.append(
+                {
+                    "reservoir_id": reservoir_id,
+                    "indicator_id": indicator_id,
+                    "indicator_name": indicator_entity.name,
+                    "value": value,
+                    "record_time": monitor_time,
+                }
+            )
+
+            pending_alerts.append(
+                {
+                    "indicator_id": indicator_id,
+                    "reservoir_id": reservoir_id,
+                    "value": value,
+                    "record_time": monitor_time.isoformat(),
+                }
+            )
+
+        station.last_data_time = monitor_time
+
+    return ProcessResult(
+        station_count=station_count,
+        record_count=total_records,
+        pending_alerts=pending_alerts,
+        cached_records=cached_records,
+        error_info=None,
+    )
+
+
+async def collect_water_quality_data():
+    """定时采集水质数据：调用外部 API 采集并入库，同步 Redis 缓存"""
+    logger.info("开始执行定时采集任务")
+    raw_data = await _fetch_real_data()
+    if not raw_data:
+        return
 
     async with get_background_db_session() as db:
         try:
-            station_entity_list = (
-                await db.scalars(
-                    select(models_station.MonitoringStation).where(
-                        models_station.MonitoringStation.status == 1
-                    )
-                )
-            ).all()
-
-            if not station_entity_list:
-                logger.warning("没有在线的监测站点，跳过本次采集")
-                return
-
-            total_records = 0
-            cached_records: list[schemas_monitorings.CachedRecordItem] = []
-
-            indicator_entity_list = (
-                await db.scalars(select(models_indicator.Indicator))
-            ).all()
-
-            indicator_code_dict = {item.code: item for item in indicator_entity_list}
-
-            # 遍历所有站点，采集并入库水质数据
-            for station in station_entity_list:
-                reservoir_id = station.reservoir_id
-
-                # 根据 API 响应字段与数据库指标编码匹配，逐条入库监测记录
-                for api_field in real_record:
-                    indicator_entity = indicator_code_dict.get(api_field)
-                    if indicator_entity is None:
-                        continue
-                    indicator_id = indicator_entity.id
-                    raw_value = real_record[api_field]
-
-                    monitoring_record_entity = await db.scalar(
-                        select(models_monitoring.MonitoringRecord).where(
-                            and_(
-                                models_monitoring.MonitoringRecord.station_id
-                                == station.id,
-                                models_monitoring.MonitoringRecord.indicator_id
-                                == indicator_id,
-                                models_monitoring.MonitoringRecord.record_time
-                                == monitor_time,
-                            )
-                        )
-                    )
-                    if monitoring_record_entity is not None:
-                        logger.info(
-                            f"站点 {station.id} 指标 {indicator_id} 时间 {monitor_time} 已存在记录，跳过"
-                        )
-                        continue
-
-                    offset_range = (-0.05, 0.05)
-                    offset = random.uniform(*offset_range)
-                    value = round(raw_value * (1 + offset), 4)
-
-                    db.add(
-                        models_monitoring.MonitoringRecord(
-                            reservoir_id=reservoir_id,
-                            station_id=station.id,
-                            indicator_id=indicator_id,
-                            value=value,
-                            data_source="auto",
-                            quality_flag=1,
-                            record_time=monitor_time,
-                            created_at=datetime.now(),
-                        )
-                    )
-                    total_records += 1
-
-                    cached_records.append(
-                        schemas_monitorings.CachedRecordItem(
-                            reservoir_id=reservoir_id,
-                            indicator_id=indicator_id,
-                            indicator_name=indicator_entity.name,
-                            value=value,
-                            record_time=monitor_time,
-                        )
-                    )
-
-                    await evaluate_alert_rules(
-                        db,
-                        indicator_id=indicator_id,
-                        reservoir_id=reservoir_id,
-                        indicator_entity=indicator_entity,
-                        current_value=value,
-                        record_time=monitor_time,
-                    )
-
-                station.last_data_time = monitor_time
-
+            result = await process_and_save_data(db, raw_data)
             await commit_or_rollback(db)
-            logger.info(f"成功采集 {total_records} 条记录，开始写入 Redis 缓存")
+            logger.info(f"成功采集 {result['record_count']} 条记录，开始写入 Redis 缓存")
 
-            for rec in cached_records:
-                await _cache_to_redis(**rec.model_dump())
+            for rec in result["cached_records"]:
+                await _cache_to_redis(**rec)
 
-            logger.info(f"Redis 缓存写入完成，共 {len(cached_records)} 条")
+            logger.info(f"Redis 缓存写入完成，共 {len(result['cached_records'])} 条")
         except Exception as e:
             logger.error(f"定时采集失败: {e}")
 

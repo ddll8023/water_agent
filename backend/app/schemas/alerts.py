@@ -25,6 +25,7 @@ class AlertDetailItem(BaseModel):
         None, description="超标指标列表_name_value_limit"
     )
     source_desc: str | None = Field(None, description="溯源描述")
+    source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     suggestion: str | None = Field(None, description="处置建议")
     notes: list[AlertNoteItem] | None = Field(
         default_factory=list, description="处置备注列表"
@@ -138,6 +139,7 @@ class GetAlertListResponse(BaseModel):
     indicators: list[dict] | None = Field(
         None, description="超标指标列表_name_value_limit"
     )
+    source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     status: int = Field(description="状态：0=待确认/1=已确认/2=处置中/3=已解决")
     detected_at: datetime = Field(description="检出时间")
     resolved_at: datetime | None = Field(None, description="解决时间")
@@ -156,6 +158,7 @@ class GetAlertDetailResponse(BaseModel):
         None, description="超标指标列表_name_value_limit"
     )
     source_desc: str | None = Field(None, description="溯源描述")
+    source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     suggestion: list[dict] = Field(default_factory=list, description="处置建议")
     notes: list[AlertNoteItem] | None = Field(
         default_factory=list, description="处置备注列表"
