@@ -4233,3 +4233,139 @@ Authorization: Bearer <token>
 | 1002   | 该水库暂无溯源数据       |
 | 2003   | 权限不足                 |
 | 5001   | 服务器内部错误           |
+
+---
+
+## 十三、预警管理（/api/v1/alerts）
+
+### 13.1 获取预警列表
+
+- **GET** `/api/v1/alerts`
+- **描述**：分页获取预警列表，支持多条件筛选。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | query | 是 | 页码，默认 1 |
+| page_size | int | query | 是 | 每页数量，默认 10 |
+| reservoir_id | int\|null | query | 否 | 水库 ID 筛选 |
+| alert_level | int\|null | query | 否 | 预警等级：1=info 2=warning 3=critical |
+| status | int\|null | query | 否 | 状态：0=待确认 1=已确认 2=处置中 3=已解决 |
+| source | int\|null | query | 否 | 来源：0=规则判定 1=Agent趋势分析 |
+| start_time | string\|null | query | 否 | 检出开始时间 |
+| end_time | string\|null | query | 否 | 检出结束时间 |
+
+**响应字段：**
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| lists[].id | int | 预警 ID |
+| lists[].reservoir_id | int | 水库 ID |
+| lists[].title | string | 预警标题 |
+| lists[].alert_level | int | 预警等级 |
+| lists[].indicators | list\|null | 超标指标列表 |
+| lists[].source | int\|null | 来源：0=规则判定 1=Agent趋势分析 |
+| lists[].status | int | 处理状态 |
+| lists[].handler_name | string\|null | 处理人姓名 |
+| lists[].detected_at | datetime | 检出时间 |
+| lists[].resolved_at | datetime\|null | 解决时间 |
+
+### 13.2 获取预警详情
+
+- **GET** `/api/v1/alerts/{id}`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 预警 ID |
+| reservoir_id | int | 水库 ID |
+| title | string | 预警标题 |
+| alert_level | int | 预警等级 |
+| indicators | list\|null | 超标指标列表 |
+| source | int\|null | 来源：0=规则判定 1=Agent趋势分析 |
+| source_desc | string\|null | 溯源描述 |
+| suggestion | list[dict]\|null | 处置建议（AI 预警为 null） |
+| notes | list | 处置备注列表 |
+| status | int | 处理状态 |
+| detected_at | datetime | 检出时间 |
+| resolved_at | datetime\|null | 解决时间 |
+
+### 13.3 AI 建议确认
+
+- **PUT** `/api/v1/alerts/{id}/suggestion/confirm`
+- **描述**：确认 AI 处置建议。
+
+---
+
+## 十四、仪表盘（/api/v1/dashboard）
+
+### 14.1 总览统计
+
+- **GET** `/api/v1/dashboard/overview`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| reservoir_count | int | 水库总数 |
+| normal_count | int | 正常站点数 |
+| abnormal_count | int | 异常站点数 |
+| record_alert_count | int | 异常监测记录数 |
+| rule_alert_count | int | 规则判定预警数 |
+| ai_alert_count | int | AI 趋势预警数 |
+| offline_stations | int | 离线站点数 |
+
+### 14.2 最近告警
+
+- **GET** `/api/v1/dashboard/last-alert`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| alert_id | int | 预警 ID |
+| reservoir_id | int | 水库 ID |
+| title | string | 告警标题 |
+| alert_level | int | 告警等级 |
+| indicators | list | 超标指标列表 |
+| source | int\|null | 来源：0=规则判定 1=Agent趋势分析 |
+| status | int | 状态 |
+| detected_at | datetime | 检出时间 |
+
+---
+
+## 十五、巡检日志（/api/v1/patrol-logs）
+
+### 15.1 巡检日志列表
+
+- **POST** `/api/v1/patrol-logs/list`
+- **描述**：分页查询 Patrol 工作流执行日志。需 admin 或 user 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| status | int\|null | body | 否 | 执行状态：0=成功 1=部分失败 2=失败 3=无数据 |
+| start_time | string\|null | body | 否 | 开始时间 |
+| end_time | string\|null | body | 否 | 结束时间 |
+| page | int | body | 是 | 页码，默认 1 |
+| page_size | int | body | 是 | 每页数量，默认 10 |
+
+**响应字段：**
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| lists[].id | int | 日志 ID |
+| lists[].executed_at | datetime | 执行开始时间 |
+| lists[].status | int | 执行状态 |
+| lists[].station_count | int | 在线站点数 |
+| lists[].record_count | int | 入库记录数 |
+| lists[].new_alert_count | int | 新增预警数 |
+| lists[].merge_count | int | 合并预警数 |
+| lists[].duration_ms | int | 执行耗时（毫秒） |
+| lists[].error | string\|null | 错误信息 |
+| lists[].created_at | datetime | 创建时间 |
+
+### 15.2 删除巡检日志
+
+- **DELETE** `/api/v1/patrol-logs/{id}`
+- **描述**：删除指定巡检日志。需 admin 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| id | int | path | 是 | 日志 ID |

@@ -69,12 +69,23 @@ ANALYSIS:
     输出格式为 JSON，包含：
     1. overall：过去 12 小时整体水质状况概述（字符串）
     2. supplementary_alerts：建议补充生成的预警列表（数组），每个元素包含：
-       - reservoir_code：水库编号
        - title：预警标题
-       - indicators：涉及指标名称列表
+       - indicators：涉及指标详情列表（数组），每个指标包含 name（名称）、value（当前值）、limit（限值）、unit（单位）
        - reason：判定理由
 
     如果认为不需要补充预警，supplementary_alerts 返回空数组。
+
+    示例：
+    {{
+      "overall": "过去12小时，碧源水库水质整体呈轻度恶化趋势，溶解氧从6.5mg/L持续下降至4.2mg/L，已接近III类水限值；pH值由7.8缓慢降至7.1，与溶解氧下降趋势吻合，提示可能存在有机物输入导致耗氧增加。氨氮浓度在凌晨3点出现峰值0.85mg/L后回落，存在短时冲击风险。建议重点关注溶解氧和pH的联动变化。",
+      "supplementary_alerts": [
+        {{
+          "title": "碧源水库溶解氧持续下降趋势预警",
+          "indicators": [{{"name": "溶解氧", "value": 4.2, "limit": 5.0, "unit": "mg/L"}}],
+          "reason": "过去12小时溶解氧从6.5mg/L持续降至4.2mg/L，连续4小时呈下降趋势，接近III类水限值5mg/L，可能存在有机物污染输入。"
+        }}
+      ]
+    }}
 
   USER: |
     【分析时段】

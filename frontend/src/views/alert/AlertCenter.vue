@@ -58,6 +58,12 @@
             <el-option label="已解决" :value="3" />
           </el-select>
         </el-form-item>
+        <el-form-item label="来源">
+          <el-select v-model="filter.source" placeholder="全部" clearable class="!w-32" @change="handleSearch">
+            <el-option label="规则判定" :value="0" />
+            <el-option label="AI趋势分析" :value="1" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="检出时间">
           <el-date-picker
             v-model="timeRange"
@@ -213,7 +219,8 @@ const hasSearched = ref(false)
 const filter = reactive({
   reservoir_id: null,
   alert_level: null,
-  status: null
+  status: null,
+  source: null
 })
 const timeRange = ref(null)
 
@@ -282,6 +289,7 @@ const buildParams = () => ({
   reservoir_id: toUndefined(filter.reservoir_id),
   alert_level: toUndefined(filter.alert_level),
   status: toUndefined(filter.status),
+  source: toUndefined(filter.source),
   start_time: timeRange.value?.[0] || undefined,
   end_time: timeRange.value?.[1] || undefined
 })
@@ -322,6 +330,7 @@ const handleReset = () => {
   filter.reservoir_id = null
   filter.alert_level = null
   filter.status = null
+  filter.source = null
   timeRange.value = null
   handleSearch()
 }

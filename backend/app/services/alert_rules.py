@@ -295,6 +295,7 @@ async def _cache_to_redis(alert_entity: models_alert.AlertEvent):
         "title": alert_entity.title,
         "alert_level": alert_entity.alert_level,
         "indicators": alert_entity.indicators,
+        "source": alert_entity.source,
         "status": alert_entity.status,
         "detected_at": alert_entity.detected_at.isoformat() if alert_entity.detected_at else None,
     }

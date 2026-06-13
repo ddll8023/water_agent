@@ -95,6 +95,7 @@ class GetAlertListRequest(BaseModel):
     status: int | None = Field(
         None, description="状态：0=待确认/1=已确认/2=处置中/3=已解决"
     )
+    source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     start_time: datetime | None = Field(None, description="检出开始时间")
     end_time: datetime | None = Field(None, description="检出结束时间")
 
@@ -159,7 +160,7 @@ class GetAlertDetailResponse(BaseModel):
     )
     source_desc: str | None = Field(None, description="溯源描述")
     source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
-    suggestion: list[dict] = Field(default_factory=list, description="处置建议")
+    suggestion: list[dict] | None = Field(default=None, description="处置建议")
     notes: list[AlertNoteItem] | None = Field(
         default_factory=list, description="处置备注列表"
     )

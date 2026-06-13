@@ -9,6 +9,7 @@ from app.models import reservoir as models_reservoir
 from app.models import indicator as models_indicator
 from app.schemas import dashboard as schemas_dashboard
 from app.models import alert as models_alert
+from sqlalchemy import and_
 from app.core.redis import get_redis, Redis, is_redis_available
 import json
 
@@ -30,9 +31,19 @@ async def get_dashboard_overview(db: AsyncSession):
             models_monitoring.MonitoringRecord.quality_flag == 0
         )
     )
-    alert_count = await db.scalar(
+    record_alert_count = await db.scalar(
         select(func.count(models_monitoring.MonitoringRecord.id)).where(
             models_monitoring.MonitoringRecord.quality_flag.in_([0, 2])
+        )
+    )
+    rule_alert_count = await db.scalar(
+        select(func.count(models_alert.AlertEvent.id)).where(
+            models_alert.AlertEvent.source == 0
+        )
+    )
+    ai_alert_count = await db.scalar(
+        select(func.count(models_alert.AlertEvent.id)).where(
+            models_alert.AlertEvent.source == 1
         )
     )
     offline_stations = await db.scalar(
@@ -44,7 +55,9 @@ async def get_dashboard_overview(db: AsyncSession):
         reservoir_count=reservoir_count or 0,
         normal_count=normal_count or 0,
         abnormal_count=abnormal_count or 0,
-        alert_count=alert_count or 0,
+        record_alert_count=record_alert_count or 0,
+        rule_alert_count=rule_alert_count or 0,
+        ai_alert_count=ai_alert_count or 0,
         offline_stations=offline_stations or 0,
     )
 
@@ -202,6 +215,7 @@ async def get_last_alert(
 
     alert_entity_list = await db.scalars(
         select(models_alert.AlertEvent)
+        .where(models_alert.AlertEvent.source == 0)
         .order_by(models_alert.AlertEvent.detected_at.desc())
         .limit(5)
     )

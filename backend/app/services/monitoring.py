@@ -25,124 +25,109 @@ from redis import Redis
 logger = setup_logger(__name__)
 
 
-async def process_and_save_data(db: AsyncSession, raw_data: dict) -> ProcessResult:
-    """处理并入库一条原始监测数据，返回处理统计"""
-    monitor_time_str = raw_data.get("monitorTime")
-    monitor_time = datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
-
-    station_entity_list = (
-        await db.scalars(
-            select(models_station.MonitoringStation).where(
-                models_station.MonitoringStation.status == 1
-            )
-        )
-    ).all()
-
-    if not station_entity_list:
+async def process_and_save_data(db: AsyncSession, raw_data: dict):
+    """处理并入库一条监测记录（按 station_code 匹配站点），返回处理统计"""
+    station_code = raw_data.get("station_code")
+    if not station_code:
         return ProcessResult(
-            station_count=0, record_count=0, alert_count=0, cached_records=[], error_info="没有在线站点"
+            station_count=0,
+            record_count=0,
+            pending_alerts=[],
+            cached_records=[],
+            error_info="缺少 station_code",
         )
+
+    station = await db.scalar(
+        select(models_station.MonitoringStation).where(
+            models_station.MonitoringStation.code == station_code,
+            models_station.MonitoringStation.status == 1,
+        )
+    )
+    if not station:
+        return ProcessResult(
+            station_count=0,
+            record_count=0,
+            pending_alerts=[],
+            cached_records=[],
+            error_info=f"站点 {station_code} 不存在或离线",
+        )
+
+    monitor_time_str = raw_data.get("monitorTime")
+    monitor_time = (
+        datetime.strptime(monitor_time_str, "%Y-%m-%d %H:%M:%S")
+        if monitor_time_str
+        else datetime.now()
+    )
+
+    indicator_entity_list = (await db.scalars(select(models_indicator.Indicator))).all()
+    indicator_code_dict = {item.code: item for item in indicator_entity_list}
 
     total_records = 0
-    station_count = len(station_entity_list)
     cached_records: list[dict] = []
     pending_alerts: list[dict] = []
 
-    indicator_entity_list = (
-        await db.scalars(select(models_indicator.Indicator))
-    ).all()
+    for field, raw_value in raw_data.items():
+        if field in ("station_code", "monitorTime"):
+            continue
+        indicator_entity = indicator_code_dict.get(field)
+        if indicator_entity is None:
+            continue
+        indicator_id = indicator_entity.id
 
-    indicator_code_dict = {item.code: item for item in indicator_entity_list}
-
-    for station in station_entity_list:
-        reservoir_id = station.reservoir_id
-
-        for api_field in raw_data:
-            indicator_entity = indicator_code_dict.get(api_field)
-            if indicator_entity is None:
-                continue
-            indicator_id = indicator_entity.id
-            raw_value = raw_data[api_field]
-
-            existing = await db.scalar(
-                select(models_monitoring.MonitoringRecord).where(
-                    and_(
-                        models_monitoring.MonitoringRecord.station_id == station.id,
-                        models_monitoring.MonitoringRecord.indicator_id == indicator_id,
-                        models_monitoring.MonitoringRecord.record_time == monitor_time,
-                    )
+        existing = await db.scalar(
+            select(models_monitoring.MonitoringRecord).where(
+                and_(
+                    models_monitoring.MonitoringRecord.station_id == station.id,
+                    models_monitoring.MonitoringRecord.indicator_id == indicator_id,
+                    models_monitoring.MonitoringRecord.record_time == monitor_time,
                 )
             )
-            if existing is not None:
-                continue
+        )
+        if existing is not None:
+            continue
 
-            offset_range = (-0.05, 0.05)
-            offset = random.uniform(*offset_range)
-            value = round(raw_value * (1 + offset), 4)
-
-            db.add(
-                models_monitoring.MonitoringRecord(
-                    reservoir_id=reservoir_id,
-                    station_id=station.id,
-                    indicator_id=indicator_id,
-                    value=value,
-                    data_source="auto",
-                    quality_flag=1,
-                    record_time=monitor_time,
-                    created_at=datetime.now(),
-                )
+        db.add(
+            models_monitoring.MonitoringRecord(
+                reservoir_id=station.reservoir_id,
+                station_id=station.id,
+                indicator_id=indicator_id,
+                value=raw_value,
+                data_source="auto",
+                quality_flag=1,
+                record_time=monitor_time,
+                created_at=datetime.now(),
             )
-            total_records += 1
+        )
+        total_records += 1
 
-            cached_records.append(
-                {
-                    "reservoir_id": reservoir_id,
-                    "indicator_id": indicator_id,
-                    "indicator_name": indicator_entity.name,
-                    "value": value,
-                    "record_time": monitor_time,
-                }
-            )
+        cached_records.append(
+            {
+                "reservoir_id": station.reservoir_id,
+                "indicator_id": indicator_id,
+                "indicator_name": indicator_entity.name,
+                "value": raw_value,
+                "record_time": monitor_time,
+            }
+        )
 
-            pending_alerts.append(
-                {
-                    "indicator_id": indicator_id,
-                    "reservoir_id": reservoir_id,
-                    "value": value,
-                    "record_time": monitor_time.isoformat(),
-                }
-            )
+        pending_alerts.append(
+            {
+                "indicator_id": indicator_id,
+                "reservoir_id": station.reservoir_id,
+                "value": raw_value,
+                "record_time": monitor_time.isoformat(),
+            }
+        )
 
-        station.last_data_time = monitor_time
+    station.last_data_time = monitor_time
 
     return ProcessResult(
-        station_count=station_count,
+        station_count=1,
         record_count=total_records,
         pending_alerts=pending_alerts,
         cached_records=cached_records,
         error_info=None,
     )
-
-
-async def collect_water_quality_data():
-    """定时采集水质数据：调用外部 API 采集并入库，同步 Redis 缓存"""
-    logger.info("开始执行定时采集任务")
-    raw_data = await _fetch_real_data()
-    if not raw_data:
-        return
-
-    async with get_background_db_session() as db:
-        try:
-            result = await process_and_save_data(db, raw_data)
-            await commit_or_rollback(db)
-            logger.info(f"成功采集 {result['record_count']} 条记录，开始写入 Redis 缓存")
-
-            for rec in result["cached_records"]:
-                await _cache_to_redis(**rec)
-
-            logger.info(f"Redis 缓存写入完成，共 {len(result['cached_records'])} 条")
-        except Exception as e:
-            logger.error(f"定时采集失败: {e}")
 
 
 async def get_monitoring_records_list(
@@ -499,7 +484,7 @@ async def _query_trend_from_redis(
     return items
 
 
-async def _fetch_real_data():
+async def _fetch_real_record():
     """调用真实接口获取最新一条监测记录"""
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -510,7 +495,7 @@ async def _fetch_real_data():
             )
             resp.raise_for_status()
             result = resp.json()
-            records = result.get("data", {}).get("records", [])
+            records: list[dict] = result.get("data", {}).get("records", [])
             if not records:
                 logger.warning("API返回空记录")
                 return None
@@ -518,3 +503,72 @@ async def _fetch_real_data():
     except Exception as e:
         logger.error(f"调用真实接口失败: {e}")
         return None
+
+
+_MOCK_RANGES = {
+    "ph": (6.5, 8.5),
+    "rjy": (3.0, 8.0),
+    "cod": (5.0, 25.0),
+    "ad": (0.1, 1.5),
+    "swt": (15, 30),
+    "zd": (1, 15),
+    "ddl": (200, 600),
+    "yl": (0.02, 0.15),
+}
+
+MOCK_EXCEED_PROBABILITY = 0.3
+
+_EXCEED_VALUES = {
+    "rjy": (2.0, 4.0),
+    "cod": (25.0, 45.0),
+    "ad": (1.2, 2.5),
+    "zd": (15.0, 55.0),
+    "ph": (5.0, 6.0),
+}
+
+
+async def _generate_mock_record():
+    """模拟模式：优先从真实 API 拿基线数据加偏移，API 不可用时纯随机生成"""
+    baseline = await _fetch_real_record()
+
+    async with get_background_db_session() as db:
+        station = (
+            await db.scalars(
+                select(models_station.MonitoringStation).where(
+                    models_station.MonitoringStation.status == 1
+                )
+            )
+        ).all()
+        if not station:
+            return None
+
+        station_code = random.choice(station).code
+
+        if baseline:
+            monitor_time = baseline.get("monitorTime")
+            mock_record = {"station_code": station_code, "monitorTime": monitor_time}
+            for field, value in baseline.items():
+                if field in ("monitorTime", "station_code"):
+                    continue
+                if isinstance(value, (int, float)):
+                    offset = random.uniform(-0.05, 0.05)
+                    mock_record[field] = round(value * (1 + offset), 4)
+                else:
+                    mock_record[field] = value
+            return mock_record
+
+    # 纯随机 fallback（API 不可用时）
+    now = datetime.now()
+    mock_record = {
+        "station_code": station_code,
+        "monitorTime": now.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    for field, (lo, hi) in _MOCK_RANGES.items():
+        mock_record[field] = round(random.uniform(lo, hi), 4)
+
+    if random.random() < MOCK_EXCEED_PROBABILITY:
+        exceed_indicator = random.choice(list(_EXCEED_VALUES.keys()))
+        lo, hi = _EXCEED_VALUES[exceed_indicator]
+        mock_record[exceed_indicator] = round(random.uniform(lo, hi), 4)
+
+    return mock_record

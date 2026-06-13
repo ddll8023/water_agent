@@ -10,7 +10,7 @@
       <span class="text-xs text-gray-500">下次刷新倒计时 {{ countdown }}s</span>
     </header>
 
-    <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       <el-card shadow="never" :body-style="{ padding: '16px' }">
         <el-statistic title="水库总数" :value="overview?.reservoir_count ?? 0">
           <template #prefix>
@@ -27,19 +27,30 @@
         </el-statistic>
       </el-card>
 
-      <el-card
-        shadow="never"
-        :body-style="{ padding: '16px' }"
-      >
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
         <el-statistic
-          :value="overview?.alert_count ?? 0"
-          :value-style="{ color: todayAlertColor }"
+          title="异常记录数"
+          :value="overview?.record_alert_count ?? 0"
+          :value-style="{ color: '#e6a23c' }"
         >
-          <template #title>
-            <span :class="todayAlertCount > 0 ? 'text-red-500' : 'text-emerald-500'">今日告警数</span>
-          </template>
           <template #prefix>
-            <el-icon :class="todayAlertCount > 0 ? 'text-red-500' : 'text-emerald-500'"><WarningFilled /></el-icon>
+            <el-icon class="text-orange-500"><WarningFilled /></el-icon>
+          </template>
+        </el-statistic>
+      </el-card>
+
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
+        <el-statistic title="规则预警" :value="overview?.rule_alert_count ?? 0" :value-style="{ color: '#409eff' }">
+          <template #prefix>
+            <el-icon class="text-blue-500"><InfoFilled /></el-icon>
+          </template>
+        </el-statistic>
+      </el-card>
+
+      <el-card shadow="never" :body-style="{ padding: '16px' }">
+        <el-statistic title="AI趋势预警" :value="overview?.ai_alert_count ?? 0" :value-style="{ color: '#e6a23c' }">
+          <template #prefix>
+            <el-icon class="text-orange-500"><DataAnalysis /></el-icon>
           </template>
         </el-statistic>
       </el-card>
@@ -134,6 +145,8 @@
               >
                 {{ alertLevelLabel(a.alert_level) }}
               </el-tag>
+              <el-tag v-if="a.source === 1" type="warning" size="small">AI趋势</el-tag>
+              <el-tag v-else-if="a.source === 0" type="info" size="small">规则</el-tag>
               <span class="text-sm text-gray-900">{{ a.title }}</span>
               <p
                 v-if="a.indicators && a.indicators.length"
@@ -203,9 +216,6 @@ const countdown = ref(REFRESH_INTERVAL)
 let refreshTimer = null
 let tickTimer = null
 let isFirstLoad = true
-
-const todayAlertCount = computed(() => overview.value?.alert_count ?? 0)
-const todayAlertColor = computed(() => (todayAlertCount.value > 0 ? '#ef4444' : '#10b981'))
 
 const offlineCount = computed(() => overview.value?.offline_stations ?? 0)
 const offlineCountColor = computed(() => (offlineCount.value === 0 ? '#10b981' : '#f59e0b'))

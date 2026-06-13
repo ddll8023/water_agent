@@ -72,6 +72,8 @@ async def get_alert_list(
         stmt = stmt.where(models_alert.AlertEvent.alert_level == request.alert_level)
     if request.status is not None:
         stmt = stmt.where(models_alert.AlertEvent.status == request.status)
+    if request.source is not None:
+        stmt = stmt.where(models_alert.AlertEvent.source == request.source)
     if request.start_time is not None:
         stmt = stmt.where(models_alert.AlertEvent.detected_at >= request.start_time)
     if request.end_time is not None:

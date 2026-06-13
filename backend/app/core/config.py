@@ -77,6 +77,8 @@ class Settings(BaseSettings):
 
     TOP_K: int = 5
 
+    PATROL_ANALYSIS_INTERVAL: int = 43200  # 秒，默认 12 小时
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

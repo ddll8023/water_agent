@@ -47,10 +47,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Neo4j 图谱初始化异常（不影响服务启动）: %s", e)
 
-    # 启动后立即执行一次采集
-    # await collect_water_quality_data()
-
-    # 每10分钟定时采集（从第二次开始计时）
+    # 每10分钟定时采集
     scheduler.add_job(
         run_patrol_workflow,
         "interval",

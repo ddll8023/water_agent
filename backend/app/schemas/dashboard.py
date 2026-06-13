@@ -46,7 +46,9 @@ class GetDashboardOverviewResponse(BaseModel):
     reservoir_count: int = Field(0, description="水库总数")
     normal_count: int = Field(0, description="正常站点数")
     abnormal_count: int = Field(0, description="异常站点数")
-    alert_count: int = Field(0, description="告警总数")
+    record_alert_count: int = Field(0, description="异常记录数")
+    rule_alert_count: int = Field(0, description="规则判定预警数")
+    ai_alert_count: int = Field(0, description="AI趋势预警数")
     offline_stations: int = Field(0, description="离线站点数")
 
     model_config = ConfigDict(from_attributes=True)
@@ -63,6 +65,7 @@ class GetLastAlertResponse(BaseModel):
         default_factory=list,
         description="超标指标列表_name_value_limit",
     )
+    source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     status: int = Field(description="状态_0=待确认_1=已确认_2=处置中_3=已解决")
     detected_at: datetime = Field(description="检出时间")
 
