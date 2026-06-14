@@ -1,12 +1,12 @@
 """Agent 工作流状态定义"""
 
-from enum import IntEnum
+from enum import IntEnum, Enum
 from typing import TypedDict
 from pydantic import BaseModel
 
 
 class PatrolStatus(IntEnum):
-    """Collector Agent 执行状态"""
+    """采集管道执行状态"""
 
     SUCCESS = 0
     PARTIAL = 1
@@ -33,19 +33,6 @@ class AnalystStatus(IntEnum):
     NO_DATA = 3
 
 
-class PatrolState(TypedDict):
-    """Collector Agent 巡检预警工作流状态"""
-
-    status: PatrolStatus | None
-    raw_data: dict | None
-    process_result: ProcessResult | None
-    target_reservoir_id: int | None
-    patrol_log_id: int | None
-    error: str | None
-    start_time: str | None
-    duration_ms: int | None
-
-
 class AnalystState(TypedDict):
     """Analyst Agent 趋势分析工作流状态"""
 
@@ -60,6 +47,21 @@ class AnalystState(TypedDict):
     error: str | None
     start_time: str | None
     duration_ms: int | None
+
+
+class ReportStatus(IntEnum):
+    """Report Generator 执行状态"""
+
+    SUCCESS = 0
+    NO_DATA = 1
+    FAILED = 2
+
+
+class ReportType(str, Enum):
+    DAILY = "daily"
+    QUARTERLY = "quarterly"
+    EVENT = "event"
+
 
 
 

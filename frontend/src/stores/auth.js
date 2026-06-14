@@ -6,6 +6,7 @@ export const useAuthStore = defineStore('auth', () => {
   const userInfo = ref(null)
 
   const isLoggedIn = computed(() => !!token.value)
+  const isAdmin = computed(() => userInfo.value?.role === '管理员')
 
   const setToken = (newToken) => {
     token.value = newToken
@@ -26,6 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     userInfo,
     isLoggedIn,
+    isAdmin,
     setToken,
     setUserInfo,
     logout

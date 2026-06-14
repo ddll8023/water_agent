@@ -12,7 +12,7 @@
           <div>
             <div class="flex items-center gap-3 mb-2">
               <h2 class="text-xl font-semibold text-gray-900">{{ report.title }}</h2>
-              <el-tag :type="getTypeTag(report.type)" size="small">{{ getTypeLabel(report.type) }}</el-tag>
+              <el-tag :type="getTypeTag(report.report_type)" size="small">{{ getTypeLabel(report.report_type) }}</el-tag>
               <el-tag v-if="report.status === 'published'" type="success" size="small">已发布</el-tag>
               <el-tag v-else type="info" size="small">草稿</el-tag>
             </div>
@@ -29,9 +29,14 @@
 
         <el-divider />
 
-        <div class="prose prose-sm max-w-none text-gray-700 leading-relaxed whitespace-pre-wrap">
-          {{ report.content || '暂无报告内容' }}
+        <div v-if="report.sections" class="space-y-6">
+          <div v-for="(sec, idx) in report.sections" :key="idx">
+            <h3 class="text-lg font-semibold text-gray-800 mb-2">{{ sec.title }}</h3>
+            <div class="text-gray-700 leading-relaxed whitespace-pre-wrap">{{ sec.content }}</div>
+            <el-divider v-if="idx < report.sections.length - 1" />
+          </div>
         </div>
+        <div v-else class="text-gray-500">暂无报告内容</div>
       </el-card>
 
       <el-empty v-else-if="!loading" description="报告不存在" />

@@ -28,7 +28,7 @@
           搜索
         </el-button>
       </div>
-      <el-button type="primary" @click="generateDialogVisible = true">
+      <el-button v-if="authStore.isAdmin" type="primary" @click="generateDialogVisible = true">
         <el-icon><Plus /></el-icon>
         生成报告
       </el-button>
@@ -91,8 +91,10 @@ import { ElMessage } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { formatDateTime } from '@/utils/format'
 import { getReportList, generateReport } from '@/api/report'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const reportList = ref([])

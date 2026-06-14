@@ -18,8 +18,15 @@ class PromptFactory:
 
     @property
     def alert(self):
-        """获取对话模型提示词"""
+        """获取预警提示词"""
         config_path = os.path.join(SCRIPT_DIR, "alert.yaml")
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    @property
+    def report(self):
+        """获取报告生成提示词"""
+        config_path = os.path.join(SCRIPT_DIR, "report.yaml")
         with open(config_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 

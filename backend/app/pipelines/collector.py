@@ -1,13 +1,10 @@
-"""Collector Agent：实时采集与规则预警链路，每 10min 运行一次，不调 LLM"""
+"""Collector 采集管道：实时采集与规则预警链路，每 10min 运行一次，不调 LLM"""
 
 import asyncio
 from datetime import datetime
 
 from sqlalchemy import select, and_, or_
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-
-from app.agent.state import PatrolState, PatrolStatus
+from app.agent.state import PatrolStatus, ProcessResult
 from app.services.alert_rules import _evaluate_rule_trigger
 from app.services.alerts import llm_suggestion
 from app.services import monitoring as services_monitoring
@@ -22,13 +19,13 @@ from app.models import indicator as models_indicator
 from app.models import alert as models_alert
 from app.models import reservoir as models_reservoir
 from app.utils.logger_config import setup_logger
+from app.utils.exception import ServiceException
 
 logger = setup_logger(__name__)
 
 
-async def fetch_data(state: PatrolState):
-    """Node1: 获取监测数据（注释切换模拟/真实模式）"""
-    start_time = datetime.now()
+async def fetch_data():
+    """从外部 API 采集最新监测数据"""
     try:
         # === 注释切换 True=模拟 False=真实 ===
         MOCK_MODE = True
@@ -39,63 +36,41 @@ async def fetch_data(state: PatrolState):
             record = await services_monitoring._fetch_real_record()
 
         if not record:
-            logger.info("fetch_data 完成 → 无数据")
-            return {
-                "status": PatrolStatus.NO_DATA,
-                "error": "数据获取异常",
-                "start_time": start_time.isoformat(),
-            }
+            return None
         ind_fields = [k for k in record if k not in ("station_code", "monitorTime")]
         logger.info(
             f"fetch_data 完成 → 站点: {record.get('station_code')}, 指标: {ind_fields}"
         )
-        return {
-            "raw_data": record,
-            "start_time": start_time.isoformat(),
-        }
+        return record
     except Exception as e:
         logger.error(f"fetch_data 异常 → {e}")
-        return {
-            "status": PatrolStatus.FAILED,
-            "error": f"数据获取异常: {e}",
-            "start_time": start_time.isoformat(),
-        }
+        return None
 
 
-async def process_save(state: PatrolState):
-    """Node2: 处理原始数据并入库（不包含预警判定）"""
+async def process_save(raw_data):
+    """处理原始数据并入库"""
     async with get_background_db_session() as db:
         try:
             result = await services_monitoring.process_and_save_data(
-                db, state["raw_data"]
+                db, raw_data
             )
             await commit_or_rollback(db)
 
-            if result.error_info and result.record_count == 0:
-                status_code = PatrolStatus.FAILED
-            elif result.error_info:
-                status_code = PatrolStatus.PARTIAL
-            else:
-                status_code = PatrolStatus.SUCCESS
-
             logger.info(
-                f"process_save 完成 → 记录: {result.record_count}, 待判定: {len(result.pending_alerts)}, 状态: {status_code}"
+                f"process_save 完成 → 记录: {result.record_count}, 待判定: {len(result.pending_alerts)}, error_info: {result.error_info}"
             )
-            return {
-                "status": status_code,
-                "process_result": result,
-            }
+            return result
         except Exception as e:
             logger.error(f"process_save 异常 → {e}")
-            return {
-                "status": PatrolStatus.FAILED,
-                "error": f"入库处理异常: {e}",
-            }
+            return ProcessResult(
+                station_count=0, record_count=0,
+                pending_alerts=[], cached_records=[],
+                error_info="入库处理异常",
+            )
 
 
-async def process_alerts(state: PatrolState):
-    """Node3: 批量判定预警规则（一次查出所有数据，内存处理），判断是否需要 LLM 分析"""
-    result = state.get("process_result")
+async def process_alerts(result):
+    """批量判定预警规则，创建/合并预警"""
     target_reservoir_id = None
 
     if not (result and result.pending_alerts):
@@ -277,39 +252,36 @@ async def process_alerts(state: PatrolState):
     }
 
 
-async def cache_log(state: PatrolState):
-    """Node5: 写入 Redis 缓存、巡检日志和分析记录"""
+async def cache_log(result, status, start_time, error=None):
+    """写入 Redis 缓存和巡检日志"""
     now = datetime.now()
-    result = state.get("process_result")
 
     if result and result.cached_records:
         for rec in result.cached_records:
             await services_monitoring._cache_to_redis(**rec)
 
     async with get_background_db_session() as db:
-        status_code = state.get("status")
-        if status_code is None and result:
-            status_code = (
+        if status is None and result:
+            status = (
                 PatrolStatus.NO_DATA
                 if result.record_count == 0
                 else PatrolStatus.SUCCESS
             )
-        elif status_code is None:
-            status_code = PatrolStatus.NO_DATA
+        elif status is None:
+            status = PatrolStatus.NO_DATA
 
-        start_time_str = state.get("start_time")
-        executed_at = datetime.fromisoformat(start_time_str) if start_time_str else now
+        executed_at = datetime.fromisoformat(start_time) if start_time else now
         duration_ms = int((now - executed_at).total_seconds() * 1000)
 
         patrol_entry = PatrolLog(
             executed_at=executed_at,
-            status=status_code,
+            status=status,
             station_count=result.station_count if result else 0,
             record_count=result.record_count if result else 0,
             new_alert_count=0,
             merge_count=0,
             duration_ms=duration_ms,
-            error=state.get("error"),
+            error=error,
         )
         db.add(patrol_entry)
 
@@ -317,75 +289,35 @@ async def cache_log(state: PatrolState):
         await db.refresh(patrol_entry)
 
         logger.info(
-            f"cache_log 完成 → patrol_log_id={patrol_entry.id}, status={status_code}, 耗时={duration_ms}ms"
+            f"cache_log 完成 → patrol_log_id={patrol_entry.id}, status={status}, 耗时={duration_ms}ms"
         )
-        return {
-            "status": status_code,
-            "patrol_log_id": patrol_entry.id,
-            "duration_ms": duration_ms,
-        }
-
-
-def should_process(state: PatrolState) -> str:
-    """条件路由：fetch_data 失败或无数据时跳过 process_save"""
-    status = state.get("status")
-    if status in (PatrolStatus.FAILED, PatrolStatus.NO_DATA):
-        return "skip"
-    return "continue"
-
-
-def build_collector_graph():
-    """编译 Collector Agent 工作流图"""
-    builder = StateGraph(PatrolState)
-
-    builder.add_node("fetch_data", fetch_data)
-    builder.add_node("process_save", process_save)
-    builder.add_node("process_alerts", process_alerts)
-    builder.add_node("cache_log", cache_log)
-
-    builder.set_entry_point("fetch_data")
-
-    builder.add_conditional_edges(
-        "fetch_data",
-        should_process,
-        {
-            "continue": "process_save",
-            "skip": "cache_log",
-        },
-    )
-    builder.add_edge("process_save", "process_alerts")
-    builder.add_edge("process_alerts", "cache_log")
-    builder.add_edge("cache_log", END)
-
-    checkpointer = MemorySaver()
-    return builder.compile(checkpointer=checkpointer)
-
-
-collector_graph = None
 
 
 async def run_collector_agent():
-    """供 APScheduler 调用的 Collector Agent 入口"""
-    global collector_graph
-    if collector_graph is None:
-        collector_graph = build_collector_graph()
+    """采集管道入口：APScheduler 每 10 分钟调用"""
+    start_time = datetime.now().isoformat()
+    try:
+        raw_data = await fetch_data()
+        if not raw_data:
+            await cache_log(None, PatrolStatus.NO_DATA, start_time, "无采集数据")
+            return
 
-    initial_state: PatrolState = {
-        "status": None,
-        "raw_data": None,
-        "process_result": None,
-        "patrol_log_id": None,
-        "error": None,
-        "start_time": None,
-        "duration_ms": None,
-        "target_reservoir_id": None,
-    }
+        result = await process_save(raw_data)
 
-    config = {
-        "configurable": {
-            "thread_id": f"collector-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        }
-    }
+        if result.error_info and result.record_count == 0:
+            await cache_log(result, PatrolStatus.FAILED, start_time, result.error_info)
+            return
+        if result.error_info:
+            await process_alerts(result)
+            await cache_log(result, PatrolStatus.PARTIAL, start_time, result.error_info)
+            return
 
-    async for event in collector_graph.astream(initial_state, config):
-        logger.debug(f"Collector 工作流事件: {event}")
+        await process_alerts(result)
+        await cache_log(result, PatrolStatus.SUCCESS, start_time)
+
+    except ServiceException as e:
+        logger.error(f"采集管道业务异常: error={e.message}")
+        await cache_log(None, PatrolStatus.FAILED, start_time, e.message)
+    except Exception as exc:
+        logger.error(f"采集管道系统异常: error={exc}", exc_info=True)
+        await cache_log(None, PatrolStatus.FAILED, start_time, "系统内部错误")

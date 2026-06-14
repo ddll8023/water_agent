@@ -4369,3 +4369,277 @@ Authorization: Bearer <token>
 | --- | --- | --- | --- | --- |
 | Authorization | string | header | 是 | Bearer Token |
 | id | int | path | 是 | 日志 ID |
+
+---
+
+## 十六、报告中心（/api/v1/reports）
+
+报告列表、详情、生成、审核、导出接口。需要 Bearer Token 认证。
+
+### 16.1 获取报告列表
+
+- **POST** `/api/v1/reports/list`
+- **描述**：分页获取报告列表，支持按类型、状态、关键词筛选。需 admin 或 user 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| page | int | body | 是 | 页码，默认 1 |
+| page_size | int | body | 是 | 每页记录数，默认 12 |
+| report_type | string\|null | body | 否 | 报告类型：daily/quarterly/event |
+| status | string\|null | body | 否 | 状态：draft/published/no_data |
+| keyword | string\|null | body | 否 | 标题关键词模糊搜索 |
+
+**请求体示例**：
+
+```json
+{
+  "page": 1,
+  "page_size": 12,
+  "report_type": "daily",
+  "status": null,
+  "keyword": null
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "lists": [
+      {
+        "id": 1,
+        "title": "水库水质日巡检报告（2026-06-14）",
+        "report_type": "daily",
+        "status": "draft",
+        "summary": "巡检全部成功，新增3条预警",
+        "created_at": "2026-06-15T00:41:18",
+        "published_at": null
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "page_size": 12,
+      "total": 1,
+      "total_pages": 1
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| lists[].id | int | 报告 ID |
+| lists[].title | string | 报告标题 |
+| lists[].report_type | string | 报告类型 |
+| lists[].status | string | 状态 |
+| lists[].summary | string\|null | AI 生成摘要 |
+| lists[].created_at | datetime\|null | 创建时间 |
+| lists[].published_at | datetime\|null | 发布时间 |
+| pagination | object | 分页信息 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| --- | --- |
+| 2003 | 权限不足 |
+
+### 16.2 获取报告详情
+
+- **POST** `/api/v1/reports/{id}`
+- **描述**：根据报告 ID 获取完整报告内容。需 admin 或 user 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| id | int | path | 是 | 报告 ID |
+
+**请求示例**：
+
+```
+POST /api/v1/reports/1
+Authorization: Bearer <token>
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "id": 1,
+    "title": "水库水质日巡检报告（2026-06-14）",
+    "report_type": "daily",
+    "status": "draft",
+    "summary": "巡检全部成功，新增3条预警",
+    "sections": [
+      {"title": "巡检概况", "content": "今日共执行5次巡检，全部成功..."},
+      {"title": "预警事件", "content": "今日新增预警3条..."},
+      {"title": "核心指标变化", "content": "青龙山COD日均值15.2mg/L..."},
+      {"title": "重点关注", "content": "青龙山COD持续上升趋势..."}
+    ],
+    "conclusion": "整体水质稳定",
+    "period_start": "2026-06-14T00:41:13",
+    "period_end": "2026-06-15T00:41:13",
+    "created_at": "2026-06-15T00:41:18",
+    "published_at": null
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| id | int | 报告 ID |
+| title | string | 报告标题 |
+| report_type | string | 报告类型 |
+| status | string | 状态 |
+| summary | string\|null | AI 生成摘要 |
+| sections | list\|null | 结构化章节 [{title, content}] |
+| conclusion | string\|null | 总体结论 |
+| period_start | datetime\|null | 覆盖起始时间 |
+| period_end | datetime\|null | 覆盖结束时间 |
+| created_at | datetime\|null | 创建时间 |
+| published_at | datetime\|null | 发布时间 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| --- | --- |
+| 1002 | 报告不存在 |
+| 2003 | 权限不足 |
+
+### 16.3 生成报告
+
+- **POST** `/api/v1/reports/generate`
+- **描述**：创建报告记录并后台异步执行生成（LLM 调用在后台进行，不阻塞 HTTP 响应）。需 admin 角色。
+- **Content-Type**：application/json
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| report_type | string | body | 是 | 报告类型：daily/quarterly/event |
+| reservoir_ids | list[int]\|null | body | 否 | 水库 ID 列表 |
+| alert_id | int\|null | body | 否 | 预警 ID（事件报告时必传） |
+
+**请求体示例**：
+
+```json
+{
+  "report_type": "daily",
+  "reservoir_ids": null,
+  "alert_id": null
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "report_id": 1,
+    "status": "generating"
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| report_id | int | 报告 ID |
+| status | string | 任务状态：generating |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| --- | --- |
+| 1001 | 参数错误（report_type 非法） |
+| 2003 | 权限不足 |
+
+### 16.4 审核报告
+
+- **POST** `/api/v1/reports/{id}/review`
+- **描述**：审核报告，可发布或驳回。需 admin 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| id | int | path | 是 | 报告 ID |
+| action | string | body | 是 | 审核动作：approve/reject |
+| comment | string\|null | body | 否 | 审核备注 |
+
+**请求体示例**：
+
+```json
+{
+  "action": "approve",
+  "comment": "数据准确，同意发布"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "success": true
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| success | bool | 操作是否成功 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| --- | --- |
+| 1002 | 报告不存在 |
+| 2003 | 权限不足 |
+
+### 16.5 导出报告
+
+- **POST** `/api/v1/reports/{id}/export`
+- **描述**：导出报告为 markdown 格式文本。需 admin 或 user 角色。
+
+| 参数 | 类型 | 位置 | 必填 | 说明 |
+| --- | --- | --- | --- | --- |
+| Authorization | string | header | 是 | Bearer Token |
+| id | int | path | 是 | 报告 ID |
+| format | string\|null | body | 否 | 导出格式，默认 markdown |
+
+**请求体示例**：
+
+```json
+{
+  "format": "markdown"
+}
+```
+
+**响应格式**：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": "# 水库水质日巡检报告（2026-06-14）\n\n巡检全部成功...\n\n## 巡检概况\n...\n\n## 结论\n...\n"
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| data | string | markdown 格式的报告文本 |
+
+**错误场景**：
+
+| 错误码 | 场景 |
+| --- | --- |
+| 1002 | 报告不存在 |
+| 2003 | 权限不足 |

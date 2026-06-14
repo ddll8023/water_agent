@@ -25,7 +25,7 @@ export function getReportList(params) {
  */
 export function getReportDetail(id) {
   return request({
-    method: 'get',
+    method: 'post',
     url: `/v1/reports/${id}`
   })
 }
@@ -35,9 +35,8 @@ export function getReportDetail(id) {
  * @param {Object} data - 生成参数
  * @param {string} data.type - 报告类型：daily/quarterly/event
  * @param {number[]} [data.reservoir_ids] - 水库 ID 列表
- * @param {string} data.start_date - 开始日期
- * @param {string} data.end_date - 结束日期
- * @returns {Promise} { task_id, status }
+ * @param {number} [data.alert_id] - 预警 ID（事件报告时传）
+ * @returns {Promise} { report_id, status }
  */
 export function generateReport(data) {
   return request({
@@ -57,7 +56,7 @@ export function generateReport(data) {
  */
 export function reviewReport(id, data) {
   return request({
-    method: 'put',
+    method: 'post',
     url: `/v1/reports/${id}/review`,
     data
   })
@@ -71,8 +70,8 @@ export function reviewReport(id, data) {
  */
 export function exportReport(id, format = 'markdown') {
   return request({
-    method: 'get',
+    method: 'post',
     url: `/v1/reports/${id}/export`,
-    params: { format }
+    data: { format }
   })
 }

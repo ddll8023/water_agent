@@ -17,9 +17,11 @@ from app.routers import monitoring as monitoring_router
 from app.routers import dashboard as dashboard_router
 from app.routers import alerts as alerts_router
 from app.routers import alert_rules as alert_rules_router
-from app.agent.collector import run_collector_agent
+from app.pipelines.collector import run_collector_agent
 from app.agent.analyst import run_analyst_agent
 from app.models import alert_rule as models_alert_rule
+from app.models import report as models_report
+from app.pipelines.report_generator import run_report_generator
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_mysql, init_neo4j
 from app.routers import documents as documents_router
@@ -27,6 +29,7 @@ from app.routers import chat as chat_router
 from app.routers import graph as graph_router
 from app.routers import graph_admin as graph_admin_router
 from app.routers import patrol_log as patrol_log_router
+from app.routers import report as report_router
 
 logger = setup_logger(__name__)
 
@@ -50,7 +53,7 @@ async def lifespan(app: FastAPI):
 
     # run_collector_agent()
 
-    # Collector Agent：每 10 分钟采集与规则预警
+    # Collector Pipeline：每 10 分钟采集与规则预警
     scheduler.add_job(
         run_collector_agent,
         "interval",
@@ -73,6 +76,20 @@ async def lifespan(app: FastAPI):
         coalesce=True,
         misfire_grace_time=600,
     )
+    # Report Generator Pipeline：每天早 8 点生成日巡检报告
+    scheduler.add_job(
+        run_report_generator,
+        "cron",
+        hour=8,
+        minute=0,
+        kwargs={"report_type": "daily"},
+        id="report_generator_daily",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
+    )
+
     scheduler.start()
 
     yield  # 应用运行中
@@ -137,6 +154,7 @@ app.include_router(chat_router.router)
 app.include_router(graph_router.router)
 app.include_router(graph_admin_router.router)
 app.include_router(patrol_log_router.router)
+app.include_router(report_router.router)
 
 
 @app.websocket("/ws/alerts")

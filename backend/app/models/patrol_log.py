@@ -6,8 +6,12 @@ from datetime import datetime
 class PatrolLog(Base):
     __tablename__ = "patrol_log"
 
+    __table_args__ = {"mysql_charset": "utf8mb4"}
+
     id = Column[int](BigInteger, primary_key=True, autoincrement=True, comment="巡检日志ID")
-    executed_at = Column[datetime](DateTime, nullable=False, comment="执行开始时间")
+    executed_at = Column[datetime](
+        DateTime, nullable=False, index=True, comment="执行开始时间"
+    )
     status = Column[int](
         SmallInteger, nullable=False, default=0, index=True, comment="执行状态_0=成功_1=部分失败_2=失败_3=无数据"
     )
