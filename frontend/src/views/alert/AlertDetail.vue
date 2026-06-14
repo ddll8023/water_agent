@@ -150,9 +150,9 @@
             </svg>
           </span>
           <span class="font-semibold text-gray-800">AI 处置建议</span>
-          <el-tag v-if="suggestionStatus === '已生成'" type="warning" size="small">待确认</el-tag>
-          <el-tag v-else-if="suggestionStatus === '已确认'" type="success" size="small">已确认</el-tag>
-          <el-tag v-else-if="suggestionStatus === '生成中'" type="info" size="small">生成中</el-tag>
+          <el-tag v-if="suggestionStatus === 2" type="warning" size="small">待确认</el-tag>
+          <el-tag v-else-if="suggestionStatus === 3" type="success" size="small">已确认</el-tag>
+          <el-tag v-else-if="suggestionStatus === 1" type="info" size="small">生成中</el-tag>
         </div>
       </template>
       <el-skeleton v-if="suggestionLoading" :rows="4" animated />
@@ -177,7 +177,7 @@
         </div>
         <div class="flex gap-3">
           <el-button
-            v-if="suggestionStatus !== '已确认'"
+            v-if="suggestionStatus !== 3"
             type="primary"
             class="flex-1"
             size="large"
@@ -355,7 +355,7 @@ const traceEdges = ref([])
 const suggestionLoading = ref(false)
 const suggestionSteps = ref([])
 const suggestionAdopting = ref(false)
-const suggestionStatus = ref('')
+const suggestionStatus = ref(0)
 const confirmSuggestionLoading = ref(false)
 
 const similarLoading = ref(true)
@@ -592,7 +592,7 @@ const loadTraceData = async () => {
 }
 
 const loadSuggestionData = () => {
-  suggestionStatus.value = alertDetail.suggestion_status || ''
+  suggestionStatus.value = alertDetail.suggestion_status ?? 0
   try {
     if (!alertDetail.suggestion) {
       suggestionSteps.value = []
@@ -616,7 +616,8 @@ const handleGenerateSuggestion = async () => {
   try {
     const res = await generateSuggestion(alertDetail.id)
     suggestionSteps.value = res.data?.lists || []
-    suggestionStatus.value = '已生成'
+    suggestionStatus.value = 2
+    await loadAlertDetail()
   } catch (e) {
     ElMessage.error('生成处置建议失败')
     console.error(e)
@@ -629,7 +630,7 @@ const handleConfirmSuggestion = async () => {
   confirmSuggestionLoading.value = true
   try {
     await confirmSuggestion(alertDetail.id)
-    suggestionStatus.value = '已确认'
+    suggestionStatus.value = 3
     ElMessage.success('处置方案已确认')
   } catch (e) {
     ElMessage.error(e.message || '确认失败')

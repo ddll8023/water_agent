@@ -17,7 +17,8 @@ from app.routers import monitoring as monitoring_router
 from app.routers import dashboard as dashboard_router
 from app.routers import alerts as alerts_router
 from app.routers import alert_rules as alert_rules_router
-from app.agent.patrol_workflow import run_patrol_workflow
+from app.agent.collector import run_collector_agent
+from app.agent.analyst import run_analyst_agent
 from app.models import alert_rule as models_alert_rule
 from app.utils.logger_config import setup_logger
 from app.utils.db_init import init_mysql, init_neo4j
@@ -47,13 +48,28 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Neo4j 图谱初始化异常（不影响服务启动）: %s", e)
 
-    # 每10分钟定时采集
+    # Collector Agent：每 10 分钟采集与规则预警
     scheduler.add_job(
-        run_patrol_workflow,
+        run_collector_agent,
         "interval",
         minutes=10,
-        id="patrol_agent",
+        id="collector_agent",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=120,
+    )
+
+    # Analyst Agent：每 6 小时趋势分析
+    scheduler.add_job(
+        run_analyst_agent,
+        "interval",
+        hours=6,
+        id="analyst_agent",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=600,
     )
     scheduler.start()
 
@@ -79,6 +95,30 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from app.schemas.response import error, success
+from app.schemas.common import ErrorCode
+from app.utils.exception import ServiceException
+
+
+@app.exception_handler(ServiceException)
+async def service_exception_handler(request: Request, exc: ServiceException):
+    return JSONResponse(
+        status_code=200,
+        content=error(code=exc.code, message=exc.message),
+    )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("未处理的服务器异常")
+    return JSONResponse(
+        status_code=200,
+        content=error(code=ErrorCode.INTERNAL_ERROR, message="服务器内部错误"),
+    )
+
 
 app.include_router(auth_router.router)
 app.include_router(users_router.router)

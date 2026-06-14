@@ -54,9 +54,9 @@ async def get_reservoir_list(
             schemas_reservoir.GetReservoirListResponse.model_validate(reservoir_entity)
             for reservoir_entity in reservoir_entity_list
         ],
-        PaginationInfo=PaginationInfo(
-            total=total,
-            total_pages=math.ceil(total / get_reservoir_list_request.page_size),
+        pagination=PaginationInfo(
+            total=total or 0,
+            total_pages=math.ceil((total or 0) / get_reservoir_list_request.page_size),
             page=get_reservoir_list_request.page,
             page_size=get_reservoir_list_request.page_size,
         ),
@@ -89,7 +89,7 @@ async def get_reservoir_detail(db: AsyncSession, reservoir_id: int):
     """获取水库详情"""
     reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
     if not reservoir_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
     return schemas_reservoir.GetReservoirDetailResponse.model_validate(reservoir_entity)
 
 
@@ -101,7 +101,7 @@ async def update_reservoir(
     """更新水库"""
     reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
     if not reservoir_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "水库不存在")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
     if (
         update_reservoir_request.code is not None
         and update_reservoir_request.code != reservoir_entity.code
@@ -155,41 +155,34 @@ async def delete_reservoir(db: AsyncSession, reservoir_id: int):
 
 async def _sync_reservoir_to_neo4j(reservoir_id: int, action: str, entity_code: str | None = None):
     """同步水库到 Neo4j"""
-    db = None
-    neo4j_session = None
     try:
-        db = get_background_db_session()
-        neo4j_session = driver.session()
-        if action == "delete":
-            await neo4j_session.run(
-                "MATCH (n:Reservoir {code: $code}) DETACH DELETE n",
-                code=entity_code,
-            )
-            return
+        async with driver.session() as neo4j_session:
+            if action == "delete":
+                await neo4j_session.run(
+                    "MATCH (n:Reservoir {code: $code}) DETACH DELETE n",
+                    code=entity_code,
+                )
+                return
 
-        entity = await db.get(models_reservoir.Reservoir, reservoir_id)
-        if not entity:
-            return
+            async with get_background_db_session() as db:
+                entity = await db.get(models_reservoir.Reservoir, reservoir_id)
+                if not entity:
+                    return
 
-        await neo4j_session.run(
-            """MERGE (n:Reservoir {code: $code})
-               ON CREATE SET n.name = $name, n.waterGrade = $waterGrade,
-                   n.capacity = $capacity, n.watershed = $watershed,
-                   n.longitude = $longitude, n.latitude = $latitude
-               ON MATCH SET n.name = $name, n.waterGrade = $waterGrade,
-                   n.capacity = $capacity, n.watershed = $watershed,
-                   n.longitude = $longitude, n.latitude = $latitude""",
-            code=entity.code, name=entity.name,
-            waterGrade=entity.water_grade,
-            capacity=entity.capacity,
-            watershed=entity.watershed,
-            longitude=entity.longitude,
-            latitude=entity.latitude,
-        )
+                await neo4j_session.run(
+                    """MERGE (n:Reservoir {code: $code})
+                       ON CREATE SET n.name = $name, n.waterGrade = $waterGrade,
+                           n.capacity = $capacity, n.watershed = $watershed,
+                           n.longitude = $longitude, n.latitude = $latitude
+                       ON MATCH SET n.name = $name, n.waterGrade = $waterGrade,
+                           n.capacity = $capacity, n.watershed = $watershed,
+                           n.longitude = $longitude, n.latitude = $latitude""",
+                    code=entity.code, name=entity.name,
+                    waterGrade=entity.water_grade,
+                    capacity=entity.capacity,
+                    watershed=entity.watershed,
+                    longitude=entity.longitude,
+                    latitude=entity.latitude,
+                )
     except Exception as e:
         logger.error(f"Neo4j 水库同步失败: id={reservoir_id}, action={action}, error={e}")
-    finally:
-        if neo4j_session:
-            await neo4j_session.close()
-        if db:
-            await db.close()

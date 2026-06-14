@@ -142,33 +142,26 @@ async def delete_indicator(
 
 async def _sync_indicator_to_neo4j(indicator_id: int, action: str, entity_code: str | None = None):
     """同步监测指标到 Neo4j"""
-    db = None
-    neo4j_session = None
     try:
-        db = get_background_db_session()
-        neo4j_session = driver.session()
-        if action == "delete":
-            await neo4j_session.run(
-                "MATCH (n:Indicator {code: $code}) DETACH DELETE n",
-                code=entity_code,
-            )
-            return
+        async with driver.session() as neo4j_session:
+            if action == "delete":
+                await neo4j_session.run(
+                    "MATCH (n:Indicator {code: $code}) DETACH DELETE n",
+                    code=entity_code,
+                )
+                return
 
-        entity = await db.get(models_indicator.Indicator, indicator_id)
-        if not entity:
-            return
+            async with get_background_db_session() as db:
+                entity = await db.get(models_indicator.Indicator, indicator_id)
+                if not entity:
+                    return
 
-        await neo4j_session.run(
-            """MERGE (i:Indicator {code: $code})
-               ON CREATE SET i.name = $name, i.unit = $unit, i.category = $category
-               ON MATCH SET i.name = $name, i.unit = $unit, i.category = $category""",
-            code=entity.code, name=entity.name,
-            unit=entity.unit, category=entity.category,
-        )
+                await neo4j_session.run(
+                    """MERGE (i:Indicator {code: $code})
+                       ON CREATE SET i.name = $name, i.unit = $unit, i.category = $category
+                       ON MATCH SET i.name = $name, i.unit = $unit, i.category = $category""",
+                    code=entity.code, name=entity.name,
+                    unit=entity.unit, category=entity.category,
+                )
     except Exception as e:
         logger.error(f"Neo4j 指标同步失败: id={indicator_id}, action={action}, error={e}")
-    finally:
-        if neo4j_session:
-            await neo4j_session.close()
-        if db:
-            await db.close()

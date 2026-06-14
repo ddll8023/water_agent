@@ -1,34 +1,42 @@
+"""Agent 工作流状态定义"""
+
 from enum import IntEnum
 from typing import TypedDict
-
 from pydantic import BaseModel
 
 
 class PatrolStatus(IntEnum):
-    """巡检执行状态（与 patrol_log.status 字段一致）"""
+    """Collector Agent 执行状态"""
 
-    SUCCESS = 0  # 成功
-    PARTIAL = 1  # 部分失败（有错误但有记录入库）
-    FAILED = 2  # 失败
-    NO_DATA = 3  # 无数据
+    SUCCESS = 0
+    PARTIAL = 1
+    FAILED = 2
+    NO_DATA = 3
 
 
 class ProcessResult(BaseModel):
-    """Node2 处理入库的产出统计"""
+    """process_and_save_data 产出统计"""
 
     station_count: int
     record_count: int
-    pending_alerts: list[
-        dict
-    ]  # 待判定的预警数据[{indicator_id, reservoir_id, value, record_time}]
+    pending_alerts: list[dict]
     cached_records: list[dict]
-    error_info: str | None = None
+    error_info: str | None
+
+
+class AnalystStatus(IntEnum):
+    """Analyst Agent 执行状态"""
+
+    SUCCESS = 0
+    PARTIAL = 1
+    FAILED = 2
+    NO_DATA = 3
 
 
 class PatrolState(TypedDict):
-    """Patrol 巡检预警工作流状态"""
+    """Collector Agent 巡检预警工作流状态"""
 
-    status: PatrolStatus | None  # None=初始
+    status: PatrolStatus | None
     raw_data: dict | None
     process_result: ProcessResult | None
     target_reservoir_id: int | None
@@ -36,6 +44,22 @@ class PatrolState(TypedDict):
     error: str | None
     start_time: str | None
     duration_ms: int | None
-    should_analyze: bool | None  # None=未判断  True=满足12h条件  False=不满足
-    analysis_summary: str | None
-    supplementary_alerts: list | None
+
+
+class AnalystState(TypedDict):
+    """Analyst Agent 趋势分析工作流状态"""
+
+    status: AnalystStatus | None
+    period_start: str | None
+    period_end: str | None
+    reservoirs_data: list | None
+    features: list | None
+    llm_output: dict | None
+    supplementary_alert_ids: list[int] | None
+    analysis_ids: list[int] | None
+    error: str | None
+    start_time: str | None
+    duration_ms: int | None
+
+
+

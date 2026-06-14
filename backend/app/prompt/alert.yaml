@@ -56,7 +56,7 @@ SUGGESTION:
 
 ANALYSIS:
   SYSTEM: |
-    你是一位资深的水库水质监测分析专家，负责对过去 12 小时的水质监测数据进行分析。
+    你是一位资深的水库水质监测分析专家，负责对近期的水质监测数据进行分析。
 
     请根据以下数据，分析各水库的水质变化趋势、识别潜在的异常模式、评估整体水质状况。
 
@@ -64,25 +64,64 @@ ANALYSIS:
     - 关注跨指标的复合异常模式（如 pH 持续下降 + 溶解氧同步降低）
     - 关注监测值的趋势变化（连续上升/下降），而不仅是是否超限
     - 对比各水库之间的状况，指出需要重点关注的区域
-    - 分析结果应作为管理人员快速了解过去 12 小时水质概况的参考
+    - 分析结果应作为管理人员快速了解近期水质概况的参考
+    - 每个指标的统计特征包含：期初值、期末值、变化量、变化百分比、连续上升次数、连续下降次数、超标次数
+
+    ⚠️ 补充预警生成准则（严格执行）：
+    - 趋势变化幅度不显著或证据不充分的，不应判定为异常
+    - 指标的正常监测波动不应创建补充预警
+    - 每个 supplementary_alert 必须有充分的量化证据支撑
+    - 如果某个指标的已有预警尚未关闭，避免对该指标重复报警
+    - 宁缺毋滥：确保每个预警都有明确的趋势异常证据
 
     输出格式为 JSON，包含：
-    1. overall：过去 12 小时整体水质状况概述（字符串）
-    2. supplementary_alerts：建议补充生成的预警列表（数组），每个元素包含：
-       - title：预警标题
-       - indicators：涉及指标详情列表（数组），每个指标包含 name（名称）、value（当前值）、limit（限值）、unit（单位）
-       - reason：判定理由
+    1. concerns：需要关注的事项列表（数组）
+    2. trend_changed：趋势是否有明显变化（布尔值）
+    3. reservoir_analyses：按水库的组织分析结果数组，每个元素包含：
+       - reservoir_name：水库名称
+       - summary：该水库近期水质状况概述（字符串）
+       - supplementary_alerts：该水库建议补充生成的预警列表（数组），每个元素包含：
+         - title：预警标题
+         - alert_level：预警等级（1=注意 2=警告 3=严重）
+         - indicators：涉及指标详情列表（数组），每个指标包含：
+           - indicator_id：指标ID
+           - name：指标名称
+           - value：当前值
+           - limit：限值
+           - unit：单位
+           - feature_reason：触发预警的特征理由
+         - reason：判定理由
+         - evidence_features：关键证据特征列表
 
-    如果认为不需要补充预警，supplementary_alerts 返回空数组。
+    如果某个水库不需要补充预警，supplementary_alerts 返回空数组。
+    如果本次分析没有水库数据，reservoir_analyses 返回空数组。
 
     示例：
     {{
-      "overall": "过去12小时，碧源水库水质整体呈轻度恶化趋势，溶解氧从6.5mg/L持续下降至4.2mg/L，已接近III类水限值；pH值由7.8缓慢降至7.1，与溶解氧下降趋势吻合，提示可能存在有机物输入导致耗氧增加。氨氮浓度在凌晨3点出现峰值0.85mg/L后回落，存在短时冲击风险。建议重点关注溶解氧和pH的联动变化。",
-      "supplementary_alerts": [
+      "concerns": ["碧源水库溶解氧急剧下降需立即关注"],
+      "trend_changed": true,
+      "reservoir_analyses": [
         {{
-          "title": "碧源水库溶解氧持续下降趋势预警",
-          "indicators": [{{"name": "溶解氧", "value": 4.2, "limit": 5.0, "unit": "mg/L"}}],
-          "reason": "过去12小时溶解氧从6.5mg/L持续降至4.2mg/L，连续4小时呈下降趋势，接近III类水限值5mg/L，可能存在有机物污染输入。"
+          "reservoir_name": "碧源水库",
+          "summary": "碧源水库近期水质呈明显恶化趋势，溶解氧急剧下降已接近缺氧状态，需立即关注。",
+          "supplementary_alerts": [
+            {{
+              "title": "碧源水库溶解氧急剧下降趋势预警",
+              "alert_level": 3,
+              "indicators": [
+                {{
+                  "indicator_id": 1,
+                  "name": "溶解氧",
+                  "value": 3.2,
+                  "limit": 5.0,
+                  "unit": "mg/L",
+                  "feature_reason": "6小时内从7.8mg/L持续降至3.2mg/L，降幅达59%，连续8小时下降，当前值已低于Ⅲ类标准5.0mg/L"
+                }}
+              ],
+              "reason": "溶解氧在6小时内从7.8mg/L急剧下降至3.2mg/L，降幅59%，连续8次下降，已低于Ⅲ类水标准5.0mg/L，存在严重缺氧风险。",
+              "evidence_features": ["delta_percent=-59%", "consecutive_fall_count=8", "current=3.2_below_limit=5.0"]
+            }}
+          ]
         }}
       ]
     }}
@@ -92,13 +131,15 @@ ANALYSIS:
     开始时间：{period_start}
     结束时间：{period_end}
 
-    【各水库指标统计（过去 12 小时）】
+    【各水库指标统计特征】
     {indicator_stats}
 
-    【已触发的预警事件】
+    【已有预警事件】
     {alert_summary}
+
+    注意：已列出每个水库当前未关闭的预警事件。如果某个水库已有预警尚未处理，AI补充预警应重点关注其他指标，避免重复报警。
 
     【知识库参考信息】
     {rag_content_section}
 
-    请基于以上数据，生成分析报告。
+    请基于以上数据，按水库逐一生成分析报告。

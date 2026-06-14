@@ -107,7 +107,7 @@ async def get_monitoring_station_detail(
         models_station.MonitoringStation, monitoring_station_id
     )
     if not monitoring_station_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "监测站点不存在")
     return schemas_stations.GetMonitoringStationDetailResponse.model_validate(
         monitoring_station_entity
     )
@@ -123,7 +123,7 @@ async def update_monitoring_station(
         models_station.MonitoringStation, monitoring_station_id
     )
     if not monitoring_station_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "监测站点不存在")
     if update_monitoring_station_request.name is not None:
         monitoring_station_entity.name = update_monitoring_station_request.name
     if (
@@ -173,7 +173,7 @@ async def delete_monitoring_station(
         models_station.MonitoringStation, monitoring_station_id
     )
     if not monitoring_station_entity:
-        raise ServiceException(ErrorCode.RESOURCE_NOT_FOUND, "监测站点不存在")
+        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "监测站点不存在")
     code = monitoring_station_entity.code
     await db.delete(monitoring_station_entity)
     await commit_or_rollback(db)
@@ -186,57 +186,50 @@ async def delete_monitoring_station(
 
 async def _sync_station_to_neo4j(station_id: int, action: str, entity_code: str | None = None):
     """同步监测站点到 Neo4j（含 BELONGS_TO + MEASURES）"""
-    db = None
-    neo4j_session = None
     try:
-        db = get_background_db_session()
-        neo4j_session = driver.session()
-        if action == "delete":
-            await neo4j_session.run(
-                "MATCH (n:MonitoringStation {code: $code}) DETACH DELETE n",
-                code=entity_code,
-            )
-            return
+        async with driver.session() as neo4j_session:
+            if action == "delete":
+                await neo4j_session.run(
+                    "MATCH (n:MonitoringStation {code: $code}) DETACH DELETE n",
+                    code=entity_code,
+                )
+                return
 
-        entity = await db.get(models_station.MonitoringStation, station_id)
-        if not entity:
-            return
+            async with get_background_db_session() as db:
+                entity = await db.get(models_station.MonitoringStation, station_id)
+                if not entity:
+                    return
 
-        await neo4j_session.run(
-            """MERGE (s:MonitoringStation {code: $code})
-               ON CREATE SET s.name = $name, s.type = $type,
-                   s.longitude = $longitude, s.latitude = $latitude,
-                   s.samplingPoint = $samplingPoint
-               ON MATCH SET s.name = $name, s.type = $type,
-                   s.longitude = $longitude, s.latitude = $latitude,
-                   s.samplingPoint = $samplingPoint""",
-            code=entity.code, name=entity.name, type=entity.type,
-            longitude=entity.longitude,
-            latitude=entity.latitude,
-            samplingPoint=entity.sampling_point,
-        )
+                await neo4j_session.run(
+                    """MERGE (s:MonitoringStation {code: $code})
+                       ON CREATE SET s.name = $name, s.type = $type,
+                           s.longitude = $longitude, s.latitude = $latitude,
+                           s.samplingPoint = $samplingPoint
+                       ON MATCH SET s.name = $name, s.type = $type,
+                           s.longitude = $longitude, s.latitude = $latitude,
+                           s.samplingPoint = $samplingPoint""",
+                    code=entity.code, name=entity.name, type=entity.type,
+                    longitude=entity.longitude,
+                    latitude=entity.latitude,
+                    samplingPoint=entity.sampling_point,
+                )
 
-        reservoir = await db.get(models_reservoir.Reservoir, entity.reservoir_id)
-        if reservoir:
-            await neo4j_session.run(
-                """MATCH (s:MonitoringStation {code: $scode})
-                   MATCH (r:Reservoir {code: $rcode})
-                   MERGE (s)-[:BELONGS_TO]->(r)""",
-                scode=entity.code, rcode=reservoir.code,
-            )
+                reservoir = await db.get(models_reservoir.Reservoir, entity.reservoir_id)
+                if reservoir:
+                    await neo4j_session.run(
+                        """MATCH (s:MonitoringStation {code: $scode})
+                           MATCH (r:Reservoir {code: $rcode})
+                           MERGE (s)-[:BELONGS_TO]->(r)""",
+                        scode=entity.code, rcode=reservoir.code,
+                    )
 
-        indicators = (await db.execute(select(models_indicator.Indicator))).scalars().all()
-        for ind in indicators:
-            await neo4j_session.run(
-                """MATCH (s:MonitoringStation {code: $scode})
-                   MATCH (i:Indicator {code: $icode})
-                   MERGE (s)-[:MEASURES]->(i)""",
-                scode=entity.code, icode=ind.code,
-            )
+                indicators = (await db.execute(select(models_indicator.Indicator))).scalars().all()
+                for ind in indicators:
+                    await neo4j_session.run(
+                        """MATCH (s:MonitoringStation {code: $scode})
+                           MATCH (i:Indicator {code: $icode})
+                           MERGE (s)-[:MEASURES]->(i)""",
+                        scode=entity.code, icode=ind.code,
+                    )
     except Exception as e:
         logger.error(f"Neo4j 站点同步失败: id={station_id}, action={action}, error={e}")
-    finally:
-        if neo4j_session:
-            await neo4j_session.close()
-        if db:
-            await db.close()

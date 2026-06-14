@@ -66,3 +66,6 @@ class ErrorCode(IntEnum):
 
     # 资源已存在
     RESOURCE_ALREADY_EXISTS = 7001
+
+    # 业务逻辑错误
+    BUSINESS_ERROR = 7002

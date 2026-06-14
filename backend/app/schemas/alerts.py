@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 from app.schemas import graph as schemas_graph
 
@@ -142,10 +142,18 @@ class GetAlertListResponse(BaseModel):
     )
     source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     status: int = Field(description="状态：0=待确认/1=已确认/2=处置中/3=已解决")
+    suggestion_status: int = Field(
+        default=0, description="建议状态：0=无 1=生成中 2=已生成 3=已确认"
+    )
     detected_at: datetime = Field(description="检出时间")
     resolved_at: datetime | None = Field(None, description="解决时间")
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("suggestion_status", mode="before")
+    @classmethod
+    def coerce_suggestion_status(cls, v):
+        return 0 if v is None else v
 
 
 class GetAlertDetailResponse(BaseModel):
@@ -161,6 +169,9 @@ class GetAlertDetailResponse(BaseModel):
     source_desc: str | None = Field(None, description="溯源描述")
     source: int | None = Field(None, description="来源：0=规则判定 1=Agent趋势分析")
     suggestion: list[dict] | None = Field(default=None, description="处置建议")
+    suggestion_status: int = Field(
+        default=0, description="建议状态：0=无 1=生成中 2=已生成 3=已确认"
+    )
     notes: list[AlertNoteItem] | None = Field(
         default_factory=list, description="处置备注列表"
     )

@@ -42,6 +42,14 @@ export function useAlertWebSocket() {
             duration: 8000,
             onClick: () => router.push(`/alerts/${msg.data.id}`)
           })
+        } else if (msg.type === 'suggestion_ready') {
+          ElNotification({
+            title: 'AI 建议已生成',
+            message: `预警 #${msg.alert_id} 的处置建议已就绪`,
+            type: 'info',
+            duration: 6000,
+            onClick: () => router.push(`/alerts/${msg.alert_id}`)
+          })
         }
       } catch {
         /* 消息解析失败，静默忽略 */

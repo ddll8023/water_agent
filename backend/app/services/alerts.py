@@ -3,16 +3,14 @@ from datetime import datetime
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from neo4j import AsyncDriver
-
 from app.models import alert as models_alert
 from app.models import reservoir as models_reservoir
 from app.schemas import alerts as schemas_alerts
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
 from app.models import user as models_user
-from app.core.database import commit_or_rollback
+from app.core.database import commit_or_rollback, get_background_db_session
 from app.services import graph as services_graph
-import asyncio
 from app.core.config import settings
 from app.utils.logger_config import setup_logger
 from app.utils.retriever import ensemble_retrieve
@@ -180,73 +178,109 @@ async def batch_read_alerts(
     return True
 
 
-async def llm_suggestion(db: AsyncSession, neo4j_driver: AsyncDriver, alert_id: int):
-    """AI 建议提示词"""
+async def confirm_suggestion(db: AsyncSession, alert_id: int):
+    """确认 AI 处置建议"""
     alert_entity = await db.get(models_alert.AlertEvent, alert_id)
     if not alert_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "预警记录不存在")
-
-    reservoir_entity = await db.get(
-        models_reservoir.Reservoir, alert_entity.reservoir_id
-    )
-    if not reservoir_entity:
-        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
-
-    source_desc = json.dumps(
-        (
-            await services_graph.trace_pollution(neo4j_driver, reservoir_entity.code)
-        ).model_dump()
-    )
-
-    query = (
-        " ".join(
-            [ind.get("name", "") for ind in alert_entity.indicators if ind.get("name")]
+    status_labels = {0: "未生成", 1: "生成中", 2: "已生成", 3: "已确认"}
+    current = status_labels.get(alert_entity.suggestion_status, "未知")
+    if alert_entity.suggestion_status != 2:
+        raise ServiceException(
+            ErrorCode.BUSINESS_ERROR,
+            f"建议状态不允许确认（当前：{current}）",
         )
-        + " 超标 处置 应急 水质标准"
-    )
-    rag_doc_list = await ensemble_retrieve(query, top_k=10)
-    rag_content_section = ""
-    for index, doc in enumerate(rag_doc_list):
-        rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
-
-    suggestion_input = schemas_alerts.SuggestionPromptInputItem(
-        reservoir_name=reservoir_entity.name,
-        reservoir_code=reservoir_entity.code,
-        reservoir_location=reservoir_entity.location,
-        watershed=reservoir_entity.watershed,
-        capacity=reservoir_entity.capacity,
-        water_grade=reservoir_entity.water_grade,
-        alert_level=alert_entity.alert_level,
-        detected_at=alert_entity.detected_at,
-        source_desc=source_desc,
-        indicators_text=json.dumps(alert_entity.indicators),
-        rag_content_section=rag_content_section,
-    )
-
-    system_prompt = PromptTemplate.from_template(
-        get_prompt.alert["SUGGESTION"]["SYSTEM"]
-    ).format()
-    user_prompt = PromptTemplate.from_template(
-        get_prompt.alert["SUGGESTION"]["USER"]
-    ).format(**suggestion_input.model_dump())
-    llm_messages = [(SystemMessage(system_prompt)), (HumanMessage(user_prompt))]
-
-    model = get_model.build_chat_model(thinking=False)
-
-    chain = model | JsonOutputParser()
-    try:
-        json_output: list[dict] = await chain.ainvoke(llm_messages)
-    except Exception as e:
-        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, f"生成建议错误:{str(e)}")
-
-    logger.info(f"ai生成建议完成")
-
-    alert_entity.suggestion = json_output
+    alert_entity.suggestion_status = 3
     await commit_or_rollback(db)
+    return schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)
 
-    return schemas_alerts.LLMSuggestionResponse(
-        lists=[schemas_alerts.LLMSuggestionItem.model_validate(r) for r in json_output]
-    )
+
+async def llm_suggestion(alert_id: int):
+    """为指定预警生成 AI 处置建议（自建 DB/Neo4j session）"""
+    from app.core.neo4j import driver as neo4j_driver
+
+    async with get_background_db_session() as db:
+        alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+        if not alert_entity:
+            logger.warning(f"预警不存在，跳过建议生成: alert_id={alert_id}")
+            return
+
+        if alert_entity.suggestion_status == 1:
+            logger.info(f"建议生成中，跳过重复触发: alert_id={alert_id}")
+            return
+
+        alert_entity.suggestion_status = 1
+        await commit_or_rollback(db)
+
+    async with get_background_db_session() as db:
+        try:
+            alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+            if not alert_entity:
+                logger.warning(f"预警不存在, alert_id={alert_id}")
+                return
+
+            reservoir_entity = await db.get(
+                models_reservoir.Reservoir, alert_entity.reservoir_id
+            )
+            if not reservoir_entity:
+                logger.warning(f"水库不存在, alert_id={alert_id}")
+                return
+
+            async with neo4j_driver.session() as neo4j_session:
+                source_desc = json.dumps(
+                    (
+                        await services_graph.trace_pollution(neo4j_session, reservoir_entity.code)
+                    ).model_dump()
+                )
+
+            query = (
+                " ".join(
+                    [ind.get("name", "") for ind in alert_entity.indicators if ind.get("name")]
+                )
+                + " 超标 处置 应急 水质标准"
+            )
+            rag_doc_list = await ensemble_retrieve(query, top_k=10)
+            rag_content_section = ""
+            for index, doc in enumerate(rag_doc_list):
+                rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
+
+            suggestion_input = schemas_alerts.SuggestionPromptInputItem(
+                reservoir_name=reservoir_entity.name,
+                reservoir_code=reservoir_entity.code,
+                reservoir_location=reservoir_entity.location,
+                watershed=reservoir_entity.watershed,
+                capacity=reservoir_entity.capacity,
+                water_grade=reservoir_entity.water_grade,
+                alert_level=alert_entity.alert_level,
+                detected_at=alert_entity.detected_at,
+                source_desc=source_desc,
+                indicators_text=json.dumps(alert_entity.indicators),
+                rag_content_section=rag_content_section,
+            )
+
+            system_prompt = PromptTemplate.from_template(
+                get_prompt.alert["SUGGESTION"]["SYSTEM"]
+            ).format()
+            user_prompt = PromptTemplate.from_template(
+                get_prompt.alert["SUGGESTION"]["USER"]
+            ).format(**suggestion_input.model_dump())
+            llm_messages = [(SystemMessage(system_prompt)), (HumanMessage(user_prompt))]
+
+            model = get_model.build_chat_model(thinking=False)
+
+            chain = model | JsonOutputParser()
+            json_output: list[dict] = await chain.ainvoke(llm_messages)
+
+            logger.info(f"ai生成建议完成, alert_id={alert_id}")
+
+            alert_entity.suggestion = json_output
+            alert_entity.suggestion_status = 2
+            await commit_or_rollback(db)
+        except Exception:
+            if alert_entity:
+                alert_entity.suggestion_status = 0
+                await commit_or_rollback(db)
+            logger.error(f"建议生成异常: alert_id={alert_id}", exc_info=True)
 
 
 async def get_similar_events(

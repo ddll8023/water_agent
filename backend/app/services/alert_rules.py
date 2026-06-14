@@ -1,14 +1,16 @@
 """预警规则管理服务"""
 
+import json
 import math
 from datetime import datetime
+from typing import Optional
+
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import alert_rule as models_alert_rule
 from app.models import indicator as models_indicator
 from app.models import alert as models_alert
-from app.models import reservoir as models_reservoir
 from app.schemas import alert_rules as schemas_alert_rules
 from app.schemas.common import PaginatedResponse, PaginationInfo, ErrorCode
 from app.utils.exception import ServiceException
@@ -18,7 +20,6 @@ from app.schemas import alerts as schemas_alerts
 from app.utils.logger_config import setup_logger
 from app.core.redis import get_redis, is_redis_available
 from redis import Redis
-import json
 
 logger = setup_logger(__name__)
 
@@ -132,143 +133,46 @@ async def delete_alert_rule(
     return True
 
 
-async def evaluate_alert_rules(
-    db: AsyncSession,
-    indicator_id: int,
-    reservoir_id: int,
+def _evaluate_rule_trigger(
+    rule: models_alert_rule.AlertRule,
     indicator_entity: models_indicator.Indicator,
     current_value: float,
-    record_time: datetime,
-):
-    """对单条监测记录执行预警规则判定"""
-    rules = await _get_matched_rules(db, indicator_id, reservoir_id)
-    if not rules:
-        logger.info(f"没有匹配的预警规则，指标ID={indicator_id}，水库ID={reservoir_id}")
-        return False
+) -> tuple[bool, Optional[float]]:
+    """判断单条规则是否触发
 
-    triggered_items = []
-    for rule in rules:
-        cls = rule.trigger_class.lower()
-        if rule.compare_direction == "gt":
-            limit = getattr(indicator_entity, f"standard_limit_{cls}_upper", None)
-        else:
-            limit = getattr(indicator_entity, f"standard_limit_{cls}_lower", None)
+    返回 (triggered, limit_value):
+    - triggered=True 时 limit_value 为触发限值
+    - triggered=False 时 limit_value 为 None
 
+    规则：
+    - compare_direction="gt"：current_value > standard_limit_{cls}_upper 时触发
+    - compare_direction="lt"：current_value < standard_limit_{cls}_lower 时触发
+    - 限值为空时不触发
+    - 未知 compare_direction 时 warning 不触发
+    """
+    cls = rule.trigger_class.lower()
+
+    if rule.compare_direction == "gt":
+        limit = getattr(indicator_entity, f"standard_limit_{cls}_upper", None)
         if limit is None:
-            continue
+            return False, None
+        triggered = current_value > float(limit)
+        return (triggered, float(limit) if triggered else None)
 
-        if current_value > limit:
-            triggered_items.append(
-                {
-                    "rule": rule,
-                    "limit": float(limit),
-                }
-            )
-        elif current_value < limit:
-            triggered_items.append(
-                {
-                    "rule": rule,
-                    "limit": float(limit),
-                }
-            )
+    if rule.compare_direction == "lt":
+        limit = getattr(indicator_entity, f"standard_limit_{cls}_lower", None)
+        if limit is None:
+            return False, None
+        triggered = current_value < float(limit)
+        return (triggered, float(limit) if triggered else None)
 
-    if not triggered_items:
-        return False
-
-    reservoir = await db.get(models_reservoir.Reservoir, reservoir_id)
-
-    max_level_item = max(triggered_items, key=lambda x: x["rule"].alert_level)
-    rule = max_level_item["rule"]
-    limit = max_level_item["limit"]
-
-    alert_indicator_entry = {
-        "indicator_id": indicator_id,
-        "name": indicator_entity.name,
-        "value": current_value,
-        "limit": limit,
-        "unit": indicator_entity.unit or "",
-    }
-
-    # 查找该水库是否有未关闭预警 → 用于合并
-    existing_alert = await db.scalar(
-        select(models_alert.AlertEvent).where(
-            and_(
-                models_alert.AlertEvent.reservoir_id == reservoir_id,
-                models_alert.AlertEvent.status < 3,
-            )
-        ).order_by(models_alert.AlertEvent.detected_at.asc()).limit(1)
+    logger.warning(
+        f"未知的 compare_direction: {rule.compare_direction}, rule_id={rule.id}"
     )
-
-    if existing_alert:
-        existing_inds = existing_alert.indicators or []
-        existing_indicator_ids = {ind.get("indicator_id") for ind in existing_inds}
-
-        if indicator_id in existing_indicator_ids:
-            logger.info(f"该指标已在未关闭预警中，跳过: indicator_id={indicator_id}")
-            return False
-
-        # 不同指标 → 合并到现有预警
-        existing_inds.append(alert_indicator_entry)
-        existing_alert.indicators = existing_inds
-        existing_alert.alert_level = max(existing_alert.alert_level, rule.alert_level)
-        existing_alert.title = f"{reservoir.name}多指标复合告警（共{len(existing_inds)}项指标异常）"
-
-        await db.flush()
-        await db.refresh(existing_alert)
-        await _cache_to_redis(existing_alert)
-        await _broadcast_alert(existing_alert, "alert_updated")
-        return True
-
-    # 无未关闭预警 → 创建新预警
-    title = f"{reservoir.name}指标告警（{indicator_entity.name}={current_value}, 限值={limit}{indicator_entity.unit or ''}）"
-    alert_indicators = [alert_indicator_entry]
-
-    alert_entity = models_alert.AlertEvent(
-        reservoir_id=reservoir_id,
-        title=title,
-        alert_level=rule.alert_level,
-        indicators=alert_indicators,
-        status=0,
-        detected_at=record_time,
-    )
-    db.add(alert_entity)
-    await db.flush()
-    await db.refresh(alert_entity)
-    await _cache_to_redis(alert_entity)
-    await _broadcast_alert(alert_entity, "new_alert")
-    return True
+    return False, None
 
 
-"""辅助函数"""
-
-
-async def _get_matched_rules(db: AsyncSession, indicator_id: int, reservoir_id: int):
-    """查询匹配的预警规则"""
-    rules = (
-        await db.scalars(
-            select(models_alert_rule.AlertRule).where(
-                and_(
-                    models_alert_rule.AlertRule.indicator_id == indicator_id,
-                    models_alert_rule.AlertRule.is_active == 1,
-                    or_(
-                        models_alert_rule.AlertRule.reservoir_id == reservoir_id,
-                        models_alert_rule.AlertRule.reservoir_id.is_(None),
-                    ),
-                )
-            )
-        )
-    ).all()
-
-    reservoir_rules = [r for r in rules if r.reservoir_id == reservoir_id]
-    matched_ids = {r.indicator_id for r in reservoir_rules}
-    for g in rules:
-        if g.reservoir_id is None and g.indicator_id not in matched_ids:
-            reservoir_rules.append(g)
-
-    return reservoir_rules
-
-
-async def _broadcast_alert(alert_entity: models_alert.AlertEvent, event_type: str = "new_alert"):
+async def broadcast_alert(alert_entity: models_alert.AlertEvent, event_type: str = "new_alert"):
     """广播预警事件到 WebSocket"""
     try:
         alert_data = schemas_alerts.GetAlertDetailResponse.model_validate(alert_entity)
@@ -278,38 +182,45 @@ async def _broadcast_alert(alert_entity: models_alert.AlertEvent, event_type: st
                 "data": alert_data.model_dump(mode="json"),
             }
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            f"预警 WebSocket 广播失败: alert_id={alert_entity.id}, "
+            f"event_type={event_type}, error={e}"
+        )
 
 
-async def _cache_to_redis(alert_entity: models_alert.AlertEvent):
-    """缓存最近 5 条预警到 Redis（lpush + 去旧补新）"""
-    if not await is_redis_available():
-        return
-    key = "alert:recent"
-    redis_client: Redis = await get_redis()
+async def cache_alert_to_redis(alert_entity: models_alert.AlertEvent):
+    """缓存最近 5 条规则预警到 Redis（只缓存 source=0）"""
+    try:
+        if not await is_redis_available():
+            return
+        if alert_entity.source != 0:
+            return
+        key = "alert:recent"
+        redis_client: Redis = await get_redis()
 
-    alert_dict = {
-        "id": alert_entity.id,
-        "reservoir_id": alert_entity.reservoir_id,
-        "title": alert_entity.title,
-        "alert_level": alert_entity.alert_level,
-        "indicators": alert_entity.indicators,
-        "source": alert_entity.source,
-        "status": alert_entity.status,
-        "detected_at": alert_entity.detected_at.isoformat() if alert_entity.detected_at else None,
-    }
-    alert_json = json.dumps(alert_dict, ensure_ascii=False)
+        alert_dict = {
+            "id": alert_entity.id,
+            "reservoir_id": alert_entity.reservoir_id,
+            "title": alert_entity.title,
+            "alert_level": alert_entity.alert_level,
+            "indicators": alert_entity.indicators,
+            "source": alert_entity.source,
+            "status": alert_entity.status,
+            "detected_at": alert_entity.detected_at.isoformat() if alert_entity.detected_at else None,
+        }
+        alert_json = json.dumps(alert_dict, ensure_ascii=False)
 
-    # 删除同 ID 的旧条目（合并场景需要更新旧条目）
-    existing = await redis_client.lrange(key, 0, -1)
-    for item in existing:
-        try:
-            raw = item if isinstance(item, str) else item.decode()
-            if json.loads(raw).get("id") == alert_entity.id:
-                await redis_client.lrem(key, 0, item)
-        except Exception:
-            continue
+        existing = await redis_client.lrange(key, 0, -1)
+        for item in existing:
+            try:
+                raw = item if isinstance(item, str) else item.decode()
+                if json.loads(raw).get("id") == alert_entity.id:
+                    await redis_client.lrem(key, 0, item)
+            except Exception:
+                continue
 
-    await redis_client.lpush(key, alert_json)
-    await redis_client.ltrim(key, 0, 4)
+        await redis_client.lpush(key, alert_json)
+        await redis_client.ltrim(key, 0, 4)
+    except Exception as e:
+        logger.error(f"预警 Redis 缓存失败: alert_id={alert_entity.id}, error={e}")

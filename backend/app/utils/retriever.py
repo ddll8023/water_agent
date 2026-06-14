@@ -25,6 +25,11 @@ async def ensemble_retrieve(query: str, top_k: int = 10):
             for t, m in zip(stored["documents"], stored["metadatas"])
         ]
 
+        if not all_docs:
+            logger.info("ensemble_retrieve: 知识库为空，跳过 RAG 检索")
+            return []
+
+        logger.info(f"EnsembleRetriever 初始化完成: total_docs={len(all_docs)}")
         _ensemble_retriever = EnsembleRetriever(
             retrievers=[
                 vector_store.as_retriever(search_kwargs={"k": 30}),
@@ -33,9 +38,7 @@ async def ensemble_retrieve(query: str, top_k: int = 10):
             weights=[0.5, 0.5],
             c=60,
         )
-        logger.info(f"EnsembleRetriever 初始化完成: total_docs={len(all_docs)}")
 
     documents = await _ensemble_retriever.ainvoke(query)
-    logger.info(f"RRF检索完成: query={query} result_count={len(documents)}")
 
     return documents[:top_k]

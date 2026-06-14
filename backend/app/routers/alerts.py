@@ -189,3 +189,21 @@ async def llm_suggestion(
         return success(data=result)
     except ServiceException as e:
         return error(code=e.code, message=e.message)
+
+
+@router.put(
+    "/{id}/suggestion/confirm",
+    response_model=ApiResponse[schemas_alerts.GetAlertDetailResponse],
+    dependencies=[Depends(require_role("admin", "user"))],
+    summary="确认AI处置建议",
+)
+async def confirm_suggestion(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    id: Annotated[int, Path(description="预警ID")],
+):
+    """确认AI处置方案"""
+    try:
+        result = await services_alerts.confirm_suggestion(db, id)
+        return success(data=result)
+    except ServiceException as e:
+        return error(code=e.code, message=e.message)
