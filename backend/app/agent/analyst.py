@@ -247,13 +247,15 @@ async def process_alerts(state: AnalystState):
     if not llm_output:
         return {"status": AnalystStatus.NO_DATA}
 
-    supplementary_alert_ids = []
+    supplementary_alert_ids = {}
     now = datetime.now()
 
     reservoir_analyses = llm_output.get("reservoir_analyses", [])
     if not reservoir_analyses:
         supplementary_alerts = llm_output.get("supplementary_alerts", [])
-        reservoir_analyses = [{"reservoir_id": None, "supplementary_alerts": supplementary_alerts}] if supplementary_alerts else []
+        if supplementary_alerts:
+            logger.warning("LLM 返回旧格式 supplementary_alerts（无 reservoir_id），跳过预警创建")
+            reservoir_analyses = []
 
     # 构建水库名称→ID 映射（LLM 输出 reservoir_name，需转为 ID）
     name_to_id = {}
@@ -267,20 +269,26 @@ async def process_alerts(state: AnalystState):
         if not alerts or not reservoir_id:
             continue
 
-        # 水库级跳过：已有未关闭的 AI 预警则整体跳过
+        # 按指标去重：查出该水库所有未关闭预警覆盖的指标名
         async with get_background_db_session() as db:
-            existing_ai_alert = await db.scalar(
-                select(models_alert.AlertEvent).where(
-                    models_alert.AlertEvent.reservoir_id == reservoir_id,
-                    models_alert.AlertEvent.source == 1,
-                    models_alert.AlertEvent.status < 3,
-                ).limit(1)
-            )
-        if existing_ai_alert:
+            existing_alerts = (
+                await db.scalars(
+                    select(models_alert.AlertEvent).where(
+                        models_alert.AlertEvent.reservoir_id == reservoir_id,
+                        models_alert.AlertEvent.status < 3,
+                    )
+                )
+            ).all()
+        existing_indicator_names = set()
+        for ea in existing_alerts:
+            for ind in (ea.indicators or []):
+                name = ind.get("name")
+                if name:
+                    existing_indicator_names.add(name)
+        if existing_indicator_names:
             logger.info(
-                f"水库 {reservoir_id} 已有未关闭的 AI 预警 (id={existing_ai_alert.id})，跳过补充预警"
+                f"水库 {reservoir_id} 已有未关闭预警覆盖指标: {existing_indicator_names}"
             )
-            continue
 
         async with get_background_db_session() as db:
             try:
@@ -290,9 +298,21 @@ async def process_alerts(state: AnalystState):
                     if res:
                         reservoir_name = res.name
 
+                suggestion_tasks = []
                 for sa in alerts:
                     indicators = sa.get("indicators", [])
                     if not indicators:
+                        continue
+
+                    # 只保留未被已有预警覆盖的指标
+                    new_indicators = [
+                        ind for ind in indicators
+                        if ind.get("name") not in existing_indicator_names
+                    ]
+                    if not new_indicators:
+                        logger.info(
+                            f"  ↳ 指标已全部被覆盖，跳过: {sa.get('title', '')}"
+                        )
                         continue
 
                     title = sa.get("title", f"{reservoir_name}AI趋势补充告警")
@@ -302,7 +322,7 @@ async def process_alerts(state: AnalystState):
                         reservoir_id=reservoir_id,
                         title=title,
                         alert_level=alert_level,
-                        indicators=indicators,
+                        indicators=new_indicators,
                         source=1,
                         status=0,
                         detected_at=now,
@@ -322,20 +342,24 @@ async def process_alerts(state: AnalystState):
                         await cache_alert_to_redis(alert_entry)
                     except Exception:
                         pass
-                    asyncio.create_task(llm_suggestion(alert_id))
-                    supplementary_alert_ids.append(alert_id)
+                    suggestion_tasks.append(asyncio.create_task(llm_suggestion(alert_id)))
+                    supplementary_alert_ids.setdefault(reservoir_id, []).append(alert_id)
+
+                if suggestion_tasks:
+                    await asyncio.gather(*suggestion_tasks, return_exceptions=True)
 
             except Exception as e:
                 logger.error(f"process_alerts 异常: reservoir_id={reservoir_id}, error={e}")
 
-    logger.info(f"process_alerts 完成 → 创建 {len(supplementary_alert_ids)} 个 AI 预警")
+    total_alerts = sum(len(v) for v in supplementary_alert_ids.values())
+    logger.info(f"process_alerts 完成 → 创建 {total_alerts} 个 AI 预警")
     return {"supplementary_alert_ids": supplementary_alert_ids}
 
 
 async def write_summary(state: AnalystState):
     """为每个水库写入 patrol_analysis 记录"""
     llm_output = state.get("llm_output")
-    supplementary_alert_ids = state.get("supplementary_alert_ids", [])
+    reservoir_alert_map = state.get("supplementary_alert_ids", {})
     reservoirs_data = state.get("reservoirs_data", [])
     if not llm_output:
         return {"status": AnalystStatus.NO_DATA}
@@ -373,7 +397,7 @@ async def write_summary(state: AnalystState):
                     period_start=period_start,
                     period_end=period_end,
                     summary=ra.get("summary", summary_text),
-                    supplementary_alert_ids=supplementary_alert_ids or None,
+                    supplementary_alert_ids=reservoir_alert_map.get(reservoir_id) or None,
                 )
                 db.add(pa)
                 await db.flush()

@@ -253,6 +253,7 @@ async def process_alerts(state: PatrolState):
                 await commit_or_rollback(db)
 
             # 在 commit 成功后执行外部副作用
+            suggestion_tasks = []
             for event_type, alert_id, alert_entity in post_commit_actions:
                 try:
                     await broadcast_alert(alert_entity, event_type)
@@ -262,7 +263,9 @@ async def process_alerts(state: PatrolState):
                     await cache_alert_to_redis(alert_entity)
                 except Exception as e:
                     logger.error(f"缓存失败: alert_id={alert_id}, error={e}")
-                asyncio.create_task(llm_suggestion(alert_id))
+                suggestion_tasks.append(asyncio.create_task(llm_suggestion(alert_id)))
+            if suggestion_tasks:
+                await asyncio.gather(*suggestion_tasks, return_exceptions=True)
 
         except Exception as e:
             logger.error(f"预警规则判定异常: {e}")

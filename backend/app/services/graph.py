@@ -222,9 +222,6 @@ async def trace_pollution(
     neo4j_driver: AsyncDriver, reservoir_code: str
 ):
     """污染溯源路径查询"""
-    from app.schemas.common import ErrorCode
-    from app.utils.exception import ServiceException
-
     node_query = """
         MATCH path = (ps:PollutionSource)-[d:DISCHARGES_INTO]->(river:River)-[f:FLOWS_INTO]->(res:Reservoir {code: $code})
         WITH nodes(path) AS path_nodes
@@ -251,7 +248,7 @@ async def trace_pollution(
         )
 
     if not nodes:
-        raise ServiceException(code=ErrorCode.DATA_NOT_FOUND, message="该水库暂无溯源数据")
+        return schemas_graph.GetTracePollutionResponse(nodes=[], edges=[], sources=[])
 
     edge_query = """
         MATCH path = (ps:PollutionSource)-[d:DISCHARGES_INTO]->(river:River)-[f:FLOWS_INTO]->(res:Reservoir {code: $code})

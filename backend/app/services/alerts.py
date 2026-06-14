@@ -1,3 +1,4 @@
+import asyncio
 import math
 from datetime import datetime
 from sqlalchemy import select, func
@@ -205,8 +206,8 @@ async def llm_suggestion(alert_id: int):
             logger.warning(f"预警不存在，跳过建议生成: alert_id={alert_id}")
             return
 
-        if alert_entity.suggestion_status == 1:
-            logger.info(f"建议生成中，跳过重复触发: alert_id={alert_id}")
+        if alert_entity.suggestion_status == 1 and alert_entity.suggestion is not None:
+            logger.info(f"建议已存在，跳过重复生成: alert_id={alert_id}")
             return
 
         alert_entity.suggestion_status = 1
@@ -226,60 +227,72 @@ async def llm_suggestion(alert_id: int):
                 logger.warning(f"水库不存在, alert_id={alert_id}")
                 return
 
-            async with neo4j_driver.session() as neo4j_session:
-                source_desc = json.dumps(
-                    (
-                        await services_graph.trace_pollution(neo4j_session, reservoir_entity.code)
-                    ).model_dump()
+            async def _do_suggestion():
+                nonlocal neo4j_driver
+                async with neo4j_driver.session() as neo4j_session:
+                    try:
+                        trace_result = await services_graph.trace_pollution(neo4j_session, reservoir_entity.code)
+                        source_desc = json.dumps(trace_result.model_dump())
+                    except Exception:
+                        source_desc = json.dumps({"nodes": [], "edges": [], "sources": []})
+
+                query = (
+                    " ".join(
+                        [ind.get("name", "") for ind in alert_entity.indicators if ind.get("name")]
+                    )
+                    + " 超标 处置 应急 水质标准"
+                )
+                rag_doc_list = await ensemble_retrieve(query, top_k=10)
+                rag_content_section = ""
+                for index, doc in enumerate(rag_doc_list):
+                    rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
+
+                suggestion_input = schemas_alerts.SuggestionPromptInputItem(
+                    reservoir_name=reservoir_entity.name,
+                    reservoir_code=reservoir_entity.code,
+                    reservoir_location=reservoir_entity.location,
+                    watershed=reservoir_entity.watershed,
+                    capacity=reservoir_entity.capacity,
+                    water_grade=reservoir_entity.water_grade,
+                    alert_level=alert_entity.alert_level,
+                    detected_at=alert_entity.detected_at,
+                    source_desc=source_desc,
+                    indicators_text=json.dumps(alert_entity.indicators),
+                    rag_content_section=rag_content_section,
                 )
 
-            query = (
-                " ".join(
-                    [ind.get("name", "") for ind in alert_entity.indicators if ind.get("name")]
-                )
-                + " 超标 处置 应急 水质标准"
+                system_prompt = PromptTemplate.from_template(
+                    get_prompt.alert["SUGGESTION"]["SYSTEM"]
+                ).format()
+                user_prompt = PromptTemplate.from_template(
+                    get_prompt.alert["SUGGESTION"]["USER"]
+                ).format(**suggestion_input.model_dump())
+                llm_messages = [(SystemMessage(system_prompt)), (HumanMessage(user_prompt))]
+
+                model = get_model.build_chat_model(thinking=False)
+
+                chain = model | JsonOutputParser()
+                return await chain.ainvoke(llm_messages)
+
+            json_output: dict = await asyncio.wait_for(
+                _do_suggestion(), timeout=120
             )
-            rag_doc_list = await ensemble_retrieve(query, top_k=10)
-            rag_content_section = ""
-            for index, doc in enumerate(rag_doc_list):
-                rag_content_section += f"第{index}个文档内容：\n{doc.page_content}\n"
-
-            suggestion_input = schemas_alerts.SuggestionPromptInputItem(
-                reservoir_name=reservoir_entity.name,
-                reservoir_code=reservoir_entity.code,
-                reservoir_location=reservoir_entity.location,
-                watershed=reservoir_entity.watershed,
-                capacity=reservoir_entity.capacity,
-                water_grade=reservoir_entity.water_grade,
-                alert_level=alert_entity.alert_level,
-                detected_at=alert_entity.detected_at,
-                source_desc=source_desc,
-                indicators_text=json.dumps(alert_entity.indicators),
-                rag_content_section=rag_content_section,
-            )
-
-            system_prompt = PromptTemplate.from_template(
-                get_prompt.alert["SUGGESTION"]["SYSTEM"]
-            ).format()
-            user_prompt = PromptTemplate.from_template(
-                get_prompt.alert["SUGGESTION"]["USER"]
-            ).format(**suggestion_input.model_dump())
-            llm_messages = [(SystemMessage(system_prompt)), (HumanMessage(user_prompt))]
-
-            model = get_model.build_chat_model(thinking=False)
-
-            chain = model | JsonOutputParser()
-            json_output: list[dict] = await chain.ainvoke(llm_messages)
 
             logger.info(f"ai生成建议完成, alert_id={alert_id}")
 
-            alert_entity.suggestion = json_output
+            alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+            alert_entity.source_desc = json_output.get("cause_analysis", "")
+            alert_entity.suggestion = json_output.get("steps", [])
             alert_entity.suggestion_status = 2
             await commit_or_rollback(db)
-        except Exception:
-            if alert_entity:
-                alert_entity.suggestion_status = 0
-                await commit_or_rollback(db)
+        except (asyncio.TimeoutError, Exception):
+            try:
+                alert_entity = await db.get(models_alert.AlertEvent, alert_id)
+                if alert_entity:
+                    alert_entity.suggestion_status = 0
+                    await commit_or_rollback(db)
+            except Exception:
+                pass
             logger.error(f"建议生成异常: alert_id={alert_id}", exc_info=True)
 
 
