@@ -238,16 +238,16 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiofiles", specifier = ">=24.1.0" },
+    { name = "aiofiles" },
     { name = "aiomysql" },
-    { name = "apscheduler", specifier = ">=3.11.2" },
+    { name = "apscheduler" },
     { name = "bcrypt" },
     { name = "cryptography" },
-    { name = "dashscope", specifier = ">=1.25.21" },
+    { name = "dashscope" },
     { name = "fastapi" },
-    { name = "jieba", specifier = ">=0.42.1" },
+    { name = "jieba" },
     { name = "langchain" },
-    { name = "langchain-chroma", specifier = ">=1.1.0" },
+    { name = "langchain-chroma" },
     { name = "langchain-community" },
     { name = "langchain-deepseek" },
     { name = "langchain-openai" },
@@ -260,11 +260,11 @@ requires-dist = [
     { name = "python-jose" },
     { name = "python-multipart" },
     { name = "pyyaml" },
-    { name = "rank-bm25", specifier = ">=0.2.2" },
+    { name = "rank-bm25" },
     { name = "redis" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
-    { name = "websockets", specifier = ">=16.0" },
+    { name = "websockets" },
 ]
 
 [[package]]

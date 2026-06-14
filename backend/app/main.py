@@ -48,6 +48,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Neo4j 图谱初始化异常（不影响服务启动）: %s", e)
 
+    # run_collector_agent()
+
     # Collector Agent：每 10 分钟采集与规则预警
     scheduler.add_job(
         run_collector_agent,

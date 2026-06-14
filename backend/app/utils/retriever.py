@@ -1,4 +1,4 @@
-"""RAG 双路检索工具（向量检索 + BM25 加权融合）"""
+import asyncio
 
 from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
@@ -19,7 +19,9 @@ async def ensemble_retrieve(query: str, top_k: int = 10):
     if _ensemble_retriever is None:
         vector_store = get_vector_store()
 
-        stored = vector_store.get(include=["documents", "metadatas"])
+        stored = await asyncio.to_thread(
+            vector_store.get, include=["documents", "metadatas"]
+        )
         all_docs = [
             Document(page_content=t, metadata=m)
             for t, m in zip(stored["documents"], stored["metadatas"])

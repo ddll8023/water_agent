@@ -29,6 +29,8 @@ from app.core.chroma import get_vector_store
 
 logger = setup_logger(__name__)
 
+_process_semaphore = asyncio.Semaphore(1)
+
 
 async def upload_document(
     db: AsyncSession,
@@ -167,8 +169,11 @@ async def delete_document(db: AsyncSession, document_id: int):
         os.remove(file_path)
     vector_store = get_vector_store()
     try:
-        await asyncio.to_thread(
-            vector_store._collection.delete, where={"doc_id": document_id}
+        await asyncio.wait_for(
+            asyncio.to_thread(
+                vector_store._collection.delete, where={"doc_id": document_id}
+            ),
+            timeout=30,
         )
     except Exception as e:
         raise ServiceException(message="chroma删除错误")
@@ -190,8 +195,11 @@ async def reprocess_document(db: AsyncSession, document_id: int):
     document_entity.error = None
     vector_store = get_vector_store()
     try:
-        await asyncio.to_thread(
-            vector_store._collection.delete, where={"doc_id": document_id}
+        await asyncio.wait_for(
+            asyncio.to_thread(
+                vector_store._collection.delete, where={"doc_id": document_id}
+            ),
+            timeout=30,
         )
     except Exception as e:
         raise ServiceException(message="chroma删除错误")
@@ -212,69 +220,73 @@ async def _validate_file(file: UploadFile):
 
 async def _process_document(document_id: int):
     """处理文档"""
-    logger.info(f"开始处理文档: doc_id={document_id}")
-    db = get_background_db_session()
-    document_entity = await db.get(models_document.KnowledgeDocument, document_id)
-    if not document_entity:
-        logger.warning(f"文档不存在: doc_id={document_id}")
-        raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
-    try:
-        file_text = await _extract_text(document_entity.file_path)
-        logger.info(f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}")
-        document_entity.content = file_text
-        # 切块
-        if document_entity.file_path.endswith("md"):
-            splitter = MarkdownHeaderTextSplitter(
-                headers_to_split_on=[("#", "title"), ("##", "section")]
-            )
-            doc_chunks = splitter.split_text(file_text)
-            splited_text_list = [doc.page_content for doc in doc_chunks]
-            metadatas_base = [doc.metadata for doc in doc_chunks]
-        else:
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=settings.CHUNK_SIZE,
-                chunk_overlap=settings.CHUNK_OVERLAP,
-                separators=settings.SEPARATORS,
-                length_function=len,
-            )
-            splited_text_list = splitter.split_text(file_text)
-            metadatas_base = [{} for _ in splited_text_list]
+    async with _process_semaphore:
+        logger.info(f"开始处理文档: doc_id={document_id}")
+        db = get_background_db_session()
+        document_entity = await db.get(models_document.KnowledgeDocument, document_id)
+        if not document_entity:
+            logger.warning(f"文档不存在: doc_id={document_id}")
+            raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
+        try:
+            file_text = await _extract_text(document_entity.file_path)
+            logger.info(f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}")
+            document_entity.content = file_text
+            # 切块
+            if document_entity.file_path.endswith("md"):
+                splitter = MarkdownHeaderTextSplitter(
+                    headers_to_split_on=[("#", "title"), ("##", "section")]
+                )
+                doc_chunks = splitter.split_text(file_text)
+                splited_text_list = [doc.page_content for doc in doc_chunks]
+                metadatas_base = [doc.metadata for doc in doc_chunks]
+            else:
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=settings.CHUNK_SIZE,
+                    chunk_overlap=settings.CHUNK_OVERLAP,
+                    separators=settings.SEPARATORS,
+                    length_function=len,
+                )
+                splited_text_list = splitter.split_text(file_text)
+                metadatas_base = [{} for _ in splited_text_list]
 
-        logger.info(
-            f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}"
-        )
-        # 向量化
-        vector_store = get_vector_store()
-        metadatas = []
-        for i, base_meta in enumerate(metadatas_base):
-            base_meta.update(
-                {
-                    "doc_id": document_id,
-                    "chunk_index": i,
-                    "doc_type": document_entity.doc_type,
-                }
+            logger.info(
+                f"文档切片完成: doc_id={document_id}, 切片数={len(splited_text_list)}"
             )
-            metadatas.append(base_meta)
-        chunk_ids_list = await asyncio.to_thread(
-            vector_store.add_texts,
-            texts=splited_text_list,
-            metadatas=metadatas,
-        )
-        logger.info(
-            f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}"
-        )
-        document_entity.chunk_count = len(chunk_ids_list)
-        document_entity.status = 2
-        await commit_or_rollback(db)
-        logger.info(f"文档处理完成: doc_id={document_id}")
-    except Exception as e:
-        logger.error(f"文档处理失败: doc_id={document_id}, {e}", exc_info=True)
-        db.rollback()
-        document_entity.status = 3
-        document_entity.error = str(e)
-        await commit_or_rollback(db)
-    finally:
-        await db.close()
+            # 向量化
+            vector_store = get_vector_store()
+            metadatas = []
+            for i, base_meta in enumerate(metadatas_base):
+                base_meta.update(
+                    {
+                        "doc_id": document_id,
+                        "chunk_index": i,
+                        "doc_type": document_entity.doc_type,
+                    }
+                )
+                metadatas.append(base_meta)
+            chunk_ids_list = await asyncio.wait_for(
+                asyncio.to_thread(
+                    vector_store.add_texts,
+                    texts=splited_text_list,
+                    metadatas=metadatas,
+                ),
+                timeout=120,
+            )
+            logger.info(
+                f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}"
+            )
+            document_entity.chunk_count = len(chunk_ids_list)
+            document_entity.status = 2
+            await commit_or_rollback(db)
+            logger.info(f"文档处理完成: doc_id={document_id}")
+        except Exception as e:
+            logger.error(f"文档处理失败: doc_id={document_id}, {e}", exc_info=True)
+            db.rollback()
+            document_entity.status = 3
+            document_entity.error = str(e)
+            await commit_or_rollback(db)
+        finally:
+            await db.close()
 
 
 async def _extract_text(filename: str):
