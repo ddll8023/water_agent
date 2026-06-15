@@ -10,7 +10,7 @@ node_modules
 .venv
 .claude
 .env
-
+.vscode
 .idea
 
 需求文档
