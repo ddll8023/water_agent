@@ -12,7 +12,7 @@ logger = setup_logger(__name__)
 _ensemble_retriever: EnsembleRetriever | None = None
 
 
-async def ensemble_retrieve(query: str, top_k: int = 10):
+async def ensemble_retrieve(query: str, top_k: int = 10, doc_type: str | None = None):
     """双路 RRF 检索：向量检索 + BM25 加权融合"""
     global _ensemble_retriever
 
@@ -42,5 +42,10 @@ async def ensemble_retrieve(query: str, top_k: int = 10):
         )
 
     documents = await _ensemble_retriever.ainvoke(query)
+
+    if doc_type:
+        documents = [d for d in documents if d.metadata.get("doc_type") == doc_type]
+        if not documents:
+            return []
 
     return documents[:top_k]

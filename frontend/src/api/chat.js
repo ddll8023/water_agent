@@ -66,8 +66,10 @@ export function fetchReChatStream({ query, session_id, message_id, onChunk, onDo
                     onThinking?.(event.content)
                     break
                   case 'progress':
-                    onProgress?.(event.stage, event.message)
+                    onProgress?.(event.stage, event.message, event.tool)
                     break
+
+
                 }
               } catch {
                 /* 单条事件解析失败，静默跳过 */
@@ -134,8 +136,10 @@ export function fetchChatStream({ query, session_id, onChunk, onDone, onError, o
                     onThinking?.(event.content)
                     break
                   case 'progress':
-                    onProgress?.(event.stage, event.message)
+                    onProgress?.(event.stage, event.message, event.tool)
                     break
+
+
                 }
               } catch {
                 /* 单条事件解析失败，静默跳过 */

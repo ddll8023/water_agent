@@ -96,7 +96,8 @@
         </div>
 
         <!-- 消息气泡 -->
-        <div v-for="(msg, index) in messages" :key="msg.id || index" class="mb-5 msg-enter">
+        <div v-for="(msg, index) in messages" :key="msg.id || index" class="mb-5"
+             :style="{ '--delay': Math.min(index * 0.04, 0.6) + 's' }">
           <!-- 用户消息 -->
           <div v-if="msg.role === 'user'" class="flex justify-end">
             <div class="max-w-[70%] group relative">
@@ -161,18 +162,39 @@
                 <!-- 正文 -->
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
 
-                <!-- 垂直时间线（流式中且无正文时） -->
-                <div v-if="msg.streaming && !msg.content" class="mt-2">
-                  <div v-for="s in msg.toolStages" :key="s" class="timeline-item">
-                    <div class="timeline-dot" :class="stageDot(s, msg.progressStage, msg.toolStages)"></div>
-                    <span class="timeline-label">{{ stageLabel(s) }}</span>
-                  </div>
-                  <div v-if="msg.thinking && msg.progressStage === 'generate'" class="ml-6 pl-4 border-l-2 border-teal-200 mb-1">
-                    <div class="thinking-content">{{ msg.thinking }}</div>
-                  </div>
-                  <div class="timeline-item">
-                    <div class="timeline-dot" :class="msg.progressStage === 'generate' ? 'timeline-dot-active' : 'timeline-dot-pending'"></div>
-                    <span class="timeline-label">生成回答</span>
+                <!-- 工具调用状态标签（流式中且无正文时） -->
+                <div v-if="msg.streaming && !msg.content" class="flex flex-wrap items-center gap-2 mt-2">
+                  <el-tag
+                    v-for="s in msg.toolStages" :key="s"
+                    :type="msg.progressStage === s ? 'warning' : 'success'"
+                    :effect="msg.progressStage === s ? 'light' : 'plain'"
+                    size="small"
+                    class="!text-xs transition-all duration-300"
+                  >
+                    <el-icon v-if="msg.progressStage === s" class="is-loading mr-1"><Loading /></el-icon>
+                    <el-icon v-else class="mr-0.5"><CircleCheck /></el-icon>
+                    {{ stageLabel(s) }}
+                  </el-tag>
+                  <el-tag
+                    type="info"
+                    effect="plain"
+                    size="small"
+                    class="!text-xs opacity-50"
+                  >
+                    {{ stageLabel('generate') }}
+                  </el-tag>
+                  <div v-if="msg.thinking && msg.progressStage === 'generate'" class="w-full text-xs text-teal-600 leading-relaxed whitespace-pre-wrap bg-teal-50 rounded-md px-3 py-2 mt-1">
+                    <template v-if="msg.content">
+                      <el-collapse accordion>
+                        <el-collapse-item title="思考过程" name="thinking">
+                          <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{{ msg.thinking }}</div>
+                        </el-collapse-item>
+                      </el-collapse>
+                    </template>
+                    <template v-else>
+                      <el-icon class="is-loading mr-1"><Loading /></el-icon>
+                      推理中
+                    </template>
                   </div>
                 </div>
 
@@ -263,11 +285,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { fetchChatStream, fetchReChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
 import {
   Plus, ChatLineSquare, Promotion, Refresh, Delete, EditPen,
-  DArrowLeft, DArrowRight, Document,
+  DArrowLeft, DArrowRight, Document, Loading, CircleCheck,
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { marked } from 'marked'
@@ -298,19 +320,14 @@ const editInputRef = ref(null)
 // 重试旋转状态
 const retryingMsgId = ref(null)
 
-function stageDot(stage, current, stages) {
-  const idx = stages.indexOf(stage)
-  const cur = stages.indexOf(current)
-  if (idx < cur) return 'timeline-dot-done'
-  if (idx === cur) return 'timeline-dot-active'
-  return 'timeline-dot-pending'
-}
-
 const stageLabels = {
-  intent: '识别意图',
-  retrieval: '检索知识库',
-  mysql_query: '查询监测数据',
-  graph_query: '查询知识图谱',
+  agent_plan: '规划策略',
+  search_knowledge_base: '检索知识库',
+  query_monitoring_data: '查询监测数据',
+  query_knowledge_graph: '查询知识图谱',
+  check_water_standard: '查询标准',
+  aggregate: '信息聚合',
+  generate: '生成回答',
 }
 function stageLabel(stage) {
   return stageLabels[stage] || stage
@@ -454,8 +471,12 @@ async function sendMessage() {
       aiMsg.thinking += content
       scrollToBottom()
     },
-    onProgress(stage) {
-      if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
+    onProgress(stage, message, tool) {
+      if (stage === 'tool_call' && tool) {
+        if (!aiMsg.toolStages.includes(tool)) {
+          aiMsg.toolStages.push(tool)
+        }
+      } else if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
         aiMsg.toolStages.push(stage)
       }
       aiMsg.progressStage = stage
@@ -529,8 +550,12 @@ function retry(msg) {
       msg.thinking += content
       scrollToBottom()
     },
-    onProgress(stage) {
-      if (stage !== 'generate' && !msg.toolStages.includes(stage)) {
+    onProgress(stage, message, tool) {
+      if (stage === 'tool_call' && tool) {
+        if (!msg.toolStages.includes(tool)) {
+          msg.toolStages.push(tool)
+        }
+      } else if (stage !== 'generate' && !msg.toolStages.includes(stage)) {
         msg.toolStages.push(stage)
       }
       msg.progressStage = stage
@@ -637,6 +662,16 @@ function confirmEdit() {
       aiMsg.content += content
       scrollToBottom()
     },
+    onProgress(stage, message, tool) {
+      if (stage === 'tool_call' && tool) {
+        if (!aiMsg.toolStages.includes(tool)) {
+          aiMsg.toolStages.push(tool)
+        }
+      } else if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
+        aiMsg.toolStages.push(stage)
+      }
+      aiMsg.progressStage = stage
+    },
     onDone(data) {
       aiMsg.streaming = false
       retryingMsgId.value = null
@@ -713,8 +748,9 @@ function renderMarkdown(text) {
 
 <style scoped>
 /* ===== 消息入场动画 ===== */
-.msg-enter {
+.msg-enter-active {
   animation: msgSlideIn 0.3s ease-out both;
+  animation-delay: var(--delay, 0s);
 }
 @keyframes msgSlideIn {
   from { opacity: 0; transform: translateY(10px); }
@@ -739,74 +775,6 @@ function renderMarkdown(text) {
   0%   { transform: scale(0.85); opacity: 0.6; }
   50%  { transform: scale(1.1);  opacity: 0.2; }
   100% { transform: scale(0.85); opacity: 0.6; }
-}
-
-/* ===== 垂直时间线 ===== */
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  position: relative;
-}
-.timeline-item + .timeline-item::before {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: -8px;
-  width: 1.5px;
-  height: 16px;
-  background: #E5E7EB;
-}
-.timeline-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #D1D5DB;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 1;
-  transition: all 0.3s ease;
-}
-.timeline-dot-done {
-  background: #0D9488;
-}
-.timeline-dot-done::after {
-  content: '✓';
-  position: absolute;
-  inset: -3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  color: #fff;
-}
-.timeline-dot-active {
-  background: #0D9488;
-  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
-  animation: tlPulse 1.6s ease-in-out infinite;
-}
-.timeline-dot-pending {
-  background: #D1D5DB;
-}
-.timeline-label {
-  font-size: 12px;
-  color: #6B7280;
-}
-.thinking-content {
-  font-size: 12px;
-  color: #6B7280;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  background: #F9FAFB;
-  border-radius: 6px;
-  padding: 6px 8px;
-  margin: 2px 0;
-}
-@keyframes tlPulse {
-  0%   { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0.45); }
-  50%  { box-shadow: 0 0 0 5px rgba(13, 148, 136, 0.1); }
-  100% { box-shadow: 0 0 0 0 rgba(13, 148, 136, 0); }
 }
 
 /* ===== 流式内容入场 ===== */

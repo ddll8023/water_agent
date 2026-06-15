@@ -1,14 +1,22 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
 from datetime import datetime
+from enum import Enum
+
+
+class ChatMessageRole(str, Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
 
 
 class ChatItem(BaseModel):
     """对话信息"""
 
     message_id: int = Field(..., alias="id", description="消息 Id")
-    role: str = Field(..., description="角色：user / assistant")
+    role: str = Field(..., description="角色：user / assistant / tool")
     content: str = Field(..., description="消息内容")
+    msg_meta: dict | None = Field(None, alias="msg_meta", description="消息元数据")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 

@@ -27,9 +27,10 @@ class ChatMessage(Base):
         index=True,
         comment="对话ID",
     )
-    role = Column[str](String(16), nullable=False, comment="角色：user / assistant")
+    role = Column[str](String(20), nullable=False, comment="角色：user / assistant / tool")
     content = Column[str](Text, nullable=False, comment="消息内容")
     reference = Column[list[dict]](JSON, comment="参考信息内容,{doc_id,chunk_index}")
+    msg_meta = Column[dict | None](JSON, nullable=True, comment="消息元数据：tool_call_id, name, tool_calls等")
     status = Column[int](
         SmallInteger,
         default=0,

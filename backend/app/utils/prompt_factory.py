@@ -39,6 +39,15 @@ class PromptFactory:
                 self._cache["report"] = yaml.safe_load(f)
         return self._cache["report"]
 
+    @property
+    def chat_agent(self):
+        """获取智能问答 Agent 提示词"""
+        if "chat_agent" not in self._cache:
+            config_path = os.path.join(SCRIPT_DIR, "chat_agent.yaml")
+            with open(config_path, "r", encoding="utf-8") as f:
+                self._cache["chat_agent"] = yaml.safe_load(f)
+        return self._cache["chat_agent"]
+
 
 @lru_cache()
 def get_prompt_factory():

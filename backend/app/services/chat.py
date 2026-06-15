@@ -1,6 +1,8 @@
+"""智能问答对话服务（SSE 流式 + ReAct Agent）"""
+
 import json
 import math
-from sqlalchemy import select, func, update, text
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import commit_or_rollback, get_background_db_session
 from app.models import chat_session as models_chat_session
@@ -9,17 +11,13 @@ from app.utils.logger_config import setup_logger
 from app.schemas import chat as schemas_chat
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
-from app.schemas import documents as schemas_documents
-from app.constants import documents as constants_documents
-from app.core.config import settings
-import asyncio
-from app.core.chroma import get_vector_store
+from app.constants.chat_agent import SESSION_SLIDING_WINDOW
 from langchain_core.prompts import PromptTemplate
 from app.utils.prompt_factory import get_prompt
 from app.utils.model_factory import get_model
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain_core.documents import Document
-from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from app.agent.chat_agent import run_chat_agent
+
 
 logger = setup_logger(__name__)
 
@@ -62,101 +60,51 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         session_entity.message_list = current_ids
         await db.flush()
 
-        yield f"data: {json.dumps({'type': 'progress', 'stage': 'intent', 'message': '正在识别意图...'})}\n\n"
-        intent_results = await _identify_intent(chat_request.query)
+        # ── Agent 工具探索阶段 ──
+        yield f"data: {json.dumps({'type': 'progress', 'stage': 'agent_plan', 'message': '正在分析问题，规划检索策略...'})}\n\n"
+        history_messages = await _load_history_messages(db, session_entity)
+        agent_state = None
+        try:
+            async for progress_list, state in run_chat_agent(chat_request.query, history_messages):
+                if progress_list:
+                    for ev in progress_list:
+                        yield f"data: {json.dumps({'type': 'progress', **ev})}\n\n"
+                if state is not None:
+                    agent_state = state
+        except Exception as e:
+            logger.warning(f"Agent 异常，降级处理: {e}")
+            agent_state = type('obj', (object,), {
+                "get": lambda self, k, d=None: d,
+                "get_error": lambda self: str(e)
+            })() if agent_state is None else agent_state
 
-        task_map: dict[str, any] = {}
-        stage_names = {
-            "rag": ("retrieval", "正在检索知识库..."),
-            "mysql": ("mysql_query", "正在查询监测数据..."),
-            "graph": ("graph_query", "正在查询知识图谱..."),
-        }
-        logger.info(f"intent_results:{intent_results}")
-        if "rag" in intent_results:
+        context = _build_agent_context(agent_state)
+        await _save_agent_messages(db, session_entity, agent_state)
 
-            logger.info(f"rag_query:{intent_results["rag"]}")
-            task_map["rag"] = _rag_retriever(intent_results["rag"])
-
-        if "mysql" in intent_results:
-            logger.info(f"sql_query:{intent_results["mysql"]}")
-            task_map["mysql"] = _generate_sql(db, intent_results["mysql"])
-
-        for tool_name in task_map:
-            stage, msg = stage_names.get(
-                tool_name, (tool_name, f"正在执行{tool_name}查询...")
-            )
-            yield f"data: {json.dumps({'type': 'progress', 'stage': stage, 'message': msg})}\n\n"
-
-        task_results: dict[str, any] = {}
-        if task_map:
-            raw_results = await asyncio.gather(
-                *task_map.values(), return_exceptions=True
-            )
-            task_results = dict(zip(task_map.keys(), raw_results))
-        else:
-            task_results = {}
-
-        rag_result_list = task_results.get("rag", [])
-        mysql_raw = task_results.get("mysql", "")
-        mysql_result_str = mysql_raw if isinstance(mysql_raw, str) else ""
-        if not isinstance(mysql_raw, str):
-            logger.warning(f"MySQL查询异常: {mysql_raw}")
-
-        if rag_result_list:
-            rag_section = "以下是与问题相关的知识库内容：\n" + "\n".join(
-                "\n".join([rag_result.page_content for rag_result in rag_result_list])
-                if rag_result_list
-                else ""
-            )
-        else:
-            rag_section = "（本次查询未检索到相关知识库内容，请根据自身专业知识回答）"
-
-        if mysql_result_str:
-            mysql_section = f"以下是从数据库中查询的数据：\n {mysql_result_str}"
-        else:
-            mysql_section = "数据库中没有查询到数据，提示用户情况，不要乱编"
+        # ── 组装最终 prompt ──
+        context_section_parts = []
+        if context.get("search_knowledge_base"):
+            context_section_parts.append(f"【知识库内容】\n{context['search_knowledge_base']}")
+        if context.get("query_monitoring_data"):
+            context_section_parts.append(f"【监测数据】\n{context['query_monitoring_data']}")
+        if context.get("query_knowledge_graph"):
+            context_section_parts.append(f"【图谱信息】\n{context['query_knowledge_graph']}")
+        if context.get("check_water_standard"):
+            context_section_parts.append(f"【标准限值】\n{context['check_water_standard']}")
+        context_section = "\n\n".join(context_section_parts) if context_section_parts else "（本次查询未检索到相关信息，请根据自身专业知识回答）"
 
         system_prompt = PromptTemplate.from_template(
-            get_prompt.chat["CHAT"]["SYSTEM"]
+            get_prompt.chat_agent["CHAT"]["SYSTEM"]
         ).format()
         user_prompt = PromptTemplate.from_template(
-            get_prompt.chat["CHAT"]["USER"]
+            get_prompt.chat_agent["CHAT"]["USER"]
         ).format(
-            rag_content_section=rag_section,
-            mysql_content_section=mysql_section,
+            context_section=context_section,
+            history_section=_build_history_section(history_messages),
             query=chat_request.query,
         )
-        history_message_id_list = (session_entity.message_list or [])[
-            :-1
-        ]  # 去掉最后一条（当前用户消息）
-        if history_message_id_list:
-            history_message_list = (
-                await db.scalars(
-                    select(models_chat_message.ChatMessage)
-                    .where(
-                        models_chat_message.ChatMessage.id.in_(history_message_id_list),
-                        models_chat_message.ChatMessage.status == 0,
-                    )
-                    .order_by(models_chat_message.ChatMessage.created_at.asc())
-                )
-            ).all()
-        else:
-            history_message_list = []
-        logger.info(
-            f"历史消息加载: session_id={session_entity.id} "
-            f"history_count={len(history_message_list)}"
-        )
 
-        message_list = []
-        message_list.append(SystemMessage(system_prompt))
-
-        for msg in history_message_list:
-            if msg.role == "user":
-                message_list.append(HumanMessage(f"用户query:{msg.content}"))
-            elif msg.role == "assistant":
-                message_list.append(AIMessage(f"ai回复:{msg.content}"))
-
-        message_list.append(HumanMessage(user_prompt))
+        message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
 
         yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在生成回答...'})}\n\n"
 
@@ -164,11 +112,9 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
 
         model = get_model.build_chat_model()
         result = ""
-        thinking_parts = []
         async for chunk in model.astream(message_list):
             reasoning = chunk.additional_kwargs.get("reasoning_content")
             if reasoning is not None:
-                thinking_parts.append(reasoning)
                 yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning}, ensure_ascii=False)}\n\n"
 
             if not chunk.content:
@@ -181,26 +127,17 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             f"response_len={len(result)}"
         )
 
-        reference: list[dict] = []
-        for rag_result in rag_result_list:
-            reference.append(
-                {
-                    "doc_id": rag_result.metadata["doc_id"],
-                    "chunk_index": rag_result.metadata["chunk_index"],
-                }
-            )
         new_message_entity = models_chat_message.ChatMessage(
             session_id=session_entity.id,
             role="assistant",
             content=result,
-            reference=reference,
         )
         db.add(new_message_entity)
         await db.flush()
 
         new_ids = (session_entity.message_list or []).copy()
         new_ids.append(new_message_entity.id)
-        session_entity.message_list = new_ids[-20:]
+        session_entity.message_list = new_ids[-SESSION_SLIDING_WINDOW:]
 
         await commit_or_rollback(db)
         logger.info(
@@ -214,10 +151,9 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             f"error={e}",
             exc_info=True,
         )
-        raise ServiceException(ErrorCode.INTERNAL_ERROR, str(e))
+        raise ServiceException(ErrorCode.INTERNAL_ERROR, "对话处理失败")
     finally:
         await db.close()
-
 
 async def get_chat_list(
     db: AsyncSession, get_chat_list_request: schemas_chat.GetChatListRequest
@@ -252,12 +188,15 @@ async def get_chat_detail(db: AsyncSession, session_id: int):
     if session_entity is None:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "会话不存在")
     message_id_list = session_entity.message_list
-    message_entity_list = await db.scalars(
-        select(models_chat_message.ChatMessage).where(
-            models_chat_message.ChatMessage.id.in_(message_id_list),
-            models_chat_message.ChatMessage.status == 0,  # 只返回活跃消息
+    message_entity_list = (
+        await db.scalars(
+            select(models_chat_message.ChatMessage).where(
+                models_chat_message.ChatMessage.id.in_(message_id_list),
+                models_chat_message.ChatMessage.status == 0,
+                models_chat_message.ChatMessage.role != "tool",
+            )
         )
-    )
+    ).all()
 
     return schemas_chat.GetChatDetailResponse(
         id=session_id,
@@ -302,169 +241,172 @@ async def re_chat(
         .values(status=1)
     )
     session_entity.message_list = new_message_list
-
     await commit_or_rollback(db)
-    async for chunk in chat(
-        user_id,
-        schemas_chat.ChatRequest(
-            query=re_chat_request.query, session_id=re_chat_request.session_id
-        ),
-    ):
-        yield chunk
+
+    old_query = await _get_query_by_message_id(db, re_chat_request.message_id)
+    if _is_query_unchanged(old_query, re_chat_request.query):
+        # 复用 Agent 结果：直接重新生成最终回答
+        async for chunk in _re_chat_reuse(db, user_id, session_entity, re_chat_request):
+            yield chunk
+    else:
+        # query 变了：完整重新执行
+        async for chunk in chat(
+            user_id,
+            schemas_chat.ChatRequest(
+                query=re_chat_request.query, session_id=re_chat_request.session_id
+            ),
+        ):
+            yield chunk
 
 
-async def _identify_intent(query: str):
-    """意图识别"""
-    system_prompt = PromptTemplate.from_template(
-        get_prompt.chat["INTENT"]["SYSTEM"]
-    ).format()
-    user_prompt = PromptTemplate.from_template(
-        get_prompt.chat["INTENT"]["USER"]
-    ).format(query=query)
-    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
-
-    model = get_model.build_chat_model(thinking=False)
-    chain = model | JsonOutputParser()
-
-    try:
-        parsed_output: dict = await chain.ainvoke(llm_messages)
-        return parsed_output
-    except Exception as exc:
-        logger.error(f"意图识别错误:{str(exc)}")
-        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "意图识别错误")
+"""辅助函数"""
 
 
-async def _rag_retriever(query: str):
-    """rag检索"""
+def _build_agent_context(state) -> dict:
+    """从 Agent State 中提取结构化上下文"""
+    if state is None:
+        return {}
+    if isinstance(state, dict):
+        return state.get("collected_context") or {}
+    if hasattr(state, "get"):
+        ctx = state.get("collected_context")
+        return ctx if isinstance(ctx, dict) else {}
+    return {}
 
-    vector_store = get_vector_store()
 
-    tasks = [
-        asyncio.to_thread(
-            vector_store.similarity_search_with_relevance_scores,
-            query=query,
-            k=settings.TOP_K,
-            filter={"doc_type": doc_type.value},
+def _build_history_section(history_messages: list) -> str:
+    """将历史消息列表转为文本段落"""
+    if not history_messages:
+        return ""
+    parts = ["【历史对话】"]
+    for msg in history_messages:
+        if msg.role == "user":
+            parts.append(f"用户: {msg.content}")
+        elif msg.role == "assistant":
+            parts.append(f"助手: {msg.content}")
+    return "\n".join(parts)
+
+
+async def _load_history_messages(db, session_entity) -> list:
+    """从 chat_message 表加载历史消息"""
+    msg_ids = (session_entity.message_list or [])[:-1]
+    if not msg_ids:
+        return []
+    history_list = (
+        await db.scalars(
+            select(models_chat_message.ChatMessage).where(
+                models_chat_message.ChatMessage.id.in_(msg_ids),
+                models_chat_message.ChatMessage.status == 0,
+            ).order_by(models_chat_message.ChatMessage.created_at.asc())
         )
-        for doc_type in schemas_documents.DocumentType
-    ]
-    results = await asyncio.gather(*tasks)
+    ).all()
+    result = []
+    for msg in history_list:
+        if msg.role == "user":
+            result.append(HumanMessage(content=msg.content))
+        elif msg.role == "assistant":
+            result.append(AIMessage(content=msg.content))
+        elif msg.role == "tool":
+            meta = msg.msg_meta or {}
+            result.append(ToolMessage(content=msg.content, tool_call_id=meta.get("tool_call_id", ""), name=meta.get("name", "tool")))
+    return result
 
-    for doc_type, sublist in zip(schemas_documents.DocumentType, results):
-        logger.info(f"RAG检索各类型数量: doc_type={doc_type.name} count={len(sublist)}")
 
-    fused_results: list[tuple[Document, float]] = []
-    for doc_type, doc_scores in zip(schemas_documents.DocumentType, results):
-        for doc, score in doc_scores:
-            fused_results.append(
-                (doc, score * constants_documents.DOCUMENT_WEIGHT[doc_type])
+async def _save_agent_messages(db, session_entity, agent_state):
+    """将 Agent 的 tool 消息写入 chat_message 表"""
+    if agent_state is None:
+        return
+    if isinstance(agent_state, dict):
+        messages = agent_state.get("messages", [])
+    elif hasattr(agent_state, "get"):
+        messages = agent_state.get("messages", [])
+    else:
+        return
+    if not messages:
+        return
+    current_ids = (session_entity.message_list or []).copy()
+    for msg in messages:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            entity = models_chat_message.ChatMessage(
+                session_id=session_entity.id,
+                role="assistant",
+                content=msg.content or "",
+                msg_meta={"tool_calls": msg.tool_calls},
             )
-
-    fused_results.sort(key=lambda x: x[1], reverse=True)
-
-    if fused_results:
-        logger.info(
-            f"RAG加权融合完成: total={len(fused_results)} "
-            f"top1_score={fused_results[0][1]:.4f}"
-        )
-    top_docs = [doc for doc, score in fused_results[:10]]
-
-    return await _re_sort(query, top_docs)
-
-
-async def _re_sort(query: str, document_list: list[Document]):
-    """重排序"""
-    logger.info(f"重排序解析开始: parsed={query} " f"len={len(document_list)}")
-
-    docs_text = ""
-    for i, document in enumerate(document_list):
-        docs_text += f"文档{i}:{document.page_content}\n"
-
-    system_prompt = PromptTemplate.from_template(
-        get_prompt.chat["RESORT"]["SYSTEM"]
-    ).format()
-    user_prompt = PromptTemplate.from_template(
-        get_prompt.chat["RESORT"]["USER"]
-    ).format(query=query, doc_count=len(document_list), document_list=docs_text)
-    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
-
-    model = get_model.build_chat_model(thinking=False)
-    chain = model | JsonOutputParser()
-
-    try:
-        parsed_output = await chain.ainvoke(llm_messages)
-        ranked_items = [
-            schemas_chat.ReSortResultItem.model_validate(r) for r in parsed_output
-        ]
-    except Exception as e:
-        logger.warning(f"重排序失败，退回原始排序: query={query[:50]},e:{str(e)}")
-        return document_list[:5]
-
-    logger.info(
-        f"重排序解析完成: parsed={len(ranked_items)} "
-        f"scores={[r.score for r in ranked_items]}"
-    )
-
-    ranked_items.sort(key=lambda x: x.score, reverse=True)
-
-    before_labels = [
-        f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
-        for d in document_list[:5]
-    ]
-
-    seen_indices = set()
-    ranked_docs: list[Document] = []
-    for item in ranked_items:
-        doc_index = item.index
-        if 0 <= doc_index < len(document_list) and doc_index not in seen_indices:
-            ranked_docs.append(document_list[doc_index])
-            seen_indices.add(doc_index)
-        if len(ranked_docs) >= 5:
-            break
-
-    after_labels = [
-        f"{d.metadata.get('doc_id', '?')}-{d.metadata.get('chunk_index', '?')}"
-        for d in ranked_docs[:5]
-    ]
-
-    logger.info(
-        f"重排序完成: before=[{', '.join(before_labels)}] "
-        f"after=[{', '.join(after_labels)}]"
-    )
-
-    return ranked_docs or document_list[:5]
+            db.add(entity)
+            await db.flush()
+            current_ids.append(entity.id)
+        elif isinstance(msg, ToolMessage):
+            entity = models_chat_message.ChatMessage(
+                session_id=session_entity.id,
+                role="tool",
+                content=msg.content,
+                msg_meta={"tool_call_id": msg.tool_call_id, "name": msg.name},
+            )
+            db.add(entity)
+            await db.flush()
+            current_ids.append(entity.id)
+    session_entity.message_list = current_ids
 
 
-async def _generate_sql(db: AsyncSession, query: str):
-    """mysql结构化数据查询"""
+def _is_query_unchanged(old_query: str, new_query: str) -> bool:
+    """判断 query 是否不变（精确字符串匹配）"""
+    return old_query == new_query
+
+
+async def _get_query_by_message_id(db: AsyncSession, message_id: int) -> str:
+    """通过 message_id 获取原始用户 query"""
+    entity = await db.get(models_chat_message.ChatMessage, message_id)
+    return entity.content if entity else ""
+
+
+async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
+    """复用 Agent 结果：加载历史上下文，直接重新生成最终回答"""
+    history = await _load_history_messages(db, session_entity)
+    context = {}
+    for msg in history:
+        if isinstance(msg, ToolMessage):
+            context[msg.name or "tool"] = msg.content
+
+    context_parts = []
+    for source, content in context.items():
+        context_parts.append(f"【{source}】\n{content}")
+    context_section = "\n\n".join(context_parts) if context_parts else "（无检索数据）"
 
     system_prompt = PromptTemplate.from_template(
-        get_prompt.chat["SQL_GENERATION"]["SYSTEM"]
+        get_prompt.chat_agent["CHAT"]["SYSTEM"]
     ).format()
     user_prompt = PromptTemplate.from_template(
-        get_prompt.chat["SQL_GENERATION"]["USER"]
-    ).format(query=query)
-    llm_messages = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+        get_prompt.chat_agent["CHAT"]["USER"]
+    ).format(
+        context_section=context_section,
+        history_section=_build_history_section(history),
+        query=re_chat_request.query,
+    )
+    message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
 
-    model = get_model.build_chat_model(thinking=False)
+    yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在重新生成回答...'})}\n\n"
 
-    try:
-        llm_output = await model.ainvoke(llm_messages)
+    model = get_model.build_chat_model()
+    result = ""
+    async for chunk in model.astream(message_list):
+        reasoning = chunk.additional_kwargs.get("reasoning_content")
+        if reasoning is not None:
+            yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning}, ensure_ascii=False)}\n\n"
+        if not chunk.content:
+            continue
+        yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
+        result += chunk.content
 
-    except Exception as exc:
-        logger.error(f"AI请求生成SQL错误:{str(exc)}")
-        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "AI请求生成SQL错误")
+    new_entity = models_chat_message.ChatMessage(
+        session_id=session_entity.id, role="assistant", content=result,
+    )
+    db.add(new_entity)
+    await db.flush()
 
-    # logger.info(f"SQL语句:{llm_output.content}")
+    new_ids = (session_entity.message_list or []).copy()
+    new_ids.append(new_entity.id)
+    session_entity.message_list = new_ids[-SESSION_SLIDING_WINDOW:]
+    await commit_or_rollback(db)
 
-    try:
-        sql_result_rows = (await db.execute(text(llm_output.content))).all()
-        rows_as_dicts = [dict(row._mapping) for row in sql_result_rows]
-        sql_result_str = json.dumps(rows_as_dicts, ensure_ascii=False, default=str)
-    except Exception as exc:
-        logger.error(f"mysql结构化数据查询错误:{str(exc)}")
-        raise ServiceException(ErrorCode.AI_SERVICE_ERROR, "mysql结构化数据查询错误")
-
-    # logger.info(f"SQL查询结果: {sql_result_str}")
-
-    return sql_result_str
+    yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_entity.id}, ensure_ascii=False)}\n\n"
