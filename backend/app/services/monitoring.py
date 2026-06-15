@@ -306,7 +306,7 @@ async def get_monitoring_records_trend(
     end = request.end_time or now
     cutoff_24h = now - timedelta(hours=24)
 
-    if start >= cutoff_24h:
+    if start >= cutoff_24h and request.indicator_id is not None:
         items = await _query_trend_from_redis(
             request.reservoir_id, request.indicator_id, start, end
         )
@@ -316,11 +316,12 @@ async def get_monitoring_records_trend(
             )
 
     stmt = select(models_monitoring.MonitoringRecord).where(
-        and_(
-            models_monitoring.MonitoringRecord.reservoir_id == request.reservoir_id,
+        models_monitoring.MonitoringRecord.reservoir_id == request.reservoir_id,
+    )
+    if request.indicator_id is not None:
+        stmt = stmt.where(
             models_monitoring.MonitoringRecord.indicator_id == request.indicator_id,
         )
-    )
     if request.start_time is not None:
         stmt = stmt.where(
             models_monitoring.MonitoringRecord.record_time >= request.start_time

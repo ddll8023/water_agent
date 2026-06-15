@@ -9,26 +9,35 @@ SCRIPT_DIR = os.path.join(ROOT_DIR, "app", "prompt")
 
 class PromptFactory:
 
+    def __init__(self):
+        self._cache = {}
+
     @property
     def chat(self):
         """获取对话模型提示词"""
-        config_path = os.path.join(SCRIPT_DIR, "chat.yaml")
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+        if "chat" not in self._cache:
+            config_path = os.path.join(SCRIPT_DIR, "chat.yaml")
+            with open(config_path, "r", encoding="utf-8") as f:
+                self._cache["chat"] = yaml.safe_load(f)
+        return self._cache["chat"]
 
     @property
     def alert(self):
         """获取预警提示词"""
-        config_path = os.path.join(SCRIPT_DIR, "alert.yaml")
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+        if "alert" not in self._cache:
+            config_path = os.path.join(SCRIPT_DIR, "alert.yaml")
+            with open(config_path, "r", encoding="utf-8") as f:
+                self._cache["alert"] = yaml.safe_load(f)
+        return self._cache["alert"]
 
     @property
     def report(self):
         """获取报告生成提示词"""
-        config_path = os.path.join(SCRIPT_DIR, "report.yaml")
-        with open(config_path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+        if "report" not in self._cache:
+            config_path = os.path.join(SCRIPT_DIR, "report.yaml")
+            with open(config_path, "r", encoding="utf-8") as f:
+                self._cache["report"] = yaml.safe_load(f)
+        return self._cache["report"]
 
 
 @lru_cache()

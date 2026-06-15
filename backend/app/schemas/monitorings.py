@@ -89,7 +89,7 @@ class GetMonitoringRecordsTrendRequest(BaseModel):
     """获取监测记录趋势请求参数"""
 
     reservoir_id: int = Field(description="水库ID")
-    indicator_id: int = Field(description="指标ID")
+    indicator_id: int | None = Field(None, description="指标ID，为空时返回所有指标")
     start_time: datetime | None = Field(
         None, description="开始时间，格式：YYYY-MM-DD HH:MM:SS"
     )

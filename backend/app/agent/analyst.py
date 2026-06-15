@@ -1,275 +1,145 @@
-"""Analyst Agent：趋势分析工作流，每 6h 对全水库做 LLM 分析"""
+"""Analyst Agent：ReAct 趋势分析工作流（StateGraph + ToolNode + 双阶段输出）"""
 
 import asyncio
 from datetime import datetime, timedelta
 
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
-from sqlalchemy import select, func
-
-from app.states.analysis import AnalystState, AnalystStatus
-from app.core.database import get_background_db_session, commit_or_rollback
-from app.models import reservoir as models_reservoir
-from app.models import indicator as models_indicator
-from app.models import monitoring as models_monitoring
-from app.models import alert as models_alert
-from app.models.patrol_analysis import PatrolAnalysis
-from app.services.alerts import llm_suggestion
-from app.services.alert_rules import broadcast_alert, cache_alert_to_redis
-from app.utils.logger_config import setup_logger
-from app.utils.retriever import ensemble_retrieve
-from app.utils.prompt_factory import get_prompt
-from app.utils.model_factory import get_model
-from langchain_core.prompts import PromptTemplate
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.exceptions import OutputParserException
+from langchain_core.prompts import PromptTemplate
+from langgraph.errors import GraphRecursionError
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+from sqlalchemy import select
+
+from app.agent.analyst_tools import (
+    query_reservoir_overview_tool,
+    query_monitoring_records_tool,
+    neo4j_trace_pollution_tool,
+    rag_retrieve_context_tool,
+)
+from app.constants import agent as constants_agent
+from app.core.database import get_background_db_session, commit_or_rollback
+from app.models import alert as models_alert
+from app.models import patrol_analysis as models_patrol_analysis
+from app.models import reservoir as models_reservoir
+from app.services import alert_rules as services_alert_rules
+from app.services import alerts as services_alerts
+from app.states.analysis import ReActAnalystState, AnalystStatus
+from app.utils.logger_config import setup_logger
+from app.utils.model_factory import get_model
+from app.utils.prompt_factory import get_prompt
 
 logger = setup_logger(__name__)
 
-
-async def fetch_recent_data(state: AnalystState):
-    """查询所有水库最近 6h 监测数据和预警事件"""
-    now = datetime.now()
-    period_start = now - timedelta(hours=6)
-    start_time = now.isoformat()
-
-    async with get_background_db_session() as db:
-        try:
-            reservoirs = (await db.scalars(select(models_reservoir.Reservoir))).all()
-            if not reservoirs:
-                logger.warning("无可用水库，跳过分析")
-                return {"status": AnalystStatus.NO_DATA, "start_time": start_time}
-
-            reservoirs_data = []
-            for reservoir in reservoirs:
-                records = (
-                    await db.execute(
-                        select(
-                            models_monitoring.MonitoringRecord.indicator_id,
-                            models_monitoring.MonitoringRecord.value,
-                            models_monitoring.MonitoringRecord.record_time,
-                        ).where(
-                            models_monitoring.MonitoringRecord.reservoir_id == reservoir.id,
-                            models_monitoring.MonitoringRecord.record_time >= period_start,
-                            models_monitoring.MonitoringRecord.record_time <= now,
-                        ).order_by(models_monitoring.MonitoringRecord.record_time.asc())
-                    )
-                ).all()
-
-                alerts = (
-                    await db.scalars(
-                        select(models_alert.AlertEvent).where(
-                            models_alert.AlertEvent.reservoir_id == reservoir.id,
-                            models_alert.AlertEvent.detected_at >= period_start,
-                        ).order_by(models_alert.AlertEvent.detected_at.desc())
-                    )
-                ).all()
-
-                last_analysis = await db.scalar(
-                    select(PatrolAnalysis).where(
-                        PatrolAnalysis.reservoir_id == reservoir.id,
-                    ).order_by(PatrolAnalysis.analyzed_at.desc()).limit(1)
-                )
-
-                reservoirs_data.append({
-                    "reservoir_id": reservoir.id,
-                    "reservoir_name": reservoir.name,
-                    "records": [{"indicator_id": r.indicator_id, "value": r.value, "record_time": r.record_time.isoformat()} for r in records],
-                    "alerts": [{"id": a.id, "title": a.title, "alert_level": a.alert_level, "detected_at": a.detected_at.isoformat()} for a in alerts],
-                    "last_summary": last_analysis.summary if last_analysis else None,
-                })
-
-            logger.info(f"fetch_recent_data 完成 → {len(reservoirs_data)} 个水库")
-            return {
-                "reservoirs_data": reservoirs_data,
-                "period_start": period_start.isoformat(),
-                "period_end": now.isoformat(),
-                "start_time": start_time,
-            }
-        except Exception as e:
-            logger.error(f"fetch_recent_data 异常: {e}")
-            return {"status": AnalystStatus.FAILED, "error": str(e), "start_time": start_time}
+TOOLS = [
+    query_reservoir_overview_tool,
+    query_monitoring_records_tool,
+    neo4j_trace_pollution_tool,
+    rag_retrieve_context_tool,
+]
+tool_node = ToolNode(TOOLS)
 
 
-async def compute_features(state: AnalystState):
-    """为每个 (reservoir_id, indicator_id) 计算确定性趋势特征"""
-    reservoirs_data = state.get("reservoirs_data")
-    if not reservoirs_data:
-        return {"status": AnalystStatus.NO_DATA}
-
-    async with get_background_db_session() as db:
-        try:
-            indicators = (await db.scalars(select(models_indicator.Indicator))).all()
-            indicator_map = {ind.id: ind for ind in indicators}
-
-            all_features = []
-            for rd in reservoirs_data:
-                reservoir_id = rd["reservoir_id"]
-                records = rd["records"]
-
-                grouped = {}
-                for r in records:
-                    grouped.setdefault(r["indicator_id"], []).append(r)
-
-                for indicator_id, recs in grouped.items():
-                    values = [r["value"] for r in recs]
-                    if not values:
-                        continue
-
-                    rec_times = [r["record_time"] for r in recs]
-                    first_val = values[0]
-                    last_val = values[-1]
-                    n = len(values)
-                    avg_val = sum(values) / n
-                    delta = last_val - first_val
-                    delta_percent = (delta / first_val * 100) if first_val != 0 else 0
-
-                    consecutive_rise = 0
-                    consecutive_fall = 0
-                    max_rise = 0
-                    max_fall = 0
-                    for i in range(1, n):
-                        if values[i] > values[i - 1]:
-                            consecutive_rise += 1
-                            consecutive_fall = 0
-                        elif values[i] < values[i - 1]:
-                            consecutive_fall += 1
-                            consecutive_rise = 0
-                        else:
-                            consecutive_rise = 0
-                            consecutive_fall = 0
-                        max_rise = max(max_rise, consecutive_rise)
-                        max_fall = max(max_fall, consecutive_fall)
-
-                    ind = indicator_map.get(indicator_id)
-                    all_features.append({
-                        "reservoir_id": reservoir_id,
-                        "reservoir_name": rd["reservoir_name"],
-                        "indicator_id": indicator_id,
-                        "indicator_name": ind.name if ind else str(indicator_id),
-                        "unit": ind.unit if ind else "",
-                        "count": n,
-                        "first_value": round(first_val, 4),
-                        "last_value": round(last_val, 4),
-                        "min": round(min(values), 4),
-                        "max": round(max(values), 4),
-                        "avg": round(avg_val, 4),
-                        "delta": round(delta, 4),
-                        "delta_percent": round(delta_percent, 2),
-                        "consecutive_rise_count": max_rise,
-                        "consecutive_fall_count": max_fall,
-                    })
-
-            logger.info(f"compute_features 完成 → {len(all_features)} 个指标特征")
-            return {"features": all_features}
-        except Exception as e:
-            logger.error(f"compute_features 异常: {e}")
-            return {"status": AnalystStatus.FAILED, "error": str(e)}
+async def call_llm(state: ReActAnalystState):
+    """LLM 决策节点：工具探索阶段，不设 tool_choice，LLM 自由选择"""
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.alert["REACT_SYSTEM"]
+    ).format()
+    messages = [SystemMessage(system_prompt)]
+    raw = state["messages"]
+    if len(raw) > constants_agent.RECENT_MESSAGE_COUNT:
+        recent = raw[-constants_agent.RECENT_MESSAGE_COUNT:]
+        from langchain_core.messages import ToolMessage
+        while recent and isinstance(recent[0], ToolMessage) and len(raw) > len(recent):
+            recent = raw[-(len(recent) + 1):]
+        messages.extend(recent)
+    else:
+        messages.extend(raw)
+    model = get_model.build_chat_model(thinking=False).bind_tools(TOOLS)
+    response = await model.ainvoke(messages)
+    return {"messages": [response]}
 
 
-async def ai_trend_analysis(state: AnalystState):
-    """LLM 趋势分析，一次性对所有水库生成分析结果"""
-    features = state.get("features")
-    reservoirs_data = state.get("reservoirs_data")
-    if not features or not reservoirs_data:
-        return {"status": AnalystStatus.NO_DATA, "llm_output": None}
+def should_continue(state: ReActAnalystState):
+    """路由判断：有 tool_calls → 继续循环；无 → 进入最终输出"""
+    last_msg = state["messages"][-1]
+    if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
+        return "continue"
+    return "finalize"
 
-    period_start = state.get("period_start", "")
-    period_end = state.get("period_end", "")
 
+async def final_answer(state: ReActAnalystState):
+    """最终输出节点：纯聊天模型 + 多策略 JSON 解析"""
+    system_prompt = PromptTemplate.from_template(
+        get_prompt.alert["REACT_SYSTEM"]
+    ).format()
+    messages = [SystemMessage(system_prompt)] + state["messages"]
+    model = get_model.build_chat_model(thinking=False)
     try:
-        query_parts = list(set(
-            [f["indicator_name"] for f in features]
-            + [f["reservoir_name"] for f in features]
-        ))
-        query = " ".join(query_parts) + " 水质趋势 分析 异常"
-        rag_docs = await ensemble_retrieve(query, top_k=10)
-        rag_section = (
-            "\n".join(
-                [f"第{i+1}个文档内容：\n{d.page_content}" for i, d in enumerate(rag_docs)]
-            )
-            if rag_docs else "无相关参考信息"
-        )
-
-        alert_summary_lines = []
-        for rd in reservoirs_data:
-            for a in rd.get("alerts", []):
-                alert_summary_lines.append(
-                    f"[水库{rd['reservoir_id']}][等级{a['alert_level']}] {a['title']}"
-                )
-        alert_text = "\n".join(alert_summary_lines[:30]) if alert_summary_lines else "无"
-
-        features_by_reservoir = {}
-        for f in features:
-            features_by_reservoir.setdefault(f["reservoir_name"], []).append(f)
-
-        indicator_stats_text = ""
-        for rname, feats in features_by_reservoir.items():
-            indicator_stats_text += f"### {rname}\n"
-            for f in feats:
-                indicator_stats_text += (
-                    f"  - {f['indicator_name']}: "
-                    f"avg={f['avg']}, max={f['max']}, min={f['min']}, "
-                    f"delta={f['delta']}({f['delta_percent']}%), "
-                    f"连续上升={f['consecutive_rise_count']}, 连续下降={f['consecutive_fall_count']}, "
-                    f"记录数={f['count']}\n"
-                )
-
-        system_prompt = PromptTemplate.from_template(
-            get_prompt.alert["ANALYSIS"]["SYSTEM"]
-        ).format()
-        user_prompt = PromptTemplate.from_template(
-            get_prompt.alert["ANALYSIS"]["USER"]
-        ).format(
-            period_start=period_start,
-            period_end=period_end,
-            indicator_stats=indicator_stats_text,
-            alert_summary=alert_text,
-            rag_content_section=rag_section,
-        )
-
-        model = get_model.build_chat_model(thinking=False)
-        chain = model | JsonOutputParser()
-        output = await chain.ainvoke([
-            SystemMessage(system_prompt),
-            HumanMessage(user_prompt),
-        ])
-
-        return {"llm_output": output}
-    except Exception as e:
-        logger.error(f"ai_trend_analysis 异常: {e}", exc_info=True)
-        return {"status": AnalystStatus.FAILED, "error": str(e), "llm_output": None}
+        chain = model | JsonOutputParser(partial=True)
+        output = await chain.ainvoke(messages)
+        return {"analysis_result": output}
+    except OutputParserException:
+        pass  # 第一次尝试失败，用纯模型获取输出重新解析
+    try:
+        from langchain_core.output_parsers.json import parse_json_markdown
+        response = await model.ainvoke(messages)
+        content = response.content if hasattr(response, "content") else str(response)
+        output = parse_json_markdown(content)
+        return {"analysis_result": output}
+    except Exception as e2:
+        logger.error(f"final_answer JSON 解析失败: {e2}")
+        return {"status": AnalystStatus.FAILED, "error": f"最终输出解析失败: {e2}"}
 
 
-async def process_alerts(state: AnalystState):
-    """创建 AI 趋势预警（source=1），水库级去重后直接创建"""
-    llm_output = state.get("llm_output")
-    if not llm_output:
+def has_finalized(state: ReActAnalystState):
+    """解析后路由：成功→process_alerts，失败→write_summary"""
+    if state.get("analysis_result"):
+        return "process"
+    return "skip"
+
+
+# ── State Key 映射表（从原 AnalystState → ReActAnalystState）──
+# 原 `state["llm_output"]`     → `state["analysis_result"]`
+# 原 `state["reservoirs_data"]` → 不变
+# 原 `state["supplementary_alert_ids"]` → 不变
+# 原 `state["analysis_ids"]`   → 不变
+
+
+async def process_alerts(state: ReActAnalystState):
+    """创建 AI 趋势预警（source=1），水库级去重后直接创建
+    State Key 迁移：原 state["llm_output"] → state["analysis_result"]"""
+    analysis_result = state.get("analysis_result")
+    if not analysis_result:
         return {"status": AnalystStatus.NO_DATA}
 
     supplementary_alert_ids = {}
     now = datetime.now()
 
-    reservoir_analyses = llm_output.get("reservoir_analyses", [])
+    reservoir_analyses = analysis_result.get("reservoir_analyses", [])
     if not reservoir_analyses:
-        supplementary_alerts = llm_output.get("supplementary_alerts", [])
+        supplementary_alerts = analysis_result.get("supplementary_alerts", [])
         if supplementary_alerts:
-            logger.warning("LLM 返回旧格式 supplementary_alerts（无 reservoir_id），跳过预警创建")
+            logger.warning(
+                "LLM 返回旧格式 supplementary_alerts（无 reservoir_id），跳过预警创建"
+            )
             reservoir_analyses = []
 
-    # 构建水库名称→ID 映射（LLM 输出 reservoir_name，需转为 ID）
     name_to_id = {}
-    for rd in state.get("reservoirs_data", []):
-        name_to_id[rd["reservoir_name"]] = rd["reservoir_id"]
+    reservoirs_data = state.get("reservoirs_data") or []
+    for rd in reservoirs_data:
+        name_to_id[rd.get("reservoir_name", "")] = rd.get("reservoir_id")
 
     for ra in reservoir_analyses:
-        reservoir_id = ra.get("reservoir_id") or name_to_id.get(ra.get("reservoir_name", ""))
+        reservoir_id = ra.get("reservoir_id") or name_to_id.get(
+            ra.get("reservoir_name", "")
+        )
         alerts = ra.get("supplementary_alerts", [])
 
         if not alerts or not reservoir_id:
             continue
 
-        # 按指标去重：查出该水库所有未关闭预警覆盖的指标名
         async with get_background_db_session() as db:
             existing_alerts = (
                 await db.scalars(
@@ -281,7 +151,7 @@ async def process_alerts(state: AnalystState):
             ).all()
         existing_indicator_names = set()
         for ea in existing_alerts:
-            for ind in (ea.indicators or []):
+            for ind in ea.indicators or []:
                 name = ind.get("name")
                 if name:
                     existing_indicator_names.add(name)
@@ -304,9 +174,9 @@ async def process_alerts(state: AnalystState):
                     if not indicators:
                         continue
 
-                    # 只保留未被已有预警覆盖的指标
                     new_indicators = [
-                        ind for ind in indicators
+                        ind
+                        for ind in indicators
                         if ind.get("name") not in existing_indicator_names
                     ]
                     if not new_indicators:
@@ -335,69 +205,119 @@ async def process_alerts(state: AnalystState):
                     await commit_or_rollback(db)
 
                     try:
-                        await broadcast_alert(alert_entry, "new_alert")
+                        await services_alert_rules.broadcast_alert(
+                            alert_entry, "new_alert"
+                        )
                     except Exception:
                         pass
                     try:
-                        await cache_alert_to_redis(alert_entry)
+                        await services_alert_rules.cache_alert_to_redis(alert_entry)
                     except Exception:
                         pass
-                    suggestion_tasks.append(asyncio.create_task(llm_suggestion(alert_id)))
-                    supplementary_alert_ids.setdefault(reservoir_id, []).append(alert_id)
+                    suggestion_tasks.append(
+                        asyncio.create_task(services_alerts.llm_suggestion(alert_id))
+                    )
+                    supplementary_alert_ids.setdefault(reservoir_id, []).append(
+                        alert_id
+                    )
 
                 if suggestion_tasks:
                     await asyncio.gather(*suggestion_tasks, return_exceptions=True)
 
             except Exception as e:
-                logger.error(f"process_alerts 异常: reservoir_id={reservoir_id}, error={e}")
+                logger.error(
+                    f"process_alerts 异常: reservoir_id={reservoir_id}, error={e}"
+                )
 
     total_alerts = sum(len(v) for v in supplementary_alert_ids.values())
     logger.info(f"process_alerts 完成 → 创建 {total_alerts} 个 AI 预警")
     return {"supplementary_alert_ids": supplementary_alert_ids}
 
 
-async def write_summary(state: AnalystState):
-    """为每个水库写入 patrol_analysis 记录"""
-    llm_output = state.get("llm_output")
+async def write_summary(state: ReActAnalystState):
+    """为每个水库写入 patrol_analysis 记录。失败时也写入含 error 字段的记录。
+    State Key 迁移：原 state["llm_output"] → state["analysis_result"]"""
+    analysis_result = state.get("analysis_result")
+    status = state.get("status")
+    error = state.get("error")
     reservoir_alert_map = state.get("supplementary_alert_ids", {})
-    reservoirs_data = state.get("reservoirs_data", [])
-    if not llm_output:
-        return {"status": AnalystStatus.NO_DATA}
 
     now = datetime.now()
     period_start_str = state.get("period_start", "")
     period_end_str = state.get("period_end", "")
-    period_start = datetime.fromisoformat(period_start_str) if period_start_str else now - timedelta(hours=6)
+    period_start = (
+        datetime.fromisoformat(period_start_str)
+        if period_start_str
+        else now - timedelta(hours=6)
+    )
     period_end = datetime.fromisoformat(period_end_str) if period_end_str else now
 
-    summary_text = llm_output.get("summary") or llm_output.get("overall", "")
+    if not analysis_result or status == AnalystStatus.FAILED:
+        summary_text = f"[分析失败] {error or '未知错误'}" if error else "[分析无结果]"
+        summary_text = summary_text[: constants_agent.MAX_SUMMARY_LEN]
+        async with get_background_db_session() as db:
+            try:
+                pa = models_patrol_analysis.PatrolAnalysis(
+                    reservoir_id=None,
+                    analyzed_at=now,
+                    period_start=period_start,
+                    period_end=period_end,
+                    summary=summary_text,
+                    supplementary_alert_ids=None,
+                )
+                db.add(pa)
+                await commit_or_rollback(db)
+                logger.info(f"analysis failure recorded: id={pa.id}")
+            except Exception as e:
+                logger.error(f"write_summary 失败记录写入异常: {e}")
+        return {"analysis_ids": [], "status": AnalystStatus.FAILED}
 
-    reservoir_analyses = llm_output.get("reservoir_analyses", [])
+    summary_text = analysis_result.get("summary") or analysis_result.get("overall", "") or "AI 趋势分析完成"
+    summary_text = summary_text[: constants_agent.MAX_SUMMARY_LEN]
+
+    reservoir_analyses = analysis_result.get("reservoir_analyses", [])
     if not reservoir_analyses:
-        if summary_text and reservoirs_data:
-            reservoir_analyses = [{"reservoir_id": rd["reservoir_id"], "summary": summary_text} for rd in reservoirs_data]
+        rd_list = []
+        async with get_background_db_session() as db:
+            rows = (await db.scalars(select(models_reservoir.Reservoir))).all()
+            rd_list = [{"reservoir_id": r.id, "reservoir_name": r.name} for r in rows]
+        if rd_list:
+            reservoir_analyses = [
+                {"reservoir_id": rd["reservoir_id"], "summary": summary_text}
+                for rd in rd_list
+            ]
 
-    # 构建水库名称→ID 映射（LLM 输出 reservoir_name）
     name_to_id = {}
+    reservoirs_data = state.get("reservoirs_data") or []
+    if not reservoirs_data:
+        async with get_background_db_session() as db:
+            rows = (await db.scalars(select(models_reservoir.Reservoir))).all()
+            reservoirs_data = [{"reservoir_id": r.id, "reservoir_name": r.name} for r in rows]
     for rd in reservoirs_data:
-        name_to_id[rd["reservoir_name"]] = rd["reservoir_id"]
+        name_to_id[rd.get("reservoir_name", "")] = rd.get("reservoir_id")
 
     written_ids = []
 
     async with get_background_db_session() as db:
         try:
             for ra in reservoir_analyses:
-                reservoir_id = ra.get("reservoir_id") or name_to_id.get(ra.get("reservoir_name", ""))
+                reservoir_id = ra.get("reservoir_id") or name_to_id.get(
+                    ra.get("reservoir_name", "")
+                )
                 if reservoir_id is None:
                     continue
 
-                pa = PatrolAnalysis(
+                ra_summary = ra.get("summary", summary_text)
+                ra_summary = ra_summary[: constants_agent.MAX_SUMMARY_LEN]
+
+                pa = models_patrol_analysis.PatrolAnalysis(
                     reservoir_id=reservoir_id,
                     analyzed_at=now,
                     period_start=period_start,
                     period_end=period_end,
-                    summary=ra.get("summary", summary_text),
-                    supplementary_alert_ids=reservoir_alert_map.get(reservoir_id) or None,
+                    summary=ra_summary,
+                    supplementary_alert_ids=reservoir_alert_map.get(reservoir_id)
+                    or None,
                 )
                 db.add(pa)
                 await db.flush()
@@ -413,90 +333,107 @@ async def write_summary(state: AnalystState):
     return {"analysis_ids": written_ids, "status": AnalystStatus.SUCCESS}
 
 
-def should_fetch(state: AnalystState) -> str:
-    """fetch_recent_data 失败或无数据时跳过"""
-    status = state.get("status")
-    if status in (AnalystStatus.FAILED, AnalystStatus.NO_DATA):
-        return "skip"
-    return "continue"
+def build_react_graph():
+    """编译 ReAct Agent 工作流图"""
+    builder = StateGraph(ReActAnalystState)
 
-
-def has_features(state: AnalystState) -> str:
-    """compute_features 失败或无特征时跳过 LLM"""
-    if state.get("features"):
-        return "analyze"
-    return "skip"
-
-
-def has_output(state: AnalystState) -> str:
-    """LLM 输出为空时跳过预警创建"""
-    if state.get("llm_output"):
-        return "process"
-    return "skip"
-
-
-def build_analyst_graph():
-    """编译 Analyst Agent 工作流图"""
-    builder = StateGraph(AnalystState)
-
-    builder.add_node("fetch_recent_data", fetch_recent_data)
-    builder.add_node("compute_features", compute_features)
-    builder.add_node("ai_trend_analysis", ai_trend_analysis)
+    builder.add_node("call_llm", call_llm)
+    builder.add_node("run_tools", tool_node)
+    builder.add_node("final_answer", final_answer)
     builder.add_node("process_alerts", process_alerts)
     builder.add_node("write_summary", write_summary)
 
-    builder.set_entry_point("fetch_recent_data")
+    builder.set_entry_point("call_llm")
 
     builder.add_conditional_edges(
-        "fetch_recent_data",
-        should_fetch,
-        {"continue": "compute_features", "skip": END},
+        "call_llm",
+        should_continue,
+        {"continue": "run_tools", "finalize": "final_answer"},
     )
+    builder.add_edge("run_tools", "call_llm")
     builder.add_conditional_edges(
-        "compute_features",
-        has_features,
-        {"analyze": "ai_trend_analysis", "skip": "write_summary"},
-    )
-    builder.add_conditional_edges(
-        "ai_trend_analysis",
-        has_output,
+        "final_answer",
+        has_finalized,
         {"process": "process_alerts", "skip": "write_summary"},
     )
     builder.add_edge("process_alerts", "write_summary")
     builder.add_edge("write_summary", END)
 
-    checkpointer = MemorySaver()
-    return builder.compile(checkpointer=checkpointer)
+    return builder.compile()
 
 
-analyst_graph = None
+react_graph = None
+
+
+async def _write_failure_record(now: datetime, summary: str):
+    """写入分析失败记录"""
+    summary = summary[: constants_agent.MAX_SUMMARY_LEN]
+    try:
+        async with get_background_db_session() as db:
+            pa = models_patrol_analysis.PatrolAnalysis(
+                reservoir_id=None,
+                analyzed_at=now,
+                period_start=now - timedelta(hours=6),
+                period_end=now,
+                summary=summary,
+                supplementary_alert_ids=None,
+            )
+            db.add(pa)
+            await commit_or_rollback(db)
+    except Exception as e:
+        logger.error(f"写入失败记录异常: {e}")
 
 
 async def run_analyst_agent():
-    """供 APScheduler 调用的 Analyst Agent 入口"""
-    global analyst_graph
-    if analyst_graph is None:
-        analyst_graph = build_analyst_graph()
+    """供 APScheduler 调用的 Analyst Agent 入口（签名不变）"""
+    global react_graph
+    if react_graph is None:
+        react_graph = build_react_graph()
 
-    initial_state: AnalystState = {
+    now = datetime.now()
+    initial_state: ReActAnalystState = {
+        "messages": [
+            HumanMessage(
+                content=f"请分析 {now.isoformat()} 之前 6h 的所有水库水质趋势数据。"
+            )
+        ],
         "status": None,
-        "period_start": None,
-        "period_end": None,
+        "period_start": (now - timedelta(hours=6)).isoformat(),
+        "period_end": now.isoformat(),
         "reservoirs_data": None,
         "features": None,
-        "llm_output": None,
+        "analysis_result": None,
         "supplementary_alert_ids": None,
         "analysis_ids": None,
         "error": None,
-        "start_time": None,
+        "start_time": now.isoformat(),
         "duration_ms": None,
     }
 
-    config = {
-        "configurable": {
-            "thread_id": f"analyst-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        }
-    }
-
-    async for event in analyst_graph.astream(initial_state, config):
-        logger.debug(f"Analyst 工作流事件: {event}")
+    try:
+        result = await asyncio.wait_for(
+            react_graph.ainvoke(
+                initial_state, {"recursion_limit": constants_agent.RECURSION_LIMIT}
+            ),
+            timeout=constants_agent.TIMEOUT_SECONDS,
+        )
+        status = result.get("status", AnalystStatus.SUCCESS)
+        logger.info(
+            f"Analyst Agent 完成: status={status}, "
+            f"analysis_ids={result.get('analysis_ids')}"
+        )
+    except GraphRecursionError:
+        logger.error(
+            f"Analyst Agent 递归超限（超过 {constants_agent.RECURSION_LIMIT} 步）"
+        )
+        await _write_failure_record(
+            now, f"[分析超限] 超过最大递归步数({constants_agent.RECURSION_LIMIT})"
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Analyst Agent 执行超时（{constants_agent.TIMEOUT_SECONDS}秒）")
+        await _write_failure_record(
+            now, f"[执行超时] {constants_agent.TIMEOUT_SECONDS} 秒内未完成"
+        )
+    except Exception as e:
+        logger.error(f"Analyst Agent 异常: {e}", exc_info=True)
+        await _write_failure_record(now, f"[分析异常] {e}")

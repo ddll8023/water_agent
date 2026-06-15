@@ -14,9 +14,9 @@ class PatrolAnalysis(Base):
     reservoir_id = Column(
         Integer,
         ForeignKey("reservoir.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
-        comment="水库ID",
+        comment="水库ID（故障记录为 None）",
     )
     analyzed_at = Column(DateTime, nullable=False, comment="分析执行时间")
     period_start = Column(DateTime, nullable=False, comment="覆盖开始时间")

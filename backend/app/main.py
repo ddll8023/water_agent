@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
         max_instances=1,
         coalesce=True,
-        misfire_grace_time=600,
+        misfire_grace_time=3600,
     )
     # Report Generator Pipeline：每天早 8 点生成日巡检报告
     scheduler.add_job(
