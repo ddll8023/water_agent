@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 from sqlalchemy import select, func
 
-from app.agent.state import AnalystState, AnalystStatus
+from app.states.analysis import AnalystState, AnalystStatus
 from app.core.database import get_background_db_session, commit_or_rollback
 from app.models import reservoir as models_reservoir
 from app.models import indicator as models_indicator

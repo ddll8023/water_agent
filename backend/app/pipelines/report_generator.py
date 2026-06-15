@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta
 
 from sqlalchemy import select, func
-from app.agent.state import ReportStatus, ReportType
+from app.states.report import ReportStatus, ReportType
 from app.core.database import get_background_db_session, commit_or_rollback
 from app.models.report import Report as models_report
 from app.models.patrol_log import PatrolLog
@@ -452,7 +452,7 @@ async def save_report(
         period_end_dt = datetime.fromisoformat(period_end) if period_end else now
 
         async with get_background_db_session() as db:
-            report_entry = models_report.Report(
+            report_entry = models_report(
                 title=title,
                 report_type=report_type.value if report_type else "unknown",
                 status=report_status,

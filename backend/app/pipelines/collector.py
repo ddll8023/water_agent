@@ -4,7 +4,8 @@ import asyncio
 from datetime import datetime
 
 from sqlalchemy import select, and_, or_
-from app.agent.state import PatrolStatus, ProcessResult
+from app.states.patrol import PatrolStatus
+from app.states.monitoring import ProcessResult
 from app.services.alert_rules import _evaluate_rule_trigger
 from app.services.alerts import llm_suggestion
 from app.services import monitoring as services_monitoring

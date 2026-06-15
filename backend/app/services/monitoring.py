@@ -19,7 +19,7 @@ from app.utils.logger_config import setup_logger
 from app.schemas import monitorings as schemas_monitorings
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
-from app.agent.state import ProcessResult
+from app.states.monitoring import ProcessResult
 from redis import Redis
 
 logger = setup_logger(__name__)
