@@ -64,6 +64,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         yield f"data: {json.dumps({'type': 'progress', 'stage': 'agent_plan', 'message': '正在分析问题，规划检索策略...'})}\n\n"
         history_messages = await _load_history_messages(db, session_entity)
         agent_state = None
+        process_steps = []
         try:
             async for progress_list, state in run_chat_agent(chat_request.query, history_messages):
                 if progress_list:
@@ -73,13 +74,9 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
                     agent_state = state
         except Exception as e:
             logger.warning(f"Agent 异常，降级处理: {e}")
-            agent_state = type('obj', (object,), {
-                "get": lambda self, k, d=None: d,
-                "get_error": lambda self: str(e)
-            })() if agent_state is None else agent_state
 
+        process_steps = _collect_process_steps(agent_state)
         context = _build_agent_context(agent_state)
-        await _save_agent_messages(db, session_entity, agent_state)
 
         # ── 组装最终 prompt ──
         context_section_parts = []
@@ -131,6 +128,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
             session_id=session_entity.id,
             role="assistant",
             content=result,
+            msg_meta={"process_steps": process_steps} if process_steps else None,
         )
         db.add(new_message_entity)
         await db.flush()
@@ -312,41 +310,20 @@ async def _load_history_messages(db, session_entity) -> list:
     return result
 
 
-async def _save_agent_messages(db, session_entity, agent_state):
-    """将 Agent 的 tool 消息写入 chat_message 表"""
+def _collect_process_steps(agent_state) -> list:
+    """从 Agent State 中收集工具调用步骤"""
     if agent_state is None:
-        return
-    if isinstance(agent_state, dict):
-        messages = agent_state.get("messages", [])
-    elif hasattr(agent_state, "get"):
-        messages = agent_state.get("messages", [])
-    else:
-        return
-    if not messages:
-        return
-    current_ids = (session_entity.message_list or []).copy()
+        return []
+    messages = agent_state.get("messages", []) if isinstance(agent_state, dict) else []
+    steps = []
     for msg in messages:
-        if isinstance(msg, AIMessage) and msg.tool_calls:
-            entity = models_chat_message.ChatMessage(
-                session_id=session_entity.id,
-                role="assistant",
-                content=msg.content or "",
-                msg_meta={"tool_calls": msg.tool_calls},
-            )
-            db.add(entity)
-            await db.flush()
-            current_ids.append(entity.id)
-        elif isinstance(msg, ToolMessage):
-            entity = models_chat_message.ChatMessage(
-                session_id=session_entity.id,
-                role="tool",
-                content=msg.content,
-                msg_meta={"tool_call_id": msg.tool_call_id, "name": msg.name},
-            )
-            db.add(entity)
-            await db.flush()
-            current_ids.append(entity.id)
-    session_entity.message_list = current_ids
+        if isinstance(msg, ToolMessage):
+            steps.append({
+                "type": "tool",
+                "name": msg.name or "tool",
+                "content": msg.content[:500] if msg.content else "",
+            })
+    return steps
 
 
 def _is_query_unchanged(old_query: str, new_query: str) -> bool:
@@ -361,12 +338,33 @@ async def _get_query_by_message_id(db: AsyncSession, message_id: int) -> str:
 
 
 async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
-    """复用 Agent 结果：加载历史上下文，直接重新生成最终回答"""
+    """复用 Agent 结果：从 msg_meta 提取上下文，直接重新生成最终回答"""
     history = await _load_history_messages(db, session_entity)
     context = {}
+    # 新格式：从助手消息 msg_meta.process_steps 提取
+    msg_ids = session_entity.message_list or []
+    if msg_ids:
+        last_assistant = (
+            await db.scalars(
+                select(models_chat_message.ChatMessage)
+                .where(
+                    models_chat_message.ChatMessage.id.in_(msg_ids),
+                    models_chat_message.ChatMessage.status == 0,
+                    models_chat_message.ChatMessage.role == "assistant",
+                )
+                .order_by(models_chat_message.ChatMessage.created_at.desc())
+                .limit(1)
+            )
+        ).first()
+        if last_assistant and last_assistant.msg_meta:
+            steps = last_assistant.msg_meta.get("process_steps", [])
+            for s in steps:
+                if s["type"] == "tool":
+                    context[s["name"]] = s["content"]
+    # 旧格式兼容：从历史 ToolMessage 提取
     for msg in history:
         if isinstance(msg, ToolMessage):
-            context[msg.name or "tool"] = msg.content
+            context[msg.name or "tool"] = msg.content[:200]
 
     context_parts = []
     for source, content in context.items():

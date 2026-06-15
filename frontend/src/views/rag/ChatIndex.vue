@@ -148,54 +148,66 @@
             </div>
             <div class="max-w-[65%]">
               <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm">
-                <!-- 思考过程折叠面板（正文出现后） -->
+
+                <!-- ===== 推理过程折叠区（非流式，有 process_steps） ===== -->
+                <div v-if="!msg.streaming && msg.msg_meta?.process_steps?.length"
+                     class="bg-gray-50 rounded-lg p-3 mb-3 space-y-2">
+                  <div class="flex items-center justify-between text-xs text-gray-500 cursor-pointer select-none"
+                       @click="toggleAllProcess(msg.id)">
+                    <span>
+                      <el-icon class="mr-1"><Setting /></el-icon>
+                      {{ processSummary(msg) }}
+                    </span>
+                    <el-icon :class="allProcessExpanded[msg.id] ? 'rotate-180' : ''"
+                             class="transition-transform"><ArrowDown /></el-icon>
+                  </div>
+                  <div v-show="allProcessExpanded[msg.id]" class="space-y-1">
+                    <div v-for="(step, i) in msg.msg_meta.process_steps" :key="i"
+                         class="border border-gray-200 rounded-lg overflow-hidden">
+                      <div class="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer text-xs text-gray-600"
+                           @click="toggleProcessItem(msg.id, i)">
+                        <span>
+                          <el-icon class="mr-1 text-gray-400">
+                            <Search v-if="step.type === 'tool'" />
+                            <ChatDotRound v-else />
+                          </el-icon>
+                          <template v-if="step.type === 'tool'">{{ stageLabel(step.name) }}</template>
+                          <template v-else>{{ step.name }}</template>
+                        </span>
+                        <el-icon :class="processExpanded[msg.id]?.[i] ? 'rotate-180' : ''"
+                                 class="transition-transform"><ArrowDown /></el-icon>
+                      </div>
+                      <div v-show="processExpanded[msg.id]?.[i]"
+                           class="px-3 py-2 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap bg-white">
+                        {{ step.content }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ===== 思考过程折叠面板（正文出现后，流式中） ===== -->
                 <div v-if="msg.thinking && msg.content" class="mb-3 border-b border-gray-100 pb-2">
                   <el-collapse accordion>
                     <el-collapse-item title="思考过程" name="thinking">
-                      <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">
-                        {{ msg.thinking }}
-                      </div>
+                      <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{{ msg.thinking }}</div>
                     </el-collapse-item>
                   </el-collapse>
                 </div>
 
-                <!-- 正文 -->
+                <!-- ===== 思考过程（流式中，内容尚未出现时） ===== -->
+                <div v-if="msg.thinking && msg.streaming && !msg.content" class="mb-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">
+                  <el-icon class="is-loading mr-1"><Loading /></el-icon>推理中...
+                </div>
+
+                <!-- ===== 正文 ===== -->
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
 
-                <!-- 工具调用状态标签（流式中且无正文时） -->
-                <div v-if="msg.streaming && !msg.content" class="flex flex-wrap items-center gap-2 mt-2">
-                  <el-tag
-                    v-for="s in msg.toolStages" :key="s"
-                    :type="msg.progressStage === s ? 'warning' : 'success'"
-                    :effect="msg.progressStage === s ? 'light' : 'plain'"
-                    size="small"
-                    class="!text-xs transition-all duration-300"
-                  >
-                    <el-icon v-if="msg.progressStage === s" class="is-loading mr-1"><Loading /></el-icon>
-                    <el-icon v-else class="mr-0.5"><CircleCheck /></el-icon>
-                    {{ stageLabel(s) }}
-                  </el-tag>
-                  <el-tag
-                    type="info"
-                    effect="plain"
-                    size="small"
-                    class="!text-xs opacity-50"
-                  >
-                    {{ stageLabel('generate') }}
-                  </el-tag>
-                  <div v-if="msg.thinking && msg.progressStage === 'generate'" class="w-full text-xs text-teal-600 leading-relaxed whitespace-pre-wrap bg-teal-50 rounded-md px-3 py-2 mt-1">
-                    <template v-if="msg.content">
-                      <el-collapse accordion>
-                        <el-collapse-item title="思考过程" name="thinking">
-                          <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{{ msg.thinking }}</div>
-                        </el-collapse-item>
-                      </el-collapse>
-                    </template>
-                    <template v-else>
-                      <el-icon class="is-loading mr-1"><Loading /></el-icon>
-                      推理中
-                    </template>
-                  </div>
+                <!-- ===== 垂直步骤条（流式中且无正文时） ===== -->
+                <div v-if="msg.streaming && !msg.content && msg.toolStages.length > 0" class="px-3 py-2">
+                  <el-steps direction="vertical" :active="activeStepIndex" class="agent-steps">
+                    <el-step v-for="s in msg.toolStages" :key="s" :title="stageLabel(s)" />
+                    <el-step title="生成回答" />
+                  </el-steps>
                 </div>
 
                 <!-- 错误状态 -->
@@ -285,11 +297,12 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { fetchChatStream, fetchReChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
 import {
   Plus, ChatLineSquare, Promotion, Refresh, Delete, EditPen,
-  DArrowLeft, DArrowRight, Document, Loading, CircleCheck,
+  DArrowLeft, DArrowRight, Document, Loading,
+  Setting, ArrowDown, Search, ChatDotRound,
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { marked } from 'marked'
@@ -331,6 +344,35 @@ const stageLabels = {
 }
 function stageLabel(stage) {
   return stageLabels[stage] || stage
+}
+
+const activeStepIndex = computed(() => {
+  const aiMsg = messages.value.find(m => m.role === 'assistant' && m.streaming)
+  if (!aiMsg || !aiMsg.progressStage) return -1
+  if (aiMsg.progressStage === 'generate') return aiMsg.toolStages.length
+  if (aiMsg.progressStage === 'tool_call') return Math.max(0, aiMsg.toolStages.length - 1)
+  return aiMsg.toolStages.indexOf(aiMsg.progressStage)
+})
+
+// 推理过程折叠状态
+const allProcessExpanded = ref({})
+const processExpanded = ref({})
+
+function toggleAllProcess(msgId) {
+  allProcessExpanded.value[msgId] = !allProcessExpanded.value[msgId]
+}
+function toggleProcessItem(msgId, idx) {
+  if (!processExpanded.value[msgId]) processExpanded.value[msgId] = {}
+  processExpanded.value[msgId][idx] = !processExpanded.value[msgId][idx]
+}
+function processSummary(msg) {
+  const steps = msg.msg_meta?.process_steps || []
+  const toolCount = steps.filter(s => s.type === 'tool').length
+  const thinkCount = steps.filter(s => s.type === 'think').length
+  const parts = []
+  if (toolCount) parts.push(`${toolCount} 个工具调用`)
+  if (thinkCount) parts.push(`${thinkCount} 次思考`)
+  return parts.join(' | ')
 }
 
 // SSE 控制器（用于取消）
@@ -430,6 +472,7 @@ function toMessage(item) {
     references: item.reference || [],
     streaming: false,
     error: null,
+    msg_meta: item.msg_meta || null,
   }
 }
 
@@ -819,4 +862,22 @@ function renderMarkdown(text) {
 .markdown-body :deep(h3) { font-size: 1rem; font-weight: 600; margin: 12px 0 4px; }
 .markdown-body :deep(blockquote) { border-left: 3px solid #0D9488; padding-left: 12px; color: #6B7280; margin: 8px 0; }
 .markdown-body :deep(hr) { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
+
+/* ===== Agent 步骤条（垂直） ===== */
+.agent-steps :deep(.el-step) {
+  min-height: 36px;
+}
+.agent-steps :deep(.el-step__head) {
+  width: 22px;
+}
+.agent-steps :deep(.el-step__main) {
+  margin-left: 8px;
+}
+.agent-steps :deep(.el-step__title) {
+  font-size: 13px;
+  line-height: 22px;
+}
+.agent-steps :deep(.el-step__line) {
+  top: 14px;
+}
 </style>

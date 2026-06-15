@@ -7,14 +7,13 @@ from enum import Enum
 class ChatMessageRole(str, Enum):
     USER = "user"
     ASSISTANT = "assistant"
-    TOOL = "tool"
 
 
 class ChatItem(BaseModel):
     """对话信息"""
 
     message_id: int = Field(..., alias="id", description="消息 Id")
-    role: str = Field(..., description="角色：user / assistant / tool")
+    role: str = Field(..., description="角色：user / assistant")
     content: str = Field(..., description="消息内容")
     msg_meta: dict | None = Field(None, alias="msg_meta", description="消息元数据")
     created_at: datetime = Field(..., description="创建时间")
