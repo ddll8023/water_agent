@@ -26,6 +26,7 @@ from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
 )
 from app.core.chroma import get_vector_store
+from app.utils.retriever import invalidate_retriever
 
 logger = setup_logger(__name__)
 
@@ -178,6 +179,7 @@ async def delete_document(db: AsyncSession, document_id: int):
     except Exception as e:
         raise ServiceException(message="chroma删除错误")
 
+    invalidate_retriever()
     await db.delete(entity)
     await commit_or_rollback(db)
     logger.info(f"文档已删除: doc_id={document_id}")
@@ -275,6 +277,7 @@ async def _process_document(document_id: int):
             logger.info(
                 f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}"
             )
+            invalidate_retriever()
             document_entity.chunk_count = len(chunk_ids_list)
             document_entity.status = 2
             await commit_or_rollback(db)

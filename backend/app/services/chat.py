@@ -14,7 +14,7 @@ from app.utils.exception import ServiceException
 from app.constants.chat_agent import SESSION_SLIDING_WINDOW
 from app.utils.model_factory import get_model
 from app.utils.prompt_factory import get_prompt
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, AIMessageChunk, ToolMessage
 from app.agent.chat_agent import run_chat_agent
 
 
@@ -231,15 +231,28 @@ async def re_chat(
 
 
 def _extract_process_steps_from_messages(state) -> list:
-    """从 agent state 的 messages 中提取工具调用步骤"""
+    """从 agent state 的 messages 中提取工具调用步骤（含参数和结果）"""
     if state is None:
         return []
+    # 第一遍：收集所有 AIMessage 中的 tool_calls，按 id 索引
+    tool_call_args: dict[str, dict] = {}
+    for m in (state.get("messages") or []):
+        if isinstance(m, (AIMessage, AIMessageChunk)) and m.tool_calls:
+            for tc in m.tool_calls:
+                tc_id = tc.get("id", "")
+                if tc_id:
+                    tool_call_args[tc_id] = tc.get("args", {})
+
+    # 第二遍：为每个 ToolMessage 补上 args
     steps = []
     for m in (state.get("messages") or []):
         if isinstance(m, ToolMessage):
+            tc_id = m.tool_call_id or ""
+            args = tool_call_args.get(tc_id, {})
             steps.append({
                 "type": "tool",
                 "name": m.name or "tool",
+                "args": args,
                 "content": m.content[:500] if m.content else "",
             })
     return steps
