@@ -17,7 +17,7 @@ export function deleteChat(id) {
   return request.delete(`/v1/chat/${id}`)
 }
 
-export function fetchReChatStream({ query, session_id, message_id, onChunk, onDone, onError, onProgress, onThinking }) {
+export function fetchReChatStream({ query, session_id, message_id, onChunk, onDone, onError, onProgress, onThinking, onToolResult }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')
 
@@ -63,10 +63,13 @@ export function fetchReChatStream({ query, session_id, message_id, onChunk, onDo
                     onDone?.({ session_id: event.session_id, message_id: event.message_id, user_message_id: event.user_message_id })
                     break
                   case 'thinking':
-                    onThinking?.(event.content)
+                    onThinking?.(event.content, event.phase)
+                    break
+                  case 'tool_result':
+                    onToolResult?.(event.tool, event.content, event.tool_call_id)
                     break
                   case 'progress':
-                    onProgress?.(event.stage, event.message, event.tool)
+                    onProgress?.(event.stage, event.message, event.tool, event.args, event.tool_call_id)
                     break
 
 
@@ -87,7 +90,7 @@ export function fetchReChatStream({ query, session_id, message_id, onChunk, onDo
   return controller
 }
 
-export function fetchChatStream({ query, session_id, onChunk, onDone, onError, onProgress, onThinking }) {
+export function fetchChatStream({ query, session_id, onChunk, onDone, onError, onProgress, onThinking, onToolResult }) {
   const controller = new AbortController()
   const token = localStorage.getItem('token')
 
@@ -133,10 +136,13 @@ export function fetchChatStream({ query, session_id, onChunk, onDone, onError, o
                     onDone?.({ session_id: event.session_id, message_id: event.message_id, user_message_id: event.user_message_id })
                     break
                   case 'thinking':
-                    onThinking?.(event.content)
+                    onThinking?.(event.content, event.phase)
+                    break
+                  case 'tool_result':
+                    onToolResult?.(event.tool, event.content, event.tool_call_id)
                     break
                   case 'progress':
-                    onProgress?.(event.stage, event.message, event.tool)
+                    onProgress?.(event.stage, event.message, event.tool, event.args, event.tool_call_id)
                     break
 
 

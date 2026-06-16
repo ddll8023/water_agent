@@ -31,14 +31,6 @@ CHAT:
     4. 结合历史对话上下文，保持回答的连贯性
     5. 涉及数值时指明单位和标准依据
 
-  USER: |
-    {context_section}
-
-    {history_section}
-
-    用户当前问题：
-    {query}
-
 SQL_GENERATION:
   SYSTEM: |
     你是一个水库水质监测系统的 SQL 查询助手。你的任务是根据用户优化后的查询描述，生成对应的 MySQL SELECT 语句。

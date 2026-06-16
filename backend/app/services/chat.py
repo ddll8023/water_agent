@@ -12,9 +12,8 @@ from app.schemas import chat as schemas_chat
 from app.schemas.common import PaginationInfo, PaginatedResponse, ErrorCode
 from app.utils.exception import ServiceException
 from app.constants.chat_agent import SESSION_SLIDING_WINDOW
-from langchain_core.prompts import PromptTemplate
-from app.utils.prompt_factory import get_prompt
 from app.utils.model_factory import get_model
+from app.utils.prompt_factory import get_prompt
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from app.agent.chat_agent import run_chat_agent
 
@@ -23,7 +22,7 @@ logger = setup_logger(__name__)
 
 
 async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
-    """对话请求"""
+    """对话请求（事件转发模式：run_chat_agent dict 事件 → SSE 字符串）"""
     logger.info(
         f"对话请求: user_id={user_id} session_id={chat_request.session_id} "
         f"query_len={len(chat_request.query)} query_preview={chat_request.query[:50]}"
@@ -60,74 +59,46 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         session_entity.message_list = current_ids
         await db.flush()
 
-        # ── Agent 工具探索阶段 ──
+        # ── Agent 执行（run_chat_agent 内部完成工具探索 + 最终生成）──
         yield f"data: {json.dumps({'type': 'progress', 'stage': 'agent_plan', 'message': '正在分析问题，规划检索策略...'})}\n\n"
         history_messages = await _load_history_messages(db, session_entity)
+        final_text = ""
         agent_state = None
-        process_steps = []
+        generate_emitted = False
+
+        event_counts = {"progress": 0, "thinking": 0, "chunk": 0, "tool_result": 0}
         try:
-            async for progress_list, state in run_chat_agent(chat_request.query, history_messages):
-                if progress_list:
-                    for ev in progress_list:
-                        yield f"data: {json.dumps({'type': 'progress', **ev})}\n\n"
-                if state is not None:
-                    agent_state = state
+            async for ev in run_chat_agent(chat_request.query, history_messages):
+                t = ev["type"]
+                if t in event_counts:
+                    event_counts[t] += 1
+                if t == "progress":
+                    yield f"data: {json.dumps({'type': 'progress', **{k:v for k,v in ev.items() if k != 'type'}})}\n\n"
+                elif t == "thinking":
+                    if not generate_emitted:
+                        yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在生成回答...'})}\n\n"
+                        generate_emitted = True
+                    yield f"data: {json.dumps({'type': 'thinking', 'content': ev['content'], 'phase': ev.get('phase', 'explore')}, ensure_ascii=False)}\n\n"
+                elif t == "chunk":
+                    final_text += ev["content"]
+                    yield f"data: {json.dumps({'type': 'chunk', 'content': ev['content']}, ensure_ascii=False)}\n\n"
+                elif t == "tool_result":
+                    yield f"data: {json.dumps({'type': 'tool_result', 'tool': ev['tool'], 'tool_call_id': ev.get('tool_call_id', ''), 'content': ev['content']}, ensure_ascii=False)}\n\n"
+                elif t == "done":
+                    agent_state = ev.get("state")
+                    if not final_text:
+                        final_text = ev.get("final_answer", "")
         except Exception as e:
-            logger.warning(f"Agent 异常，降级处理: {e}")
+            logger.warning(f"Agent 执行异常，降级处理: {e}", exc_info=True)
 
-        process_steps = _collect_process_steps(agent_state)
-        context = _build_agent_context(agent_state)
-
-        # ── 组装最终 prompt ──
-        context_section_parts = []
-        if context.get("search_knowledge_base"):
-            context_section_parts.append(f"【知识库内容】\n{context['search_knowledge_base']}")
-        if context.get("query_monitoring_data"):
-            context_section_parts.append(f"【监测数据】\n{context['query_monitoring_data']}")
-        if context.get("query_knowledge_graph"):
-            context_section_parts.append(f"【图谱信息】\n{context['query_knowledge_graph']}")
-        if context.get("check_water_standard"):
-            context_section_parts.append(f"【标准限值】\n{context['check_water_standard']}")
-        context_section = "\n\n".join(context_section_parts) if context_section_parts else "（本次查询未检索到相关信息，请根据自身专业知识回答）"
-
-        system_prompt = PromptTemplate.from_template(
-            get_prompt.chat_agent["CHAT"]["SYSTEM"]
-        ).format()
-        user_prompt = PromptTemplate.from_template(
-            get_prompt.chat_agent["CHAT"]["USER"]
-        ).format(
-            context_section=context_section,
-            history_section=_build_history_section(history_messages),
-            query=chat_request.query,
-        )
-
-        message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
-
-        yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在生成回答...'})}\n\n"
-
-        logger.info(f"LLM 开始生成: session_id={session_entity.id}")
-
-        model = get_model.build_chat_model()
-        result = ""
-        async for chunk in model.astream(message_list):
-            reasoning = chunk.additional_kwargs.get("reasoning_content")
-            if reasoning is not None:
-                yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning}, ensure_ascii=False)}\n\n"
-
-            if not chunk.content:
-                continue
-
-            yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
-            result += chunk.content
-        logger.info(
-            f"LLM 生成完成: session_id={session_entity.id} "
-            f"response_len={len(result)}"
-        )
+        logger.info(f"SSE 事件统计: {event_counts}, final_text_len={len(final_text)}, "
+                      f"final_text_preview={final_text[:100]}...")
+        process_steps = _extract_process_steps_from_messages(agent_state)
 
         new_message_entity = models_chat_message.ChatMessage(
             session_id=session_entity.id,
             role="assistant",
-            content=result,
+            content=final_text,
             msg_meta={"process_steps": process_steps} if process_steps else None,
         )
         db.add(new_message_entity)
@@ -152,6 +123,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         raise ServiceException(ErrorCode.INTERNAL_ERROR, "对话处理失败")
     finally:
         await db.close()
+
 
 async def get_chat_list(
     db: AsyncSession, get_chat_list_request: schemas_chat.GetChatListRequest
@@ -243,11 +215,9 @@ async def re_chat(
 
     old_query = await _get_query_by_message_id(db, re_chat_request.message_id)
     if _is_query_unchanged(old_query, re_chat_request.query):
-        # 复用 Agent 结果：直接重新生成最终回答
         async for chunk in _re_chat_reuse(db, user_id, session_entity, re_chat_request):
             yield chunk
     else:
-        # query 变了：完整重新执行
         async for chunk in chat(
             user_id,
             schemas_chat.ChatRequest(
@@ -260,29 +230,19 @@ async def re_chat(
 """辅助函数"""
 
 
-def _build_agent_context(state) -> dict:
-    """从 Agent State 中提取结构化上下文"""
+def _extract_process_steps_from_messages(state) -> list:
+    """从 agent state 的 messages 中提取工具调用步骤"""
     if state is None:
-        return {}
-    if isinstance(state, dict):
-        return state.get("collected_context") or {}
-    if hasattr(state, "get"):
-        ctx = state.get("collected_context")
-        return ctx if isinstance(ctx, dict) else {}
-    return {}
-
-
-def _build_history_section(history_messages: list) -> str:
-    """将历史消息列表转为文本段落"""
-    if not history_messages:
-        return ""
-    parts = ["【历史对话】"]
-    for msg in history_messages:
-        if msg.role == "user":
-            parts.append(f"用户: {msg.content}")
-        elif msg.role == "assistant":
-            parts.append(f"助手: {msg.content}")
-    return "\n".join(parts)
+        return []
+    steps = []
+    for m in (state.get("messages") or []):
+        if isinstance(m, ToolMessage):
+            steps.append({
+                "type": "tool",
+                "name": m.name or "tool",
+                "content": m.content[:500] if m.content else "",
+            })
+    return steps
 
 
 async def _load_history_messages(db, session_entity) -> list:
@@ -310,22 +270,6 @@ async def _load_history_messages(db, session_entity) -> list:
     return result
 
 
-def _collect_process_steps(agent_state) -> list:
-    """从 Agent State 中收集工具调用步骤"""
-    if agent_state is None:
-        return []
-    messages = agent_state.get("messages", []) if isinstance(agent_state, dict) else []
-    steps = []
-    for msg in messages:
-        if isinstance(msg, ToolMessage):
-            steps.append({
-                "type": "tool",
-                "name": msg.name or "tool",
-                "content": msg.content[:500] if msg.content else "",
-            })
-    return steps
-
-
 def _is_query_unchanged(old_query: str, new_query: str) -> bool:
     """判断 query 是否不变（精确字符串匹配）"""
     return old_query == new_query
@@ -338,59 +282,26 @@ async def _get_query_by_message_id(db: AsyncSession, message_id: int) -> str:
 
 
 async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
-    """复用 Agent 结果：从 msg_meta 提取上下文，直接重新生成最终回答"""
+    """重新生成：从历史消息重建完整消息序列，跳过 Agent Graph 工具循环"""
     history = await _load_history_messages(db, session_entity)
-    context = {}
-    # 新格式：从助手消息 msg_meta.process_steps 提取
-    msg_ids = session_entity.message_list or []
-    if msg_ids:
-        last_assistant = (
-            await db.scalars(
-                select(models_chat_message.ChatMessage)
-                .where(
-                    models_chat_message.ChatMessage.id.in_(msg_ids),
-                    models_chat_message.ChatMessage.status == 0,
-                    models_chat_message.ChatMessage.role == "assistant",
-                )
-                .order_by(models_chat_message.ChatMessage.created_at.desc())
-                .limit(1)
-            )
-        ).first()
-        if last_assistant and last_assistant.msg_meta:
-            steps = last_assistant.msg_meta.get("process_steps", [])
-            for s in steps:
-                if s["type"] == "tool":
-                    context[s["name"]] = s["content"]
-    # 旧格式兼容：从历史 ToolMessage 提取
-    for msg in history:
-        if isinstance(msg, ToolMessage):
-            context[msg.name or "tool"] = msg.content[:200]
+    system_prompt = get_prompt.chat_agent["CHAT"]["SYSTEM"]
+    messages = [SystemMessage(content=system_prompt)] + history
 
-    context_parts = []
-    for source, content in context.items():
-        context_parts.append(f"【{source}】\n{content}")
-    context_section = "\n\n".join(context_parts) if context_parts else "（无检索数据）"
-
-    system_prompt = PromptTemplate.from_template(
-        get_prompt.chat_agent["CHAT"]["SYSTEM"]
-    ).format()
-    user_prompt = PromptTemplate.from_template(
-        get_prompt.chat_agent["CHAT"]["USER"]
-    ).format(
-        context_section=context_section,
-        history_section=_build_history_section(history),
-        query=re_chat_request.query,
+    user_msg = models_chat_message.ChatMessage(
+        session_id=session_entity.id, role="user", content=re_chat_request.query
     )
-    message_list = [SystemMessage(system_prompt), HumanMessage(user_prompt)]
+    db.add(user_msg)
+    await db.flush()
+    session_entity.message_list = (session_entity.message_list or []) + [user_msg.id]
 
     yield f"data: {json.dumps({'type': 'progress', 'stage': 'generate', 'message': '正在重新生成回答...'})}\n\n"
 
     model = get_model.build_chat_model()
     result = ""
-    async for chunk in model.astream(message_list):
+    async for chunk in model.astream(messages):
         reasoning = chunk.additional_kwargs.get("reasoning_content")
         if reasoning is not None:
-            yield f"data: {json.dumps({'type': 'thinking', 'content': reasoning}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'type': 'thinking', 'phase': 'answer', 'content': reasoning}, ensure_ascii=False)}\n\n"
         if not chunk.content:
             continue
         yield f"data: {json.dumps({'type': 'chunk', 'content': chunk.content}, ensure_ascii=False)}\n\n"
@@ -407,4 +318,4 @@ async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
     session_entity.message_list = new_ids[-SESSION_SLIDING_WINDOW:]
     await commit_or_rollback(db)
 
-    yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_entity.id}, ensure_ascii=False)}\n\n"
+    yield f"data: {json.dumps({'type': 'done', 'session_id': session_entity.id, 'message_id': new_entity.id, 'user_message_id': user_msg.id}, ensure_ascii=False)}\n\n"

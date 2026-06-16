@@ -100,7 +100,7 @@
              :style="{ '--delay': Math.min(index * 0.04, 0.6) + 's' }">
           <!-- 用户消息 -->
           <div v-if="msg.role === 'user'" class="flex justify-end">
-            <div class="max-w-[70%] group relative">
+            <div class="max-w-[85%] group relative">
               <!-- 查看模式 -->
               <template v-if="editingMsgId !== msg.id">
                 <div class="user-bubble text-white rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap shadow-sm">
@@ -146,69 +146,80 @@
               <span v-if="msg.streaming" class="streaming-ring"></span>
               <el-icon class="text-white text-sm"><ChatLineSquare /></el-icon>
             </div>
-            <div class="max-w-[65%]">
+            <div class="max-w-[85%]">
               <div class="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm leading-relaxed shadow-sm">
 
-                <!-- ===== 推理过程折叠区（非流式，有 process_steps） ===== -->
-                <div v-if="!msg.streaming && msg.msg_meta?.process_steps?.length"
-                     class="bg-gray-50 rounded-lg p-3 mb-3 space-y-2">
-                  <div class="flex items-center justify-between text-xs text-gray-500 cursor-pointer select-none"
-                       @click="toggleAllProcess(msg.id)">
-                    <span>
-                      <el-icon class="mr-1"><Setting /></el-icon>
-                      {{ processSummary(msg) }}
-                    </span>
-                    <el-icon :class="allProcessExpanded[msg.id] ? 'rotate-180' : ''"
-                             class="transition-transform"><ArrowDown /></el-icon>
+                <!-- ===== 推理轮次（流式中：时间线 + 蓝色卡片） ===== -->
+                <div v-if="msg.streaming">
+                  <div v-if="msg.thinkingRounds.length === 0" class="px-4 py-3 text-xs text-gray-500 flex items-center gap-2">
+                    <el-icon class="is-loading"><Loading /></el-icon>
+                    <span>思考中...</span>
                   </div>
-                  <div v-show="allProcessExpanded[msg.id]" class="space-y-1">
-                    <div v-for="(step, i) in msg.msg_meta.process_steps" :key="i"
-                         class="border border-gray-200 rounded-lg overflow-hidden">
-                      <div class="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer text-xs text-gray-600"
-                           @click="toggleProcessItem(msg.id, i)">
-                        <span>
-                          <el-icon class="mr-1 text-gray-400">
-                            <Search v-if="step.type === 'tool'" />
-                            <ChatDotRound v-else />
-                          </el-icon>
-                          <template v-if="step.type === 'tool'">{{ stageLabel(step.name) }}</template>
-                          <template v-else>{{ step.name }}</template>
-                        </span>
-                        <el-icon :class="processExpanded[msg.id]?.[i] ? 'rotate-180' : ''"
-                                 class="transition-transform"><ArrowDown /></el-icon>
+                  <div v-if="msg.thinkingRounds.length > 0" class="px-4 pb-3">
+                    <div v-for="(round, ri) in msg.thinkingRounds" :key="ri" class="relative flex gap-3">
+                      <div class="flex flex-col items-center w-5 shrink-0">
+                        <div class="w-5 h-5 rounded-full bg-teal-500 text-white text-[10px] flex items-center justify-center font-medium z-10">
+                          {{ ri + 1 }}
+                        </div>
+                        <div v-if="ri < msg.thinkingRounds.length - 1" class="w-0.5 flex-1 bg-gray-200 min-h-[12px]"></div>
                       </div>
-                      <div v-show="processExpanded[msg.id]?.[i]"
-                           class="px-3 py-2 text-xs text-gray-700 leading-relaxed whitespace-pre-wrap bg-white">
-                        {{ step.content }}
+                      <div class="flex-1 min-w-0 pb-3">
+                        <div v-if="round.thinking"
+                             class="text-xs text-gray-600 bg-blue-50 rounded-lg p-2.5 leading-relaxed whitespace-pre-wrap">
+                          {{ round.thinking }}
+                        </div>
+                        <div v-if="round.tools.length > 0" class="flex flex-wrap gap-1 mt-1">
+                          <el-tag v-for="t in round.tools" :key="t" size="small" effect="plain">
+                            {{ stageLabel(t) }}
+                          </el-tag>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <!-- ===== 思考过程折叠面板（正文出现后，流式中） ===== -->
-                <div v-if="msg.thinking && msg.content" class="mb-3 border-b border-gray-100 pb-2">
-                  <el-collapse accordion>
-                    <el-collapse-item title="思考过程" name="thinking">
-                      <div class="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{{ msg.thinking }}</div>
-                    </el-collapse-item>
-                  </el-collapse>
-                </div>
-
-                <!-- ===== 思考过程（流式中，内容尚未出现时） ===== -->
-                <div v-if="msg.thinking && msg.streaming && !msg.content" class="mb-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">
-                  <el-icon class="is-loading mr-1"><Loading /></el-icon>推理中...
+                <!-- ===== 推理轮次（完成后：时间线 + 卡片折叠） ===== -->
+                <div v-if="!msg.streaming && msg.thinkingRounds.length > 0"
+                     class="px-4 pb-2">
+                  <div v-for="(round, ri) in msg.thinkingRounds" :key="ri" class="relative flex gap-3">
+                    <div class="flex flex-col items-center w-6 shrink-0">
+                      <div class="w-6 h-6 rounded-full bg-teal-500 text-white text-xs flex items-center justify-center font-medium z-10">
+                        {{ ri + 1 }}
+                      </div>
+                      <div v-if="ri < msg.thinkingRounds.length - 1" class="w-0.5 flex-1 bg-gray-200 min-h-[12px]"></div>
+                    </div>
+                    <div class="flex-1 pb-3">
+                      <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                        <div class="flex items-center justify-between px-3 py-2 cursor-pointer text-xs text-gray-500 hover:bg-gray-50 select-none"
+                             @click="toggleThinkingRound(msg.id, ri)">
+                          <span class="font-medium text-gray-600">
+                            第 {{ ri + 1 }} 轮推理
+                            <span v-if="round.tools.length > 0" class="text-gray-300 font-normal ml-1">
+                              · {{ round.tools.length }} 个工具
+                            </span>
+                          </span>
+                          <el-icon :class="getThinkingRoundExpanded(msg.id, ri) ? 'rotate-180' : ''"
+                                   class="transition-transform"><ArrowDown /></el-icon>
+                        </div>
+                        <div v-show="getThinkingRoundExpanded(msg.id, ri)">
+                          <div v-if="round.thinking"
+                               class="px-3 py-2 text-xs text-gray-600 leading-relaxed whitespace-pre-wrap border-t border-gray-100">
+                            {{ round.thinking }}
+                          </div>
+                          <div v-if="round.tools.length > 0"
+                               class="px-3 py-2 border-t border-gray-100 flex flex-wrap gap-1">
+                            <el-tag v-for="t in round.tools" :key="t" size="small" effect="plain">
+                              {{ stageLabel(t) }}
+                            </el-tag>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- ===== 正文 ===== -->
                 <div class="markdown-body" v-html="renderMarkdown(msg.content)" />
-
-                <!-- ===== 垂直步骤条（流式中且无正文时） ===== -->
-                <div v-if="msg.streaming && !msg.content && msg.toolStages.length > 0" class="px-3 py-2">
-                  <el-steps direction="vertical" :active="activeStepIndex" class="agent-steps">
-                    <el-step v-for="s in msg.toolStages" :key="s" :title="stageLabel(s)" />
-                    <el-step title="生成回答" />
-                  </el-steps>
-                </div>
 
                 <!-- 错误状态 -->
                 <div
@@ -269,9 +280,19 @@
             class="input-area"
           />
           <el-button
+            v-if="isStreaming"
+            type="danger"
+            circle
+            class="absolute right-2 bottom-2 !h-9 !w-9 transition-all duration-200"
+            @click="stopGeneration"
+          >
+            <el-icon><Close /></el-icon>
+          </el-button>
+          <el-button
+            v-else
             type="primary"
             circle
-            :disabled="!inputText.trim() || isStreaming"
+            :disabled="!inputText.trim()"
             @click="sendMessage"
             class="absolute right-2 bottom-2 !h-9 !w-9 transition-all duration-200 hover:scale-110"
           >
@@ -297,12 +318,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { fetchChatStream, fetchReChatStream, getChatList, getChatDetail, deleteChat } from '@/api/chat'
 import {
   Plus, ChatLineSquare, Promotion, Refresh, Delete, EditPen,
   DArrowLeft, DArrowRight, Document, Loading,
-  Setting, ArrowDown, Search, ChatDotRound,
+  ArrowDown, ChatDotRound,
 } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { marked } from 'marked'
@@ -346,33 +367,16 @@ function stageLabel(stage) {
   return stageLabels[stage] || stage
 }
 
-const activeStepIndex = computed(() => {
-  const aiMsg = messages.value.find(m => m.role === 'assistant' && m.streaming)
-  if (!aiMsg || !aiMsg.progressStage) return -1
-  if (aiMsg.progressStage === 'generate') return aiMsg.toolStages.length
-  if (aiMsg.progressStage === 'tool_call') return Math.max(0, aiMsg.toolStages.length - 1)
-  return aiMsg.toolStages.indexOf(aiMsg.progressStage)
-})
+// 推理轮次折叠状态（每轮独立控制，默认展开）
+const thinkingRoundExpanded = ref({})
 
-// 推理过程折叠状态
-const allProcessExpanded = ref({})
-const processExpanded = ref({})
+function getThinkingRoundExpanded(msgId, ri) {
+  return thinkingRoundExpanded.value[msgId]?.[ri] ?? true
+}
 
-function toggleAllProcess(msgId) {
-  allProcessExpanded.value[msgId] = !allProcessExpanded.value[msgId]
-}
-function toggleProcessItem(msgId, idx) {
-  if (!processExpanded.value[msgId]) processExpanded.value[msgId] = {}
-  processExpanded.value[msgId][idx] = !processExpanded.value[msgId][idx]
-}
-function processSummary(msg) {
-  const steps = msg.msg_meta?.process_steps || []
-  const toolCount = steps.filter(s => s.type === 'tool').length
-  const thinkCount = steps.filter(s => s.type === 'think').length
-  const parts = []
-  if (toolCount) parts.push(`${toolCount} 个工具调用`)
-  if (thinkCount) parts.push(`${thinkCount} 次思考`)
-  return parts.join(' | ')
+function toggleThinkingRound(msgId, ri) {
+  if (!thinkingRoundExpanded.value[msgId]) thinkingRoundExpanded.value[msgId] = {}
+  thinkingRoundExpanded.value[msgId][ri] = !thinkingRoundExpanded.value[msgId][ri]
 }
 
 // SSE 控制器（用于取消）
@@ -457,7 +461,7 @@ async function loadSessionMessages(id) {
     messages.value = msgs
   } catch (e) {
     messages.value = [
-      { id: genId(), role: 'assistant', content: '', thinking: '', references: [], streaming: false, error: e.message || '加载对话失败' },
+      { id: genId(), role: 'assistant', content: '', thinking: '', thinkingRounds: [], references: [], streaming: false, error: e.message || '加载对话失败' },
     ]
   } finally {
     sessionLoading.value = false
@@ -473,6 +477,8 @@ function toMessage(item) {
     streaming: false,
     error: null,
     msg_meta: item.msg_meta || null,
+    thinking: '',
+    thinkingRounds: item.msg_meta?.thinkingRounds || [],
   }
 }
 
@@ -491,11 +497,11 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     thinking: '',
+    thinkingRounds: [],
     references: [],
     streaming: true,
     error: null,
     progressStage: null,
-    toolStages: [],
   })
 
   const aiMsg = messages.value[messages.value.length - 1]
@@ -510,17 +516,26 @@ async function sendMessage() {
       aiMsg.content += content
       scrollToBottom()
     },
-    onThinking(content) {
+    onThinking(content, phase) {
       aiMsg.thinking += content
+      if (phase === 'explore' || phase === 'answer') {
+        // 最后一轮已有工具时，新建轮次
+        if (aiMsg.thinkingRounds.length === 0 || aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1].tools.length > 0) {
+          aiMsg.thinkingRounds.push({ thinking: '', tools: [] })
+        }
+        aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1].thinking += content
+      }
       scrollToBottom()
     },
-    onProgress(stage, message, tool) {
+    onProgress(stage, message, tool, args, toolCallId) {
       if (stage === 'tool_call' && tool) {
-        if (!aiMsg.toolStages.includes(tool)) {
-          aiMsg.toolStages.push(tool)
+        if (aiMsg.thinkingRounds.length === 0) {
+          aiMsg.thinkingRounds.push({ thinking: '', tools: [] })
         }
-      } else if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
-        aiMsg.toolStages.push(stage)
+        const last = aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1]
+        if (!last.tools.includes(tool)) {
+          last.tools.push(tool)
+        }
       }
       aiMsg.progressStage = stage
     },
@@ -563,6 +578,22 @@ async function sendMessage() {
   })
 }
 
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+  const aiMsg = messages.value.find(m => m.role === 'assistant' && m.streaming)
+  if (aiMsg) {
+    aiMsg.streaming = false
+    retryingMsgId.value = null
+    if (!aiMsg.content) {
+      aiMsg.content = '⚠️ 生成已中断'
+    }
+  }
+  isStreaming.value = false
+}
+
 function retry(msg) {
   if (isStreaming.value) return
   // 找到对应的 user 消息
@@ -574,9 +605,9 @@ function retry(msg) {
   msg.error = null
   msg.content = ''
   msg.thinking = ''
+  msg.thinkingRounds = []
   msg.streaming = true
   msg.progressStage = null
-  msg.toolStages = []
   retryingMsgId.value = msg.id
 
   isStreaming.value = true
@@ -589,17 +620,25 @@ function retry(msg) {
       msg.content += content
       scrollToBottom()
     },
-    onThinking(content) {
+    onThinking(content, phase) {
       msg.thinking += content
+      if (phase === 'explore' || phase === 'answer') {
+        if (msg.thinkingRounds.length === 0 || msg.thinkingRounds[msg.thinkingRounds.length - 1].tools.length > 0) {
+          msg.thinkingRounds.push({ thinking: '', tools: [] })
+        }
+        msg.thinkingRounds[msg.thinkingRounds.length - 1].thinking += content
+      }
       scrollToBottom()
     },
-    onProgress(stage, message, tool) {
+    onProgress(stage, message, tool, args, toolCallId) {
       if (stage === 'tool_call' && tool) {
-        if (!msg.toolStages.includes(tool)) {
-          msg.toolStages.push(tool)
+        if (msg.thinkingRounds.length === 0) {
+          msg.thinkingRounds.push({ thinking: '', tools: [] })
         }
-      } else if (stage !== 'generate' && !msg.toolStages.includes(stage)) {
-        msg.toolStages.push(stage)
+        const last = msg.thinkingRounds[msg.thinkingRounds.length - 1]
+        if (!last.tools.includes(tool)) {
+          last.tools.push(tool)
+        }
       }
       msg.progressStage = stage
     },
@@ -622,11 +661,20 @@ function retry(msg) {
   })
 }
 
-function clearMessages() {
+async function clearMessages() {
   if (isStreaming.value) return
-  messages.value = []
-  if (currentSessionId.value) {
-    messageCache.value.set(currentSessionId.value, [])
+  try {
+    await ElMessageBox.confirm('清空后当前对话的消息将全部移除，确认清空？', '确认清空', {
+      confirmButtonText: '清空',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    messages.value = []
+    if (currentSessionId.value) {
+      messageCache.value.set(currentSessionId.value, [])
+    }
+  } catch {
+    // 用户取消，不操作
   }
 }
 
@@ -690,10 +738,11 @@ function confirmEdit() {
 
   // 执行重试
   aiMsg.content = ''
+  aiMsg.thinking = ''
+  aiMsg.thinkingRounds = []
   aiMsg.streaming = true
   aiMsg.error = null
   aiMsg.progressStage = null
-  aiMsg.toolStages = []
   retryingMsgId.value = aiMsg.id
   isStreaming.value = true
 
@@ -705,13 +754,25 @@ function confirmEdit() {
       aiMsg.content += content
       scrollToBottom()
     },
-    onProgress(stage, message, tool) {
-      if (stage === 'tool_call' && tool) {
-        if (!aiMsg.toolStages.includes(tool)) {
-          aiMsg.toolStages.push(tool)
+    onThinking(content, phase) {
+      aiMsg.thinking += content
+      if (phase === 'explore' || phase === 'answer') {
+        if (aiMsg.thinkingRounds.length === 0 || aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1].tools.length > 0) {
+          aiMsg.thinkingRounds.push({ thinking: '', tools: [] })
         }
-      } else if (stage !== 'generate' && !aiMsg.toolStages.includes(stage)) {
-        aiMsg.toolStages.push(stage)
+        aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1].thinking += content
+      }
+      scrollToBottom()
+    },
+    onProgress(stage, message, tool, args, toolCallId) {
+      if (stage === 'tool_call' && tool) {
+        if (aiMsg.thinkingRounds.length === 0) {
+          aiMsg.thinkingRounds.push({ thinking: '', tools: [] })
+        }
+        const last = aiMsg.thinkingRounds[aiMsg.thinkingRounds.length - 1]
+        if (!last.tools.includes(tool)) {
+          last.tools.push(tool)
+        }
       }
       aiMsg.progressStage = stage
     },
@@ -790,6 +851,23 @@ function renderMarkdown(text) {
 </script>
 
 <style scoped>
+/* ===== 折叠动画 ===== */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+.collapse-enter-from,
+.collapse-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+.collapse-enter-to,
+.collapse-leave-from {
+  opacity: 1;
+  max-height: 500px;
+}
+
 /* ===== 消息入场动画 ===== */
 .msg-enter-active {
   animation: msgSlideIn 0.3s ease-out both;
@@ -863,21 +941,4 @@ function renderMarkdown(text) {
 .markdown-body :deep(blockquote) { border-left: 3px solid #0D9488; padding-left: 12px; color: #6B7280; margin: 8px 0; }
 .markdown-body :deep(hr) { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
 
-/* ===== Agent 步骤条（垂直） ===== */
-.agent-steps :deep(.el-step) {
-  min-height: 36px;
-}
-.agent-steps :deep(.el-step__head) {
-  width: 22px;
-}
-.agent-steps :deep(.el-step__main) {
-  margin-left: 8px;
-}
-.agent-steps :deep(.el-step__title) {
-  font-size: 13px;
-  line-height: 22px;
-}
-.agent-steps :deep(.el-step__line) {
-  top: 14px;
-}
 </style>
