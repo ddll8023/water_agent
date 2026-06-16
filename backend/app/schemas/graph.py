@@ -52,6 +52,7 @@ class SearchNodeRequest(BaseModel):
     """搜索节点请求"""
 
     keyword: str = Field(..., description="搜索关键字")
+    type: str | None = Field(None, description="节点类型过滤（可选，如 Reservoir/River/PollutionSource）")
 
 
 # ========== 响应类（Response）==========

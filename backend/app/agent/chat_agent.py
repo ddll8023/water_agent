@@ -1,6 +1,7 @@
 """M4 智能问答 ReAct Agent（StateGraph + ToolNode + 标准 ReAct + stream_mode 流式）"""
 
 import asyncio
+import re
 
 from langchain_core.messages import AIMessage, AIMessageChunk, SystemMessage, HumanMessage, ToolMessage
 from langgraph.errors import GraphRecursionError
@@ -63,14 +64,6 @@ async def call_llm(state: ChatAgentState):
                         "args": tc.get("args", {}),
                         "message": f"正在调用{name}..."
                     })
-            # 有 tool_calls 时清空 content，防止 final_answer 误以为已回答
-            clean_msg = AIMessage(
-                content="",
-                tool_calls=full.tool_calls,
-                additional_kwargs=full.additional_kwargs,
-            )
-            return {"messages": [clean_msg], "progress_snapshot": progress}
-
         return {"messages": [full], "progress_snapshot": progress}
     except Exception as e:
         logger.error(f"call_llm 异常: {e}", exc_info=True)
@@ -87,59 +80,21 @@ def should_continue(state: ChatAgentState) -> str:
     return "finalize"
 
 
-async def final_answer(state: ChatAgentState):
-    """最终输出节点：检测 call_llm 是否已产出回答，如有则跳过 LLM 调用"""
-    try:
-        if state.get("error"):
-            return {"final_answer": "", "error": state["error"]}
-
-        raw = state["messages"]
-
-        # 检查 call_llm 最后一轮是否已产出完整回答
-        for m in reversed(raw):
-            if isinstance(m, (AIMessage, AIMessageChunk)) and not m.tool_calls and len(m.content or '') > 100:
-                logger.info(f"final_answer 跳过 LLM，使用已有内容: len={len(m.content)}, preview={m.content[:80]}...")
-                return {"final_answer": m.content, "messages": raw + [AIMessage(content=m.content)]}
-
-        logger.info(f"final_answer 调用 LLM 生成...")
-        raw = state["messages"]
-        logger.info(f"final_answer 收到 {len(raw)} 条消息: "
-                      f"{[{'t': type(m).__name__, 'tc': bool(getattr(m, 'tool_calls', None)), 'cl': len(m.content or ''), 'rl': len(m.additional_kwargs.get('reasoning_content', '') or '') if hasattr(m, 'additional_kwargs') else 0} for m in raw]}")
-
-        system_prompt = get_prompt.chat_agent["CHAT"]["SYSTEM"] \
-            + "\n\n对话历史中包含工具调用记录和结果，请忽略工具调用过程，直接根据工具返回的结果回答用户问题。"  # TODO: 移入 chat_agent.yaml CHAT.SYSTEM
-        start_idx = 1 if raw and isinstance(raw[0], SystemMessage) else 0
-        messages = [SystemMessage(content=system_prompt)] + raw[start_idx:]
-
-        model = get_model.build_chat_model()
-        full_text = ""
-        async for chunk in model.astream(messages):
-            full_text += chunk.content
-
-        logger.info(f"final_answer 产出: content_len={len(full_text)}, preview={full_text[:150]}...")
-        return {"final_answer": full_text, "messages": raw + [AIMessage(content=full_text)]}
-    except Exception as e:
-        logger.error(f"final_answer 异常: {e}", exc_info=True)
-        return {"final_answer": "", "error": f"最终回答生成失败: {e}"}
-
-
 def build_chat_graph():
-    """编译 M4 ReAct Agent 工作流图"""
+    """编译 M4 ReAct Agent 工作流图（标准 ReAct：call_llm ↔ run_tools，无 tool_calls 时 END）"""
     builder = StateGraph(ChatAgentState)
     builder.add_node("call_llm", call_llm)
     builder.add_node("run_tools", tool_node)
-    builder.add_node("final_answer", final_answer)
     builder.set_entry_point("call_llm")
     builder.add_conditional_edges(
         "call_llm",
         should_continue,
         {
             "continue": "run_tools",
-            "finalize": "final_answer",
+            "finalize": END,
         },
     )
     builder.add_edge("run_tools", "call_llm")
-    builder.add_edge("final_answer", END)
     return builder.compile()
 
 
@@ -151,11 +106,9 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
         messages=messages,
         progress_snapshot=None,
         error=None,
-        final_answer=None,
     )
     prev_msg_count = len(messages)
     final_state = None
-    chunks_yielded = 0
 
     try:
         async for event in graph.astream(initial, stream_mode=["values", "messages"],
@@ -184,28 +137,15 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
                     reasoning = msg.additional_kwargs.get("reasoning_content")
                     if reasoning:
                         yield {"type": "thinking", "phase": "explore", "content": reasoning}
-                elif node == "final_answer":
-                    reasoning = msg.additional_kwargs.get("reasoning_content")
-                    if reasoning:
-                        yield {"type": "thinking", "phase": "answer", "content": reasoning}
-                    if msg.content:
-                        chunks_yielded += 1
-                        yield {"type": "chunk", "content": msg.content}
 
-        final_text = (final_state or {}).get("final_answer", "")
-        if final_text and chunks_yielded == 0:
-            import re
-            sentences = re.split(r'(?<=[。！？\n])', final_text)
+        final_text = _get_final_answer_text(final_state)
+        if final_text:
+            sentences = re.split(r'(?<=[。！？\n.!?])', final_text)
             for s in sentences:
-                s = s.strip()
-                if s:
+                if s.strip():
                     yield {"type": "chunk", "content": s}
-        if not final_text and final_state:
-            final_text = _build_degraded_answer(final_state)
-            if final_text:
-                yield {"type": "chunk", "content": final_text}
-        logger.info(f"run_chat_agent 完成: chunks_yielded={chunks_yielded}, "
-                      f"final_text_len={len(final_text)}, "
+                    await asyncio.sleep(0.02)
+        logger.info(f"run_chat_agent 完成: final_text_len={len(final_text)}, "
                       f"final_text_preview={final_text[:100]}...")
         yield {"type": "done", "final_answer": final_text, "state": final_state}
 
@@ -227,10 +167,16 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
         yield {"type": "done", "final_answer": "分析异常", "state": final_state}
 
 
-def _build_degraded_answer(state) -> str:
-    """降级：从 messages 中提取已有工具结果"""
+def _get_final_answer_text(state) -> str:
+    """从图最终状态中提取 AI 回答文本"""
+    if not state:
+        return ""
+    msgs = state.get("messages") or []
+    for m in reversed(msgs):
+        if isinstance(m, (AIMessage, AIMessageChunk)) and not m.tool_calls and m.content:
+            return m.content
     parts = []
-    for m in (state.get("messages") or []):
+    for m in msgs:
         if isinstance(m, ToolMessage) and m.content:
             parts.append(f"[{m.name}]: {m.content[:_DEGRADED_CONTENT_TRUNCATE]}")
-    return "\n".join(parts) if parts else "分析异常，无法生成回答"
+    return "\n".join(parts) if parts else ""

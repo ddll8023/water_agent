@@ -6,4 +6,3 @@ from langgraph.graph import MessagesState
 class ChatAgentState(MessagesState):
     progress_snapshot: list | None = None
     error: str | None = None
-    final_answer: str | None = None

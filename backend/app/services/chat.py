@@ -94,12 +94,16 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         logger.info(f"SSE 事件统计: {event_counts}, final_text_len={len(final_text)}, "
                       f"final_text_preview={final_text[:100]}...")
         process_steps = _extract_process_steps_from_messages(agent_state)
+        thinking_rounds = _extract_thinking_rounds_from_messages(agent_state)
 
         new_message_entity = models_chat_message.ChatMessage(
             session_id=session_entity.id,
             role="assistant",
             content=final_text,
-            msg_meta={"process_steps": process_steps} if process_steps else None,
+            msg_meta={
+                "process_steps": process_steps,
+                "thinkingRounds": thinking_rounds,
+            } if process_steps or thinking_rounds else None,
         )
         db.add(new_message_entity)
         await db.flush()
@@ -258,6 +262,35 @@ def _extract_process_steps_from_messages(state) -> list:
     return steps
 
 
+def _extract_thinking_rounds_from_messages(state):
+    """从 agent state messages 中提取思考过程轮次（含推理内容和工具名）"""
+    if state is None:
+        return []
+    msgs = state.get("messages") or []
+    rounds = []
+    current_round = None
+    for m in msgs:
+        if isinstance(m, (AIMessage, AIMessageChunk)):
+            reasoning = m.additional_kwargs.get("reasoning_content")
+            if reasoning:
+                if current_round is None:
+                    current_round = {"thinking": "", "tools": []}
+                current_round["thinking"] += reasoning
+            if getattr(m, "tool_calls", None):
+                if current_round is None:
+                    current_round = {"thinking": "", "tools": []}
+                for tc in m.tool_calls:
+                    name = tc.get("name", "")
+                    if name and name not in current_round["tools"]:
+                        current_round["tools"].append(name)
+                if current_round:
+                    rounds.append(current_round)
+                    current_round = None
+    if current_round and current_round["thinking"]:
+        rounds.append(current_round)
+    return rounds
+
+
 async def _load_history_messages(db, session_entity) -> list:
     """从 chat_message 表加载历史消息"""
     msg_ids = (session_entity.message_list or [])[:-1]
@@ -311,9 +344,13 @@ async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
 
     model = get_model.build_chat_model()
     result = ""
+    thinking_rounds = []
     async for chunk in model.astream(messages):
         reasoning = chunk.additional_kwargs.get("reasoning_content")
         if reasoning is not None:
+            if not thinking_rounds:
+                thinking_rounds.append({"thinking": "", "tools": []})
+            thinking_rounds[-1]["thinking"] += reasoning
             yield f"data: {json.dumps({'type': 'thinking', 'phase': 'answer', 'content': reasoning}, ensure_ascii=False)}\n\n"
         if not chunk.content:
             continue
@@ -321,7 +358,10 @@ async def _re_chat_reuse(db, user_id, session_entity, re_chat_request):
         result += chunk.content
 
     new_entity = models_chat_message.ChatMessage(
-        session_id=session_entity.id, role="assistant", content=result,
+        session_id=session_entity.id,
+        role="assistant",
+        content=result,
+        msg_meta={"thinkingRounds": thinking_rounds} if thinking_rounds else None,
     )
     db.add(new_entity)
     await db.flush()

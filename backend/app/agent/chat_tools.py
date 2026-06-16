@@ -61,40 +61,40 @@ async def query_monitoring_data_tool(description: str = "") -> str:
 
 
 @tool
-async def query_knowledge_graph_tool(template: str = "", **kwargs) -> str:
+async def query_knowledge_graph_tool(
+    template: str = "",
+    keyword: str = "",
+    node_type: str = "",
+    node_id: str = "",
+    reservoir_code: str = "",
+) -> str:
     """使用预定义模板查询知识图谱。可用模板与参数：
-    - trace_pollution: reservoir_code
-    - search_node: keyword, node_type(可选)
-    - expand_node: node_type, node_id
-    - node_detail: node_type, node_id"""
+    - trace_pollution: 需 reservoir_code
+    - search_node: 需 keyword，可选 node_type
+    - expand_node: 需 node_type + node_id
+    - node_detail: 需 node_type + node_id"""
     try:
         async with neo4j_driver.session() as session:
             if template == "trace_pollution":
-                code = kwargs.get("reservoir_code", "")
-                if not code:
+                if not reservoir_code:
                     return "请提供水库编码"
-                result = await trace_pollution(session, code)
+                result = await trace_pollution(session, reservoir_code)
                 return str(result.model_dump())
 
             elif template == "search_node":
-                keyword = kwargs.get("keyword", "")
                 if not keyword:
                     return "请提供搜索关键词"
-                req = SearchNodeRequest(keyword=keyword, type=kwargs.get("node_type"))
+                req = SearchNodeRequest(keyword=keyword, type=node_type or None)
                 result = await search_node(session, req)
                 return str(result.model_dump())
 
             elif template == "expand_node":
-                node_type = kwargs.get("node_type", "")
-                node_id = kwargs.get("node_id", "")
                 if not node_type or not node_id:
                     return "请提供节点类型和节点ID"
                 result = await get_node_expand(session, node_type, node_id)
                 return str(result.model_dump())
 
             elif template == "node_detail":
-                node_type = kwargs.get("node_type", "")
-                node_id = kwargs.get("node_id", "")
                 if not node_type or not node_id:
                     return "请提供节点类型和节点ID"
                 result = await get_node_detail(session, node_type, node_id)
