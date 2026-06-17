@@ -58,12 +58,12 @@ const report = ref(null)
 const reviewLoading = ref(false)
 
 function getTypeLabel(type) {
-  const map = { daily: '日巡检', quarterly: '季度评估', event: '事件应急' }
+  const map = { daily: '日巡检', monthly: '月度评估', quarterly: '季度评估', event: '事件应急' }
   return map[type] || type
 }
 
 function getTypeTag(type) {
-  const map = { daily: '', quarterly: 'primary', event: 'warning' }
+  const map = { daily: '', monthly: 'success', quarterly: 'primary', event: 'warning' }
   return map[type] || 'info'
 }
 

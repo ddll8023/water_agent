@@ -2,7 +2,7 @@
   <div class="p-6">
     <header class="mb-6">
       <h1 class="text-xl font-semibold text-gray-900">报告中心</h1>
-      <p class="text-sm text-gray-500 mt-1">查看和生成水质巡检、季度评估与事件应急报告</p>
+      <p class="text-sm text-gray-500 mt-1">查看和生成水质巡检、月度评估、季度评估与事件应急报告</p>
     </header>
 
     <section class="bg-white rounded-lg shadow-sm p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -10,6 +10,7 @@
         <el-select v-model="filters.type" placeholder="报告类型" clearable class="w-32">
           <el-option label="全部" value="" />
           <el-option label="日巡检" value="daily" />
+          <el-option label="月度评估" value="monthly" />
           <el-option label="季度评估" value="quarterly" />
           <el-option label="事件应急" value="event" />
         </el-select>
@@ -37,7 +38,7 @@
     <section v-loading="loading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       <el-card v-for="item in reportList" :key="item.id" shadow="sm" class="cursor-pointer hover:shadow-md transition-shadow" @click="handleViewDetail(item.id)">
         <div class="flex items-start justify-between mb-3">
-          <el-tag :type="getTypeTag(item.type)" size="small">{{ getTypeLabel(item.type) }}</el-tag>
+          <el-tag :type="getTypeTag(item.report_type)" size="small">{{ getTypeLabel(item.report_type) }}</el-tag>
           <el-tag v-if="item.status === 'published'" type="success" size="small">已发布</el-tag>
           <el-tag v-else type="info" size="small">草稿</el-tag>
         </div>
@@ -65,6 +66,7 @@
         <el-form-item label="报告类型">
           <el-select v-model="generateForm.type" placeholder="请选择报告类型" class="w-full">
             <el-option label="日巡检报告" value="daily" />
+            <el-option label="月度水质报告" value="monthly" />
             <el-option label="季度水质报告" value="quarterly" />
             <el-option label="事件应急报告" value="event" />
           </el-select>
@@ -118,12 +120,12 @@ const generateForm = reactive({
 })
 
 function getTypeLabel(type) {
-  const map = { daily: '日巡检', quarterly: '季度评估', event: '事件应急' }
+  const map = { daily: '日巡检', monthly: '月度评估', quarterly: '季度评估', event: '事件应急' }
   return map[type] || type
 }
 
 function getTypeTag(type) {
-  const map = { daily: '', quarterly: 'primary', event: 'warning' }
+  const map = { daily: '', monthly: 'success', quarterly: 'primary', event: 'warning' }
   return map[type] || 'info'
 }
 
@@ -148,7 +150,7 @@ async function fetchReportList() {
       page: pagination.page,
       page_size: pagination.pageSize
     }
-    if (filters.type) params.type = filters.type
+    if (filters.type) params.report_type = filters.type
     if (filters.status) params.status = filters.status
     if (filters.keyword) params.keyword = filters.keyword
 
@@ -174,7 +176,7 @@ async function handleGenerate() {
   generating.value = true
   try {
     await generateReport({
-      type: generateForm.type,
+      report_type: generateForm.type,
       start_date: generateForm.startDate,
       end_date: generateForm.endDate
     })

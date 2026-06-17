@@ -23,6 +23,8 @@ from langchain_core.output_parsers import JsonOutputParser
 
 logger = setup_logger(__name__)
 
+VALID_REPORT_TYPES = {t.value for t in ReportType}
+
 
 async def collect_report_data(report_type, alert_id=None):
     """按报告类型聚合多源监测数据"""
@@ -30,6 +32,9 @@ async def collect_report_data(report_type, alert_id=None):
     if report_type == ReportType.DAILY:
         period_end = now
         period_start = now - timedelta(hours=24)
+    elif report_type == ReportType.MONTHLY:
+        period_end = now.replace(day=1) - timedelta(seconds=1)
+        period_start = period_end.replace(day=1)
     elif report_type == ReportType.QUARTERLY:
         period_end = now
         period_start = now - timedelta(days=90)
@@ -43,12 +48,14 @@ async def collect_report_data(report_type, alert_id=None):
             alert_stats = None
             indicator_stats = None
             analysis_summary = None
+            monthly_report_reference = None
             monthly_trend = None
             period_comparison = None
             trace_info = ""
             process_detail = ""
 
-            if report_type in (ReportType.DAILY, ReportType.QUARTERLY):
+            # ---- 公共数据：巡检统计 + 预警统计 + 核心指标 ----
+            if report_type in (ReportType.DAILY, ReportType.MONTHLY, ReportType.QUARTERLY):
                 # 1. 巡检日志统计
                 log_counts = (
                     await db.execute(
@@ -194,61 +201,113 @@ async def collect_report_data(report_type, alert_id=None):
                         for row in rows
                     ]
 
-                # 4. 最新分析摘要
-                latest_analysis = (
+            # ---- AI 分析摘要 ----
+            if report_type in (ReportType.DAILY, ReportType.QUARTERLY):
+                # 4. 时间段内分析摘要（PatrolAnalysis）
+                analyses = (
                     await db.scalars(
                         select(PatrolAnalysis)
+                        .where(
+                            PatrolAnalysis.period_start <= period_end,
+                            PatrolAnalysis.period_end >= period_start,
+                        )
                         .order_by(PatrolAnalysis.analyzed_at.desc())
-                        .limit(1)
+                        .limit(20)
                     )
-                ).first()
-                if latest_analysis:
+                ).all()
+                if analyses:
                     analysis_summary = [
                         {
-                            "analyzed_at": latest_analysis.analyzed_at.isoformat(),
-                            "summary": latest_analysis.summary,
+                            "analyzed_at": row.analyzed_at.isoformat(),
+                            "summary": row.summary,
                         }
+                        for row in analyses
                     ]
 
-                # 5. QUARTERLY 月度趋势 + 同期对比
-                if report_type == ReportType.QUARTERLY:
-                    monthly_trend = []
-                    for i in [2, 1, 0]:
-                        ref = period_start.replace(day=1) - timedelta(days=30 * i)
-                        ms = ref.replace(day=1)
-                        me = (ms + timedelta(days=32)).replace(day=1)
-                        cnt = (
-                            await db.scalar(
-                                select(func.count(AlertEvent.id)).where(
-                                    AlertEvent.detected_at >= ms,
-                                    AlertEvent.detected_at < me,
-                                )
-                            )
-                            or 0
+            elif report_type == ReportType.MONTHLY:
+                # MONTHLY 从 report 表查日报列表
+                daily_reports = (
+                    await db.scalars(
+                        select(models_report)
+                        .where(
+                            models_report.report_type == ReportType.DAILY.value,
+                            models_report.period_start <= period_end,
+                            models_report.period_end >= period_start,
                         )
-                        monthly_trend.append(
-                            {"month": ms.strftime("%Y-%m"), "count": cnt}
-                        )
+                        .order_by(models_report.period_start.asc())
+                    )
+                ).all()
+                if daily_reports:
+                    analysis_summary = [
+                        {
+                            "analyzed_at": r.created_at.isoformat() if r.created_at else "",
+                            "summary": r.summary or "",
+                        }
+                        for r in daily_reports
+                    ]
 
-                    prev_start = period_start - timedelta(days=90)
-                    prev_total = (
+            # ---- QUARTERLY 专用：月度趋势 + 同比对比 + 月报引用 ----
+            if report_type == ReportType.QUARTERLY:
+                monthly_trend = []
+                for i in [2, 1, 0]:
+                    ref = period_start.replace(day=1) - timedelta(days=30 * i)
+                    ms = ref.replace(day=1)
+                    me = (ms + timedelta(days=32)).replace(day=1)
+                    cnt = (
                         await db.scalar(
                             select(func.count(AlertEvent.id)).where(
-                                AlertEvent.detected_at >= prev_start,
-                                AlertEvent.detected_at < period_start,
+                                AlertEvent.detected_at >= ms,
+                                AlertEvent.detected_at < me,
                             )
                         )
                         or 0
                     )
-                    current_total = sum(m["count"] for m in monthly_trend)
-                    period_comparison = {
-                        "previous_total": prev_total,
-                        "current_total": current_total,
-                        "change_percent": round(
-                            (current_total - prev_total) / max(prev_total, 1) * 100, 1
-                        ),
-                    }
+                    monthly_trend.append(
+                        {"month": ms.strftime("%Y-%m"), "count": cnt}
+                    )
 
+                prev_start = period_start - timedelta(days=90)
+                prev_total = (
+                    await db.scalar(
+                        select(func.count(AlertEvent.id)).where(
+                            AlertEvent.detected_at >= prev_start,
+                            AlertEvent.detected_at < period_start,
+                        )
+                    )
+                    or 0
+                )
+                current_total = sum(m["count"] for m in monthly_trend)
+                period_comparison = {
+                    "previous_total": prev_total,
+                    "current_total": current_total,
+                    "change_percent": round(
+                        (current_total - prev_total) / max(prev_total, 1) * 100, 1
+                    ),
+                }
+
+                # 月报摘要引用
+                monthly_rows = (
+                    await db.scalars(
+                        select(models_report)
+                        .where(
+                            models_report.report_type == ReportType.MONTHLY.value,
+                            models_report.period_start <= period_end,
+                            models_report.period_end >= period_start,
+                        )
+                        .order_by(models_report.period_start.asc())
+                    )
+                ).all()
+                if monthly_rows:
+                    monthly_report_reference = [
+                        {
+                            "title": r.title,
+                            "summary": r.summary,
+                            "conclusion": r.conclusion,
+                        }
+                        for r in monthly_rows
+                    ]
+
+            # ---- EVENT 专用 ----
             elif report_type == ReportType.EVENT and alert_id:
                 alert = await db.get(AlertEvent, alert_id)
                 if alert:
@@ -263,7 +322,6 @@ async def collect_report_data(report_type, alert_id=None):
                         "suggestion": alert.suggestion,
                     }
 
-                    # 溯源查询
                     from app.core.neo4j import driver as neo4j_driver
                     from app.services.graph import trace_pollution
 
@@ -285,14 +343,12 @@ async def collect_report_data(report_type, alert_id=None):
                         logger.error(f"溯源查询异常: {exc}", exc_info=True)
                         trace_info = ""
 
-                    # 处置备注
                     notes = alert.notes or []
                     process_detail = json.dumps(
                         sorted(notes, key=lambda x: x.get("created_at", "")),
                         ensure_ascii=False,
                     )
 
-                    # 前后 12h 监测记录
                     event_records = (
                         await db.execute(
                             select(
@@ -331,8 +387,10 @@ async def collect_report_data(report_type, alert_id=None):
                             ensure_ascii=False,
                         )
 
-            has_data = bool(patrol_summary or alert_stats)
-            if not has_data and report_type in (ReportType.DAILY, ReportType.QUARTERLY):
+            has_data = bool(patrol_summary or alert_stats or analysis_summary or monthly_report_reference)
+            if not has_data and report_type in (
+                ReportType.DAILY, ReportType.MONTHLY, ReportType.QUARTERLY,
+            ):
                 logger.info(f"collect_report_data 完成 → 无数据 ({report_type})")
                 return {
                     "has_data": False,
@@ -349,6 +407,7 @@ async def collect_report_data(report_type, alert_id=None):
                 "alert_stats": alert_stats,
                 "indicator_stats": indicator_stats,
                 "analysis_summary": analysis_summary,
+                "monthly_report_reference": monthly_report_reference,
                 "monthly_trend": monthly_trend,
                 "period_comparison": period_comparison,
                 "trace_info": trace_info,
@@ -379,7 +438,8 @@ async def llm_generate_report(report_type, data, period_start, period_end):
             patrol_summary=data.get("patrol_summary"),
             alert_stats=data.get("alert_stats"),
             indicator_stats=data.get("indicator_stats"),
-            analysis_reference=data.get("analysis_summary"),
+            analysis_reference=data.get("analysis_summary") or [],
+            monthly_report_reference=data.get("monthly_report_reference") or [],
             monthly_trend=data.get("monthly_trend"),
             period_comparison=data.get("period_comparison"),
             alert_title=(data.get("alert_stats") or {}).get("title", ""),
@@ -476,8 +536,8 @@ async def save_report(
 
 
 async def run_report_generator(report_type="daily", reservoir_ids=None, alert_id=None):
-    """报告生成入口：每天 8:00 或手动触发"""
-    if report_type not in ("daily", "quarterly", "event"):
+    """报告生成入口：定时任务或手动触发"""
+    if report_type not in VALID_REPORT_TYPES:
         logger.error(f"非法 report_type: {report_type}")
         return
 
@@ -516,7 +576,7 @@ async def background_generate(report_id, report_type, reservoir_ids, alert_id):
         logger.error(f"后台报告生成异常: report_id={report_id}", exc_info=True)
         try:
             async with get_background_db_session() as db:
-                entity = await db.get(models_report.Report, report_id)
+                entity = await db.get(models_report, report_id)
                 if entity and entity.status == "generating":
                     entity.status = "failed"
                     await commit_or_rollback(db)

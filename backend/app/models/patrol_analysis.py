@@ -18,9 +18,9 @@ class PatrolAnalysis(Base):
         index=True,
         comment="水库ID（故障记录为 None）",
     )
-    analyzed_at = Column(DateTime, nullable=False, comment="分析执行时间")
-    period_start = Column(DateTime, nullable=False, comment="覆盖开始时间")
-    period_end = Column(DateTime, nullable=False, comment="覆盖结束时间")
+    analyzed_at = Column(DateTime, nullable=False, index=True, comment="分析执行时间")
+    period_start = Column(DateTime, nullable=False, index=True, comment="覆盖开始时间")
+    period_end = Column(DateTime, nullable=False, index=True, comment="覆盖结束时间")
     summary = Column(Text, nullable=False, comment="AI 分析摘要")
     supplementary_alert_ids = Column(JSON, nullable=True, comment="本次分析创建的 AI 预警 ID 列表")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")

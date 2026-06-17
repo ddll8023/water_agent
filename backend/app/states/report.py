@@ -15,5 +15,6 @@ class ReportType(str, Enum):
     """报告类型（值类型为字符串，故使用 str, Enum 而非 IntEnum）"""
 
     DAILY = "daily"
+    MONTHLY = "monthly"
     QUARTERLY = "quarterly"
     EVENT = "event"

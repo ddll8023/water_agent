@@ -15,6 +15,7 @@ class ReportPromptItem(BaseModel):
     alert_stats: dict | None = Field(default=None, description="预警事件统计")
     indicator_stats: list | None = Field(default=None, description="核心指标各水库均值")
     analysis_reference: list | None = Field(default=None, description="分析摘要列表")
+    monthly_report_reference: list | None = Field(default=None, description="月报摘要列表")
     monthly_trend: list | None = Field(default=None, description="月度预警趋势")
     period_comparison: dict | None = Field(default=None, description="季度同比对比")
     alert_title: str = Field(default="", description="预警标题")
@@ -33,14 +34,14 @@ class GetReportListRequest(BaseModel):
     """获取报告列表请求"""
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=12, ge=1, le=100, description="每页记录数")
-    report_type: str | None = Field(None, description="报告类型: daily/quarterly/event")
+    report_type: str | None = Field(None, description="报告类型: daily/monthly/quarterly/event")
     status: str | None = Field(None, description="状态: draft/published/no_data")
     keyword: str | None = Field(None, description="标题关键词")
 
 
 class GenerateReportRequest(BaseModel):
     """生成报告请求"""
-    report_type: str = Field(..., description="报告类型: daily/quarterly/event")
+    report_type: str = Field(..., description="报告类型: daily/monthly/quarterly/event")
     reservoir_ids: list[int] | None = Field(None, description="水库ID列表")
     alert_id: int | None = Field(None, description="预警ID（事件报告时必传）")
 

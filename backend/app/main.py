@@ -90,6 +90,37 @@ async def lifespan(app: FastAPI):
         misfire_grace_time=600,
     )
 
+    # Report Generator Pipeline：每月 1 日 9 点生成月报
+    scheduler.add_job(
+        run_report_generator,
+        "cron",
+        day=1,
+        hour=9,
+        minute=0,
+        kwargs={"report_type": "monthly"},
+        id="report_generator_monthly",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+
+    # Report Generator Pipeline：每季度首月 2 日 8 点生成季报
+    scheduler.add_job(
+        run_report_generator,
+        "cron",
+        month="1,4,7,10",
+        day=2,
+        hour=8,
+        minute=0,
+        kwargs={"report_type": "quarterly"},
+        id="report_generator_quarterly",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+    )
+
     scheduler.start()
 
     yield  # 应用运行中

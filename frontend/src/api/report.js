@@ -5,7 +5,7 @@ import request from '@/utils/request'
  * @param {Object} params - 查询参数
  * @param {number} [params.page] - 页码
  * @param {number} [params.page_size] - 每页记录数
- * @param {string} [params.type] - 报告类型：daily/quarterly/event
+ * @param {string} [params.report_type] - 报告类型：daily/monthly/quarterly/event
  * @param {string} [params.status] - 状态：draft/published
  * @param {string} [params.keyword] - 关键词
  * @returns {Promise} 分页报告列表
@@ -33,7 +33,7 @@ export function getReportDetail(id) {
 /**
  * 生成报告
  * @param {Object} data - 生成参数
- * @param {string} data.type - 报告类型：daily/quarterly/event
+ * @param {string} data.report_type - 报告类型：daily/monthly/quarterly/event
  * @param {number[]} [data.reservoir_ids] - 水库 ID 列表
  * @param {number} [data.alert_id] - 预警 ID（事件报告时传）
  * @returns {Promise} { report_id, status }

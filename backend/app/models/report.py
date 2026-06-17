@@ -1,18 +1,21 @@
 """报告生成记录模型"""
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, BigInteger, JSON, Index
 from app.core.database import Base
 
 
 class Report(Base):
     __tablename__ = "report"
 
-    __table_args__ = {"mysql_charset": "utf8mb4"}
+    __table_args__ = (
+        Index("idx_report_type", "report_type"),
+        {"mysql_charset": "utf8mb4"},
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True, comment="报告ID")
     title = Column(String(200), nullable=False, comment="报告标题")
-    report_type = Column(String(20), nullable=False, comment="报告类型: daily/quarterly/event")
+    report_type = Column(String(20), nullable=False, comment="报告类型: daily/monthly/quarterly/event")
     status = Column(String(20), nullable=False, default="draft", comment="状态: draft/published/no_data")
     summary = Column(Text, nullable=True, comment="AI 生成摘要")
     sections = Column(JSON, nullable=True, comment="结构化章节 [{title, content}]")

@@ -49,10 +49,11 @@ async def call_llm(state: ReActAnalystState):
     messages = [SystemMessage(system_prompt)]
     raw = state["messages"]
     if len(raw) > constants_agent.RECENT_MESSAGE_COUNT:
-        recent = raw[-constants_agent.RECENT_MESSAGE_COUNT:]
+        recent = raw[-constants_agent.RECENT_MESSAGE_COUNT :]
         from langchain_core.messages import ToolMessage
+
         while recent and isinstance(recent[0], ToolMessage) and len(raw) > len(recent):
-            recent = raw[-(len(recent) + 1):]
+            recent = raw[-(len(recent) + 1) :]
         messages.extend(recent)
     else:
         messages.extend(raw)
@@ -84,6 +85,7 @@ async def final_answer(state: ReActAnalystState):
         pass  # 第一次尝试失败，用纯模型获取输出重新解析
     try:
         from langchain_core.output_parsers.json import parse_json_markdown
+
         response = await model.ainvoke(messages)
         content = response.content if hasattr(response, "content") else str(response)
         output = parse_json_markdown(content)
@@ -98,13 +100,6 @@ def has_finalized(state: ReActAnalystState):
     if state.get("analysis_result"):
         return "process"
     return "skip"
-
-
-# ── State Key 映射表（从原 AnalystState → ReActAnalystState）──
-# 原 `state["llm_output"]`     → `state["analysis_result"]`
-# 原 `state["reservoirs_data"]` → 不变
-# 原 `state["supplementary_alert_ids"]` → 不变
-# 原 `state["analysis_ids"]`   → 不变
 
 
 async def process_alerts(state: ReActAnalystState):
@@ -272,7 +267,11 @@ async def write_summary(state: ReActAnalystState):
                 logger.error(f"write_summary 失败记录写入异常: {e}")
         return {"analysis_ids": [], "status": AnalystStatus.FAILED}
 
-    summary_text = analysis_result.get("summary") or analysis_result.get("overall", "") or "AI 趋势分析完成"
+    summary_text = (
+        analysis_result.get("summary")
+        or analysis_result.get("overall", "")
+        or "AI 趋势分析完成"
+    )
     summary_text = summary_text[: constants_agent.MAX_SUMMARY_LEN]
 
     reservoir_analyses = analysis_result.get("reservoir_analyses", [])
@@ -292,7 +291,9 @@ async def write_summary(state: ReActAnalystState):
     if not reservoirs_data:
         async with get_background_db_session() as db:
             rows = (await db.scalars(select(models_reservoir.Reservoir))).all()
-            reservoirs_data = [{"reservoir_id": r.id, "reservoir_name": r.name} for r in rows]
+            reservoirs_data = [
+                {"reservoir_id": r.id, "reservoir_name": r.name} for r in rows
+            ]
     for rd in reservoirs_data:
         name_to_id[rd.get("reservoir_name", "")] = rd.get("reservoir_id")
 
