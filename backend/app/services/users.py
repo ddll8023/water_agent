@@ -33,7 +33,7 @@ async def get_user_list(
     )
     total = await db.scalar(select(func.count()).select_from(stmt.subquery()))
 
-    return PaginatedResponse[schemas_users.GetUserListResponse](
+    return PaginatedResponse(
         lists=[
             schemas_users.GetUserListResponse.model_validate(user_entity)
             for user_entity in user_entity_list

@@ -99,7 +99,7 @@ const buildOption = (xAxisData, seriesData) => {
 }
 
 const fetchTrendData = async () => {
-  if (!props.stationId || !props.indicatorId) return { xAxis: [], series: [] }
+  if (!props.indicatorId) return { xAxis: [], series: [] }
 
   const now = new Date()
   const start = new Date(now.getTime() - 24 * 60 * 60 * 1000)

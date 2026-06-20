@@ -91,7 +91,7 @@ async def get_current_user_detail(
     if not user_entity:
         logger.error("用户不存在")
         raise ServiceException(message="用户不存在")
-    role_entity = await db.get(models_user.Role, user_entity.role_id)
+    role_entity = await db.get(models_role.Role, user_entity.role_id)
     if not role_entity:
         logger.error("角色不存在")
         raise ServiceException(message="角色不存在")

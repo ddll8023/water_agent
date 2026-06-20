@@ -55,9 +55,11 @@
       <el-pagination
         :current-page="pagination.page"
         :page-size="pagination.pageSize"
+        :page-sizes="[10, 20, 50, 100]"
         :total="pagination.total"
         layout="total, sizes, prev, pager, next"
         @update:current-page="handlePageChange"
+        @update:page-size="handleSizeChange"
       />
     </div>
 
@@ -136,6 +138,12 @@ function handleSearch() {
 
 function handlePageChange(page) {
   pagination.page = page
+  fetchReportList()
+}
+
+function handleSizeChange(size) {
+  pagination.pageSize = size
+  pagination.page = 1
   fetchReportList()
 }
 

@@ -27,7 +27,7 @@ async def get_role_list(
         .limit(get_role_list_request.page_size)
     )
 
-    return PaginatedResponse[schemas_roles.GetRoleListResponse](
+    return PaginatedResponse(
         lists=[
             schemas_roles.GetRoleListResponse.model_validate(role_entity)
             for role_entity in role_entity_list
@@ -82,7 +82,6 @@ async def update_role(
     if update_role_request.permissions is not None:
         role_entity.permissions = update_role_request.permissions
     await commit_or_rollback(db)
-    await db.refresh(role_entity)
     return True
 
 

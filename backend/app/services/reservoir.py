@@ -102,6 +102,7 @@ async def update_reservoir(
     reservoir_entity = await db.get(models_reservoir.Reservoir, reservoir_id)
     if not reservoir_entity:
         raise ServiceException(ErrorCode.DATA_NOT_FOUND, "水库不存在")
+
     if (
         update_reservoir_request.code is not None
         and update_reservoir_request.code != reservoir_entity.code
@@ -114,6 +115,7 @@ async def update_reservoir(
         if existing and existing.id != reservoir_id:
             raise ServiceException(ErrorCode.RESOURCE_ALREADY_EXISTS, "水库编码已存在")
         reservoir_entity.code = update_reservoir_request.code
+
     if update_reservoir_request.name is not None:
         reservoir_entity.name = update_reservoir_request.name
     if update_reservoir_request.location is not None:
@@ -153,7 +155,9 @@ async def delete_reservoir(db: AsyncSession, reservoir_id: int):
 """辅助函数"""
 
 
-async def _sync_reservoir_to_neo4j(reservoir_id: int, action: str, entity_code: str | None = None):
+async def _sync_reservoir_to_neo4j(
+    reservoir_id: int, action: str, entity_code: str | None = None
+):
     """同步水库到 Neo4j"""
     try:
         async with driver.session() as neo4j_session:
@@ -177,7 +181,8 @@ async def _sync_reservoir_to_neo4j(reservoir_id: int, action: str, entity_code: 
                        ON MATCH SET n.name = $name, n.waterGrade = $waterGrade,
                            n.capacity = $capacity, n.watershed = $watershed,
                            n.longitude = $longitude, n.latitude = $latitude""",
-                    code=entity.code, name=entity.name,
+                    code=entity.code,
+                    name=entity.name,
                     waterGrade=entity.water_grade,
                     capacity=entity.capacity,
                     watershed=entity.watershed,
@@ -185,4 +190,6 @@ async def _sync_reservoir_to_neo4j(reservoir_id: int, action: str, entity_code: 
                     latitude=entity.latitude,
                 )
     except Exception as e:
-        logger.error(f"Neo4j 水库同步失败: id={reservoir_id}, action={action}, error={e}")
+        logger.error(
+            f"Neo4j 水库同步失败: id={reservoir_id}, action={action}, error={e}"
+        )

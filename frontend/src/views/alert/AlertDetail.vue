@@ -296,7 +296,7 @@
       <template #footer>
         <div v-if="similarTotal > similarPageSize" class="flex justify-center">
           <el-pagination
-            small
+            size="small"
             layout="prev, pager, next"
             :total="similarTotal"
             :page-size="similarPageSize"
