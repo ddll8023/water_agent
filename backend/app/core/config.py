@@ -37,16 +37,10 @@ class Settings(BaseSettings):
     # CORS 配置
     CORS_ORIGINS: list[str] = ["http://localhost:3444"]
 
-    # 聊天配置
-    # 负责需要多步推理的任务——Agent 规划、污染溯源推理、调度方案生成
-    CHAT_ONE_API_KEY: str = ""
-    CHAT_ONE_BASE_URL: str = "https://api.deepseek.cn/v1"
-    CHAT_ONE_MODEL: str = "deepseek-v4-flash"
-
-    # 负责知识密集型任务——RAG 问答、报告生成、自然语言交互
-    CHAT_TWO_API_KEY: str = ""
-    CHAT_TWO_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    CHAT_TWO_MODEL: str = "Qwen-Max"
+    # 对话推理模型配置
+    CHAT_API_KEY: str = ""
+    CHAT_BASE_URL: str = "https://api.deepseek.cn/v1"
+    CHAT_MODEL: str = "deepseek-v4-flash"
 
     # 嵌入模型配置
     EMBEDDING_API_KEY: str = ""

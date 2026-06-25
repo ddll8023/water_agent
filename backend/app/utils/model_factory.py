@@ -23,9 +23,9 @@ class ModelFactory:
 
     def build_chat_model(
         self,
-        model: str = settings.CHAT_ONE_MODEL,
-        api_key: str = settings.CHAT_ONE_API_KEY,
-        base_url: str = settings.CHAT_ONE_BASE_URL,
+        model: str = settings.CHAT_MODEL,
+        api_key: str = settings.CHAT_API_KEY,
+        base_url: str = settings.CHAT_BASE_URL,
         provider: str = "deepseek",
         max_tokens: int | None = None,
         temperature: float | None = None,

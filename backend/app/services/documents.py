@@ -231,7 +231,9 @@ async def _process_document(document_id: int):
             raise ServiceException(ErrorCode.DATA_NOT_FOUND, "文档不存在")
         try:
             file_text = await _extract_text(document_entity.file_path)
-            logger.info(f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}")
+            logger.info(
+                f"文档文本提取完成: doc_id={document_id}, 长度={len(file_text)}"
+            )
             document_entity.content = file_text
             # 切块
             if document_entity.file_path.endswith("md"):
@@ -277,18 +279,19 @@ async def _process_document(document_id: int):
             logger.info(
                 f"Chroma 入库完成: doc_id={document_id}, 切片数={len(chunk_ids_list)}"
             )
-            invalidate_retriever()
             document_entity.chunk_count = len(chunk_ids_list)
             document_entity.status = 2
             await commit_or_rollback(db)
             logger.info(f"文档处理完成: doc_id={document_id}")
         except Exception as e:
             logger.error(f"文档处理失败: doc_id={document_id}, {e}", exc_info=True)
+            vector_store._collection.delete(where={"doc_id": document_id})
             db.rollback()
             document_entity.status = 3
             document_entity.error = str(e)
             await commit_or_rollback(db)
         finally:
+            invalidate_retriever()
             await db.close()
 
 
