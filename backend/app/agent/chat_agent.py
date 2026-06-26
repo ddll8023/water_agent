@@ -102,6 +102,7 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
     """执行 Agent，异步生成 dict 事件流（progress / thinking / chunk / done）"""
     graph = build_chat_graph()
     messages = list(history_messages) + [HumanMessage(content=query)] if history_messages else [HumanMessage(content=query)]
+    initial_msg_count = len(messages)
     initial = ChatAgentState(
         messages=messages,
         progress_snapshot=None,
@@ -147,16 +148,16 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
                     await asyncio.sleep(0.02)
         logger.info(f"run_chat_agent 完成: final_text_len={len(final_text)}, "
                       f"final_text_preview={final_text[:100]}...")
-        yield {"type": "done", "final_answer": final_text, "state": final_state}
+        yield {"type": "done", "final_answer": final_text, "state": final_state, "initial_msg_count": initial_msg_count}
 
     except GraphRecursionError:
         logger.error("Chat Agent 递归超限")
         yield {"type": "progress", "stage": "error", "message": "分析步骤超限，请简化问题"}
-        yield {"type": "done", "final_answer": "分析步骤超限", "state": final_state}
+        yield {"type": "done", "final_answer": "分析步骤超限", "state": final_state, "initial_msg_count": initial_msg_count}
     except asyncio.TimeoutError:
         logger.error("Chat Agent 执行超时")
         yield {"type": "progress", "stage": "error", "message": "分析超时"}
-        yield {"type": "done", "final_answer": "分析超时", "state": final_state}
+        yield {"type": "done", "final_answer": "分析超时", "state": final_state, "initial_msg_count": initial_msg_count}
     except asyncio.CancelledError:
         logger.warning("客户端断开连接")
         yield {"type": "progress", "stage": "error", "message": "连接已断开"}
@@ -164,7 +165,7 @@ async def run_chat_agent(query: str, history_messages: list | None = None):
     except Exception as e:
         logger.error(f"Chat Agent 异常: {e}", exc_info=True)
         yield {"type": "progress", "stage": "error", "message": f"分析异常: {e}"}
-        yield {"type": "done", "final_answer": "分析异常", "state": final_state}
+        yield {"type": "done", "final_answer": "分析异常", "state": final_state, "initial_msg_count": initial_msg_count}
 
 
 def _get_final_answer_text(state) -> str:

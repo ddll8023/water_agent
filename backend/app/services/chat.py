@@ -64,6 +64,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         history_messages = await _load_history_messages(db, session_entity)
         final_text = ""
         agent_state = None
+        initial_msg_count = 0
         generate_emitted = False
 
         event_counts = {"progress": 0, "thinking": 0, "chunk": 0, "tool_result": 0}
@@ -86,6 +87,7 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
                     yield f"data: {json.dumps({'type': 'tool_result', 'tool': ev['tool'], 'tool_call_id': ev.get('tool_call_id', ''), 'content': ev['content']}, ensure_ascii=False)}\n\n"
                 elif t == "done":
                     agent_state = ev.get("state")
+                    initial_msg_count = ev.get("initial_msg_count", 0)
                     if not final_text:
                         final_text = ev.get("final_answer", "")
         except Exception as e:
@@ -93,6 +95,36 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
 
         logger.info(f"SSE 事件统计: {event_counts}, final_text_len={len(final_text)}, "
                       f"final_text_preview={final_text[:100]}...")
+
+        # 写中间消息（AIMessage tool_calls + ToolMessage），供跨轮对话恢复上下文
+        intermediate_ids = []
+        if agent_state and initial_msg_count > 0:
+            all_msgs = agent_state.get("messages") or []
+            new_msgs = all_msgs[initial_msg_count:]
+            for m in new_msgs:
+                if isinstance(m, AIMessage) and m.tool_calls:
+                    tool_calls_data = [
+                        tc.model_dump() if hasattr(tc, 'model_dump') else tc
+                        for tc in m.tool_calls
+                    ]
+                    helper = models_chat_message.ChatMessage(
+                        session_id=session_entity.id,
+                        role="assistant",
+                        content=m.content or "",
+                        msg_meta={"tool_calls": tool_calls_data},
+                    )
+                    db.add(helper)
+                    intermediate_ids.append(helper.id)
+                elif isinstance(m, ToolMessage):
+                    helper = models_chat_message.ChatMessage(
+                        session_id=session_entity.id,
+                        role="tool",
+                        content=(m.content or "")[:500],
+                        msg_meta={"tool_call_id": m.tool_call_id, "name": m.name or "tool"},
+                    )
+                    db.add(helper)
+                    intermediate_ids.append(helper.id)
+
         process_steps = _extract_process_steps_from_messages(agent_state)
         thinking_rounds = _extract_thinking_rounds_from_messages(agent_state)
 
@@ -109,8 +141,12 @@ async def chat(user_id: int, chat_request: schemas_chat.ChatRequest):
         await db.flush()
 
         new_ids = (session_entity.message_list or []).copy()
+        new_ids.extend(intermediate_ids)
         new_ids.append(new_message_entity.id)
         session_entity.message_list = new_ids[-SESSION_SLIDING_WINDOW:]
+        logger.info(f"对话消息落库: session_id={session_entity.id}, "
+                      f"intermediate_ids={intermediate_ids}, final_id={new_message_entity.id}, "
+                      f"total_in_window={len(new_ids)}")
 
         await commit_or_rollback(db)
         logger.info(
@@ -171,6 +207,11 @@ async def get_chat_detail(db: AsyncSession, session_id: int):
             )
         )
     ).all()
+    # 过滤掉中间助理消息（带 tool_calls 的 AIMessage，content 通常为空）
+    message_entity_list = [
+        m for m in message_entity_list
+        if not (m.role == "assistant" and (m.msg_meta or {}).get("tool_calls"))
+    ]
 
     return schemas_chat.GetChatDetailResponse(
         id=session_id,
@@ -309,7 +350,11 @@ async def _load_history_messages(db, session_entity) -> list:
         if msg.role == "user":
             result.append(HumanMessage(content=msg.content))
         elif msg.role == "assistant":
-            result.append(AIMessage(content=msg.content))
+            meta = msg.msg_meta or {}
+            if meta.get("tool_calls"):
+                result.append(AIMessage(content=msg.content, tool_calls=meta["tool_calls"]))
+            else:
+                result.append(AIMessage(content=msg.content))
         elif msg.role == "tool":
             meta = msg.msg_meta or {}
             result.append(ToolMessage(content=msg.content, tool_call_id=meta.get("tool_call_id", ""), name=meta.get("name", "tool")))
