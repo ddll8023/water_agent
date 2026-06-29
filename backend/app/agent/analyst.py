@@ -29,6 +29,7 @@ from app.states.analysis import ReActAnalystState, AnalystStatus
 from app.utils.logger_config import setup_logger
 from app.utils.model_factory import get_model
 from app.utils.prompt_factory import get_prompt
+from app.utils.llm_retry import ainvoke_with_retry
 
 logger = setup_logger(__name__)
 
@@ -43,27 +44,33 @@ tool_node = ToolNode(TOOLS)
 
 async def call_llm(state: ReActAnalystState):
     """LLM 决策节点：工具探索阶段，不设 tool_choice，LLM 自由选择"""
-    system_prompt = PromptTemplate.from_template(
-        get_prompt.alert["REACT_SYSTEM"]
-    ).format()
-    messages = [SystemMessage(system_prompt)]
-    raw = state["messages"]
-    if len(raw) > constants_agent.RECENT_MESSAGE_COUNT:
-        recent = raw[-constants_agent.RECENT_MESSAGE_COUNT :]
-        from langchain_core.messages import ToolMessage
+    try:
+        system_prompt = PromptTemplate.from_template(
+            get_prompt.alert["REACT_SYSTEM"]
+        ).format()
+        messages = [SystemMessage(system_prompt)]
+        raw = state["messages"]
+        if len(raw) > constants_agent.RECENT_MESSAGE_COUNT:
+            recent = raw[-constants_agent.RECENT_MESSAGE_COUNT :]
+            from langchain_core.messages import ToolMessage
 
-        while recent and isinstance(recent[0], ToolMessage) and len(raw) > len(recent):
-            recent = raw[-(len(recent) + 1) :]
-        messages.extend(recent)
-    else:
-        messages.extend(raw)
-    model = get_model.build_chat_model(thinking=False).bind_tools(TOOLS)
-    response = await model.ainvoke(messages)
-    return {"messages": [response]}
+            while recent and isinstance(recent[0], ToolMessage) and len(raw) > len(recent):
+                recent = raw[-(len(recent) + 1) :]
+            messages.extend(recent)
+        else:
+            messages.extend(raw)
+        model = get_model.build_chat_model(thinking=False).bind_tools(TOOLS)
+        response = await ainvoke_with_retry(model.ainvoke, messages)
+        return {"messages": [response]}
+    except Exception as e:
+        logger.error(f"call_llm 异常（重试耗尽）: {e}", exc_info=True)
+        return {"error": f"LLM 决策失败: {e}"}
 
 
 def should_continue(state: ReActAnalystState):
-    """路由判断：有 tool_calls → 继续循环；无 → 进入最终输出"""
+    """路由判断：error→finalize / tool_calls→continue / 其他→finalize"""
+    if state.get("error"):
+        return "finalize"
     last_msg = state["messages"][-1]
     if isinstance(last_msg, AIMessage) and last_msg.tool_calls:
         return "continue"
@@ -71,7 +78,7 @@ def should_continue(state: ReActAnalystState):
 
 
 async def final_answer(state: ReActAnalystState):
-    """最终输出节点：纯聊天模型 + 多策略 JSON 解析"""
+    """最终输出节点：纯聊天模型 + 多策略 JSON 解析（含 LLM 重试）"""
     system_prompt = PromptTemplate.from_template(
         get_prompt.alert["REACT_SYSTEM"]
     ).format()
@@ -79,14 +86,14 @@ async def final_answer(state: ReActAnalystState):
     model = get_model.build_chat_model(thinking=False)
     try:
         chain = model | JsonOutputParser(partial=True)
-        output = await chain.ainvoke(messages)
+        output = await ainvoke_with_retry(chain.ainvoke, messages)
         return {"analysis_result": output}
     except OutputParserException:
         pass  # 第一次尝试失败，用纯模型获取输出重新解析
     try:
         from langchain_core.output_parsers.json import parse_json_markdown
 
-        response = await model.ainvoke(messages)
+        response = await ainvoke_with_retry(model.ainvoke, messages)
         content = response.content if hasattr(response, "content") else str(response)
         output = parse_json_markdown(content)
         return {"analysis_result": output}

@@ -19,6 +19,8 @@ from app.routers import alerts as alerts_router
 from app.routers import alert_rules as alert_rules_router
 from app.pipelines.collector import run_collector_agent
 from app.agent.analyst import run_analyst_agent
+from app.pipelines.health_probe import run_health_probe
+from app.constants import agent as constants_agent
 from app.models import alert_rule as models_alert_rule
 from app.models import report as models_report
 from app.pipelines.report_generator import run_report_generator
@@ -119,6 +121,18 @@ async def lifespan(app: FastAPI):
         max_instances=1,
         coalesce=True,
         misfire_grace_time=3600,
+    )
+
+    # Health Probe：每 60 分钟检测 Agent 系统健康状态
+    scheduler.add_job(
+        run_health_probe,
+        "interval",
+        minutes=constants_agent.HEALTH_PROBE_INTERVAL_MINUTES,
+        id="health_probe",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=300,
     )
 
     scheduler.start()

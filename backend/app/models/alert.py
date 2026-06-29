@@ -22,8 +22,8 @@ class AlertEvent(Base):
         Integer,
         ForeignKey("reservoir.id"),
         index=True,
-        nullable=False,
-        comment="水库ID",
+        nullable=True,
+        comment="水库ID（系统自检告警为 None）",
     )
     handler_id = Column(
         Integer,
@@ -55,7 +55,7 @@ class AlertEvent(Base):
         comment="状态_0=待确认_1=已确认_2=处置中_3=已解决",
     )
     source = Column(
-        SmallInteger, nullable=False, default=0, comment="来源_0=规则判定_1=Agent趋势分析"
+        SmallInteger, nullable=False, default=0, comment="来源_0=规则判定_1=Agent趋势分析_2=系统自检告警"
     )
     detected_at = Column(DateTime, nullable=False, comment="检出时间")
     resolved_at = Column(DateTime, comment="解决时间")

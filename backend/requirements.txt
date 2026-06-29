@@ -21,3 +21,4 @@ cryptography
 langchain_chroma
 aiofiles
 dashscope
+tenacity>=9.1.0

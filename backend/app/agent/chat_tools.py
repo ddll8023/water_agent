@@ -28,11 +28,12 @@ async def search_knowledge_base_tool(query: str = "", top_k: int = 5, doc_type: 
     try:
         docs = await ensemble_retrieve(query, top_k=top_k, doc_type=doc_type)
         if not docs:
-            return "知识库中未找到相关文档"
-        return "\n\n".join([f"[{i+1}] {d.page_content}" for i, d in enumerate(docs)])
+            return json.dumps({"success": True, "data": "知识库中未找到相关文档"}, ensure_ascii=False)
+        content = "\n\n".join([f"[{i+1}] {d.page_content}" for i, d in enumerate(docs)])
+        return json.dumps({"success": True, "data": content}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"search_knowledge_base_tool 异常: {e}", exc_info=True)
-        return f"知识库检索失败: {e}"
+        return json.dumps({"success": False, "error": f"知识库检索失败: {e}"}, ensure_ascii=False)
 
 
 @tool
@@ -52,10 +53,12 @@ async def query_monitoring_data_tool(description: str = "") -> str:
         sql = sql_result.content.strip()
         rows = (await db.execute(text(sql))).all()
         result = [dict(r._mapping) for r in rows]
-        return json.dumps(result, ensure_ascii=False, default=str) if result else "未查询到数据"
+        if result:
+            return json.dumps({"success": True, "data": result}, ensure_ascii=False, default=str)
+        return json.dumps({"success": True, "data": "未查询到数据"}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"query_monitoring_data_tool 异常: {e}", exc_info=True)
-        return f"数据查询失败: {e}"
+        return json.dumps({"success": False, "error": f"数据查询失败: {e}"}, ensure_ascii=False)
     finally:
         await db.close()
 
@@ -77,34 +80,36 @@ async def query_knowledge_graph_tool(
         async with neo4j_driver.session() as session:
             if template == "trace_pollution":
                 if not reservoir_code:
-                    return "请提供水库编码"
+                    return json.dumps({"success": False, "error": "请提供水库编码"}, ensure_ascii=False)
                 result = await trace_pollution(session, reservoir_code)
-                return str(result.model_dump())
+                return json.dumps({"success": True, "data": str(result.model_dump())}, ensure_ascii=False)
 
             elif template == "search_node":
                 if not keyword:
-                    return "请提供搜索关键词"
+                    return json.dumps({"success": False, "error": "请提供搜索关键词"}, ensure_ascii=False)
                 req = SearchNodeRequest(keyword=keyword, type=node_type or None)
                 result = await search_node(session, req)
-                return str(result.model_dump())
+                return json.dumps({"success": True, "data": str(result.model_dump())}, ensure_ascii=False)
 
             elif template == "expand_node":
                 if not node_type or not node_id:
-                    return "请提供节点类型和节点ID"
+                    return json.dumps({"success": False, "error": "请提供节点类型和节点ID"}, ensure_ascii=False)
                 result = await get_node_expand(session, node_type, node_id)
-                return str(result.model_dump())
+                return json.dumps({"success": True, "data": str(result.model_dump())}, ensure_ascii=False)
 
             elif template == "node_detail":
                 if not node_type or not node_id:
-                    return "请提供节点类型和节点ID"
+                    return json.dumps({"success": False, "error": "请提供节点类型和节点ID"}, ensure_ascii=False)
                 result = await get_node_detail(session, node_type, node_id)
-                return str(result.model_dump()) if result else "未找到节点"
+                if result:
+                    return json.dumps({"success": True, "data": str(result.model_dump())}, ensure_ascii=False)
+                return json.dumps({"success": True, "data": "未找到节点"}, ensure_ascii=False)
 
             else:
-                return f"未知模板：{template}，可选：trace_pollution, search_node, expand_node, node_detail"
+                return json.dumps({"success": False, "error": f"未知模板：{template}"}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"query_knowledge_graph_tool 异常: template={template}, {e}", exc_info=True)
-        return f"图谱查询失败: {e}"
+        return json.dumps({"success": False, "error": f"图谱查询失败: {e}"}, ensure_ascii=False)
 
 
 @tool
@@ -118,11 +123,11 @@ async def check_water_standard_tool(indicator_name: str = "") -> str:
             stmt = select(Indicator).where(Indicator.code.like(f"%{indicator_name}%"))
             result = (await db.scalars(stmt)).first()
         if not result:
-            return f"未找到指标: {indicator_name}"
-        return _build_standard_response(result)
+            return json.dumps({"success": True, "data": f"未找到指标: {indicator_name}"}, ensure_ascii=False)
+        return json.dumps({"success": True, "data": _build_standard_response(result)}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"check_water_standard_tool 异常: {e}", exc_info=True)
-        return f"标准查询失败: {e}"
+        return json.dumps({"success": False, "error": f"标准查询失败: {e}"}, ensure_ascii=False)
     finally:
         await db.close()
 

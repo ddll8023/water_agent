@@ -1,5 +1,6 @@
 """Analyst Agent ReAct 工具集"""
 
+import json
 from datetime import datetime, timedelta
 
 from async_lru import alru_cache
@@ -29,15 +30,18 @@ async def query_reservoir_overview_tool(reservoir_ids: list[int] | None = None) 
                 stmt = stmt.where(Reservoir.id.in_(reservoir_ids))
             result = (await db.scalars(stmt)).all()
             if not result:
-                return "无可用水库数据"
+                return json.dumps({"success": True, "data": "无可用水库数据"}, ensure_ascii=False)
             lines = [
                 f"{r.id}:{r.name}(code={r.code},grade={r.water_grade},basin={r.watershed})"
                 for r in result
             ]
-            return "水库列表:\n" + "\n".join(lines)
+            return json.dumps(
+                {"success": True, "data": "水库列表:\n" + "\n".join(lines)},
+                ensure_ascii=False,
+            )
     except Exception as e:
         logger.error(f"query_reservoir_overview_tool 异常: {e}")
-        return f"查询失败: {e}"
+        return json.dumps({"success": False, "error": f"查询失败: {e}"}, ensure_ascii=False)
 
 
 @tool
@@ -51,12 +55,13 @@ async def query_monitoring_records_tool(
     try:
         reservoir_id = int(reservoir_id)
         hours = min(max(hours, 1), 168)
-        return await _cached_monitoring_query(reservoir_id, hours)
+        result = await _cached_monitoring_query(reservoir_id, hours)
+        return json.dumps({"success": True, "data": result}, ensure_ascii=False)
     except Exception as e:
         logger.error(
             f"query_monitoring_records_tool 异常: reservoir_id={reservoir_id}, {e}"
         )
-        return f"查询失败: {e}"
+        return json.dumps({"success": False, "error": f"查询失败: {e}"}, ensure_ascii=False)
 
 
 @alru_cache(maxsize=64)
@@ -83,10 +88,10 @@ async def neo4j_trace_pollution_tool(reservoir_code: str) -> str:
     try:
         async with neo4j_driver.session() as session:
             result = await trace_pollution(session, reservoir_code)
-            return str(result.model_dump())
+            return json.dumps({"success": True, "data": str(result.model_dump())}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"neo4j_trace_pollution_tool 异常: code={reservoir_code}, {e}")
-        return f"溯源查询失败: {e}"
+        return json.dumps({"success": False, "error": f"溯源查询失败: {e}"}, ensure_ascii=False)
 
 
 @tool
@@ -96,8 +101,9 @@ async def rag_retrieve_context_tool(query: str, top_k: int = 5) -> str:
     try:
         docs = await ensemble_retrieve(query, top_k=top_k)
         if not docs:
-            return "知识库中未找到相关文档"
-        return "\n\n".join([f"[{i+1}] {d.page_content}" for i, d in enumerate(docs)])
+            return json.dumps({"success": True, "data": "知识库中未找到相关文档"}, ensure_ascii=False)
+        content = "\n\n".join([f"[{i+1}] {d.page_content}" for i, d in enumerate(docs)])
+        return json.dumps({"success": True, "data": content}, ensure_ascii=False)
     except Exception as e:
         logger.error(f"rag_retrieve_context_tool 异常: {e}")
-        return f"知识库检索失败: {e}"
+        return json.dumps({"success": False, "error": f"知识库检索失败: {e}"}, ensure_ascii=False)
